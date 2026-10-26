@@ -50,10 +50,10 @@ export interface ServiceRegistryShape {
    */
   register(id: string, service: unknown): () => void;
   /**
-   * Waits for a service to arrive, under the registry's default deadline.
+   * Waits for a service to arrive, without bound (invariant 8).
    *
    * @param id - the service id to wait for
-   * @returns a promise that resolves with the service once registered, or rejects on timeout
+   * @returns a promise that resolves with the service once registered
    */
   want(id: string): Promise<unknown>;
   /**

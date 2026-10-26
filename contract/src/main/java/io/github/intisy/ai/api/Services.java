@@ -26,7 +26,8 @@ public interface Services {
     <T> T get(ServiceType<T> type);
 
     /**
-     * Waits for the id to be registered, for a host default the implementation chooses.
+     * Waits for the id to be registered, for as long as it takes: waiting is unbounded unless a
+     * timeout is given (invariant 8).
      *
      * @param <T> the service's API type
      * @param type the service key, from {@link PluginContext#service(String)}

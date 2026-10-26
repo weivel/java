@@ -170,7 +170,8 @@ export interface Services {
    */
   register<T>(type: ServiceType<T>, implementation: T): () => void;
   /**
-   * Waits for the id to be registered, for a host default the implementation chooses.
+   * Waits for the id to be registered, for as long as it takes: waiting is unbounded unless a
+   * timeout is given (invariant 8).
    *
    * @param <T> - the service's API type
    * @param type - the service key, from {@link PluginContext.service(String)}
@@ -745,7 +746,7 @@ export interface TopicType<T> {
 
 /** How long a plugin is willing to wait for a service that is not registered yet. */
 export interface WantOptions {
-  /** Milliseconds to wait before giving up. Absent takes the host's own default. */
+  /** Milliseconds to wait before giving up. Absent means wait without bound (invariant 8). */
   timeoutMs?: number;
 }
 

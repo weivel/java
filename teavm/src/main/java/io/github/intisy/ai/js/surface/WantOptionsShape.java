@@ -9,7 +9,7 @@ public interface WantOptionsShape {
     /**
      * How long to wait before giving up.
      *
-     * @return the timeout in milliseconds, or absent to use the registry's default deadline
+     * @return the timeout in milliseconds, or absent to wait without bound
      */
     @TsOptional
     Integer timeoutMs();
