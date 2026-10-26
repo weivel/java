@@ -363,12 +363,50 @@ class LibraryTypeGeneratorTest {
     }
 
     @Test
-    void refusesAControlCharacterOrAUnicodeEscapeInTheVersionTheHeaderNames() {
-        for (String version : new String[] {"1.0.0\nclass Injected {}", "1.0.0\u2028x", "1.0.0\r", "1.0.0\\u000aclass Injected {}"}) {
+    void refusesAControlCharacterInTheVersionTheHeaderNames() {
+        for (String version : new String[] {"1.0.0\nclass Injected {}", "1.0.0\u2028x", "1.0.0\r"}) {
             JsonObject declaration = fixtureDeclaration("app-registry", "{}", "{\"type\":\"string\"}");
             declaration.addProperty("version", version);
             assertRefusedAt("cannot generate types: version", LibraryDeclaration.parse(declaration.toString()));
         }
+    }
+
+    @Test
+    void writesABackslashInTheVersionSoJavacCannotReadAnEscapeOutOfIt() throws Exception {
+        JsonObject declaration = fixtureDeclaration("app-registry", "{}", "{\"type\":\"string\"}");
+        declaration.addProperty("version", "1.0.0\\u000aclass Injected {}");
+        Map<String, String> sources = generated(LibraryDeclaration.parse(declaration.toString()));
+
+        assertTrue(sources.get("AppRegistryService.java").startsWith(
+                "// Generated from the library.json of fixture 1.0.0\\u005cu000aclass Injected {}; "), sources.get("AppRegistryService.java"));
+        ClassLoader loader = compiled(sources);
+        loaded(loader, "AppRegistryService");
+        assertThrows(ClassNotFoundException.class, () -> Class.forName(GENERATED_PACKAGE + ".Injected", false, loader));
+    }
+
+    @Test
+    void refusesTwoServicesWhoseFilesDifferOnlyInCase() {
+        JsonObject declaration = fixtureDeclaration("ab", "{}", "{\"type\":\"string\"}");
+        JsonArray services = declaration.getAsJsonArray("services");
+        JsonObject second = services.get(0).deepCopy().getAsJsonObject();
+        second.addProperty("id", "a-b");
+        services.add(second);
+        String message = refusalMessage(LibraryDeclaration.parse(declaration.toString()));
+        assertTrue(message.contains("services[1].id \"a-b\" generates ABService.java"), message);
+        assertTrue(message.contains("service \"ab\""), message);
+    }
+
+    @Test
+    void refusesAWaitFunctionTakingAnIntegerWhichWouldOverrideAFinalMethod() {
+        JsonObject declaration = fixtureDeclaration("app-registry", "{\"type\":\"integer\"}", "{\"type\":\"string\"}");
+        declaration.getAsJsonArray("services").get(0).getAsJsonObject().getAsJsonArray("functions").get(0).getAsJsonObject()
+                .addProperty("name", "wait");
+        assertRefusedAt("services[0].functions[0].name", LibraryDeclaration.parse(declaration.toString()));
+        JsonObject objectArgument = fixtureDeclaration("app-registry", "{}", "{\"type\":\"string\"}");
+        objectArgument.getAsJsonArray("services").get(0).getAsJsonObject().getAsJsonArray("functions").get(0).getAsJsonObject()
+                .addProperty("name", "wait");
+        assertTrue(generated(LibraryDeclaration.parse(objectArgument.toString())).get("AppRegistryService.java")
+                .contains("    String wait(JsonElement argument);"));
     }
 
     @Test
@@ -404,10 +442,28 @@ class LibraryTypeGeneratorTest {
     }
 
     @Test
-    void refusesTwoNestedTypesTheirPathsNameAlike() {
+    void numbersTwoNestedTypesTheirPathsNameAlikeInTheOrderTheyAreReached() throws Exception {
         String object = "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"string\"}},\"additionalProperties\":false}";
-        assertRefusedAt("services[0].functions[0].result.properties.aB",
-                declarationWithResult("{\"type\":\"object\",\"properties\":{\"a-b\":" + object + ",\"aB\":" + object + "}}"));
+        ClassLoader loader = compiled(generated(
+                declarationWithResult("{\"type\":\"object\",\"properties\":{\"a-b\":" + object + ",\"aB\":" + object + "}}")));
+        Class<?> result = loaded(loader, "AppRegistryService$GetResult");
+
+        Map<String, String> expected = new LinkedHashMap<String, String>();
+        expected.put("aB", loaded(loader, "AppRegistryService$GetResultAB").getTypeName());
+        expected.put("aB2", loaded(loader, "AppRegistryService$GetResultAB2").getTypeName());
+        assertEquals(expected, fieldTypes(result));
+    }
+
+    @Test
+    void numbersANestedTypeWhosePropertyAddsNothingToItsParentsName() throws Exception {
+        ClassLoader loader = compiled(generated(
+                declarationWithResult("{\"type\":\"object\",\"properties\":{\"_\":{\"type\":\"object\",\"properties\":{\"x\":{}}}}}")));
+        Class<?> result = loaded(loader, "AppRegistryService$GetResult");
+        Class<?> nested = loaded(loader, "AppRegistryService$GetResult2");
+
+        assertEquals(Collections.singletonMap("_Value", nested.getTypeName()), fieldTypes(result));
+        assertEquals("_", result.getDeclaredField("_Value").getAnnotation(SerializedName.class).value());
+        assertEquals(Collections.singletonMap("x", "com.google.gson.JsonElement"), fieldTypes(nested));
     }
 
     @Test
@@ -494,7 +550,7 @@ class LibraryTypeGeneratorTest {
         for (Map.Entry<String, List<String>> file : ModelDefinitions.published().entrySet()) {
             for (String definition : file.getValue()) {
                 try {
-                    Class.forName(LibraryTypeGenerator.CONTRACT_PACKAGE + "." + LibraryTypeGenerator.pascalCase(definition));
+                    Class.forName(SchemaTypes.CONTRACT_PACKAGE + "." + JavaNames.pascalCase(definition));
                 } catch (ClassNotFoundException absent) {
                     missing.add(file.getKey() + "#" + definition);
                 }

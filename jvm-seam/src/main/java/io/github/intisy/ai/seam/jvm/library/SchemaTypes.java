@@ -29,8 +29,7 @@ import java.util.regex.Pattern;
  * @implNote It accepts and refuses exactly the schemas the TypeScript generator does, at the same
  * paths. Where TypeScript writes an anonymous structural type, Java needs a named one, so an object
  * with members becomes a nested class and a string enum a nested enum, each named by
- * {@link #nestedName}; two schemas whose paths name the same type are refused, which TypeScript
- * never has to do.
+ * {@link #nestedName}, and a name already taken is made distinct rather than refused.
  */
 final class SchemaTypes {
 
@@ -190,7 +189,7 @@ final class SchemaTypes {
         if (!values.isJsonArray() || values.getAsJsonArray().size() == 0 || !allEnumValues(values.getAsJsonArray())) {
             throw refusal(path + ".enum", "is not a non-empty list of strings, numbers, booleans or null", "list the allowed primitive values");
         }
-        return EnumValues.of(values.getAsJsonArray()).javaType(this, path, typeName);
+        return EnumValues.of(values.getAsJsonArray()).javaType(this, typeName);
     }
 
     private static boolean allEnumValues(JsonArray values) {
@@ -242,16 +241,17 @@ final class SchemaTypes {
         if (declared.size() == 0 && required.isEmpty() && !closed) {
             return imported(JSON_OBJECT);
         }
-        int slot = reserveDeclaration(typeName, path);
-        List<JavaDeclarations.Member> members = members(declared, required, path, typeName);
-        declare(slot, JavaDeclarations.classSource(typeName, members));
+        String className = claimTypeName(typeName);
+        int slot = reserveDeclaration();
+        List<JavaDeclarations.Member> members = members(declared, required, path, className);
+        declare(slot, JavaDeclarations.classSource(className, members));
         if (JavaDeclarations.usesObjects(members)) {
             imports.add(OBJECTS);
         }
         if (JavaDeclarations.usesSerializedName(members)) {
             imports.add(SERIALIZED_NAME);
         }
-        return JavaType.reference(typeName);
+        return JavaType.reference(className);
     }
 
     private List<JavaDeclarations.Member> members(JsonObject declared, Set<String> required, String path, String typeName) {
@@ -299,8 +299,9 @@ final class SchemaTypes {
                 "use one of object, array, string, integer, number or boolean");
     }
 
-    JavaType declareEnum(String path, String typeName, List<String> values) {
-        int slot = reserveDeclaration(typeName, path);
+    JavaType declareEnum(String typeName, List<String> values) {
+        String enumName = claimTypeName(typeName);
+        int slot = reserveDeclaration();
         Map<String, String> constantsByValue = new LinkedHashMap<String, String>();
         Set<String> taken = new HashSet<String>();
         for (String value : values) {
@@ -315,16 +316,26 @@ final class SchemaTypes {
         for (Map.Entry<String, String> constant : constantsByValue.entrySet()) {
             constants.add(new JavaDeclarations.Constant(constant.getKey(), constant.getValue()));
         }
-        declare(slot, JavaDeclarations.enumSource(typeName, constants));
+        declare(slot, JavaDeclarations.enumSource(enumName, constants));
         imports.add(SERIALIZED_NAME);
-        return JavaType.reference(typeName);
+        return JavaType.reference(enumName);
     }
 
-    private int reserveDeclaration(String typeName, String path) {
-        if (!takenTypeNames.add(typeName)) {
-            throw refusal(path, "generates the nested type " + typeName + ", whose name is already taken in the generated interface",
-                    "rename a property so the paths of the two schemas no longer name the same type");
+    /**
+     * @implNote A path whose name is already taken, by another schema or by a name the file uses,
+     * gets {@code 2}, {@code 3} and so on appended, in the order the walk reaches it. A property
+     * named {@code _}, or one made of letters outside ASCII, adds nothing to the name, so its nested type would otherwise
+     * be its parent's.
+     */
+    private String claimTypeName(String typeName) {
+        String candidate = typeName;
+        for (int suffix = 2; !takenTypeNames.add(candidate); suffix++) {
+            candidate = typeName + suffix;
         }
+        return candidate;
+    }
+
+    private int reserveDeclaration() {
         declarations.add(null);
         return declarations.size() - 1;
     }
@@ -421,12 +432,12 @@ final class SchemaTypes {
             }
         }
 
-        JavaType javaType(SchemaTypes walk, String path, String typeName) {
+        JavaType javaType(SchemaTypes walk, String typeName) {
             if (strings.isEmpty() && others.isEmpty()) {
                 return JavaType.reference("Void");
             }
             if (others.isEmpty()) {
-                return walk.declareEnum(path, typeName, strings);
+                return walk.declareEnum(typeName, strings);
             }
             JavaType type = strings.isEmpty() ? scalarType(others) : null;
             if (type == null) {

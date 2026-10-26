@@ -9,7 +9,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,16 +28,14 @@ import java.util.regex.Pattern;
  * It is the twin of the TypeScript generator in {@code weivel/typescript} and refuses the same
  * declarations at the same paths. It refuses three things more, each one Java cannot express and
  * TypeScript can: a function named by a Java reserved word, which the proxy could not find a method
- * for; a {@code \}{@code u} sequence in the version the header names, which javac would read as a
- * character even inside a comment; and two nested types whose paths give them one name.
+ * for; a function {@code wait} taking an integer, which would override a final method of
+ * {@code Object}; and two services whose files differ only in case, which a case-insensitive file
+ * system would hold as a single file.
  */
 public final class LibraryTypeGenerator {
 
-    static final String CONTRACT_PACKAGE = SchemaTypes.CONTRACT_PACKAGE;
-
     private static final Pattern CONTROL_CHARACTER = Pattern.compile("[\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]");
-    private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u");
-    private static final String SERVICE_TYPE = CONTRACT_PACKAGE + ".ServiceType";
+    private static final String SERVICE_TYPE = SchemaTypes.CONTRACT_PACKAGE + ".ServiceType";
 
     private LibraryTypeGenerator() {
     }
@@ -63,6 +63,7 @@ public final class LibraryTypeGenerator {
             contractTypes.addAll(types.contractTypes());
         }
         refuseCollidingNames(declaration, contractTypes);
+        refuseFilesDifferingInCase(declaration);
         return sources;
     }
 
@@ -112,10 +113,6 @@ public final class LibraryTypeGenerator {
         }
     }
 
-    static String pascalCase(String name) {
-        return JavaNames.pascalCase(name);
-    }
-
     private static String interfaceName(LibraryDeclaration.ServiceDeclaration service) {
         return JavaNames.pascalCase(service.id()) + "Service";
     }
@@ -138,9 +135,6 @@ public final class LibraryTypeGenerator {
     private static void refuseHeaderBreakout(String libraryId, String field, String value) {
         if (CONTROL_CHARACTER.matcher(value).find()) {
             throw headerRefusal(libraryId, field, value, "a control character");
-        }
-        if (UNICODE_ESCAPE.matcher(value).find()) {
-            throw headerRefusal(libraryId, field, value, "a backslash before u, which javac reads as a character escape even in a comment");
         }
     }
 
@@ -165,6 +159,22 @@ public final class LibraryTypeGenerator {
                     throw new PluginException(declaration.id(), "cannot generate types: services[" + index + "].id generates the name "
                             + declared + ", which is already taken in the generated module", "give the service an id that does not collide");
                 }
+            }
+        }
+    }
+
+    private static void refuseFilesDifferingInCase(LibraryDeclaration declaration) {
+        Map<String, String> idsByFoldedFile = new HashMap<String, String>();
+        List<LibraryDeclaration.ServiceDeclaration> services = declaration.services();
+        for (int index = 0; index < services.size(); index++) {
+            String id = services.get(index).id();
+            String file = interfaceName(services.get(index)) + ".java";
+            String earlier = idsByFoldedFile.put(file.toLowerCase(Locale.ROOT), id);
+            if (earlier != null) {
+                throw new PluginException(declaration.id(), "cannot generate types: services[" + index + "].id \"" + id + "\" generates "
+                        + file + ", which differs only in case from the file service \"" + earlier
+                        + "\" generates, and a case-insensitive file system holds the two as one",
+                        "give one of the two services an id that does not collide");
             }
         }
     }

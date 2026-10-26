@@ -119,11 +119,19 @@ final class JavaNames {
         }
     }
 
-    /** Non-ASCII text as {@code \}{@code u} escapes, for a comment the caller has already cleared of line breaks. */
+    /**
+     * Text for a comment the caller has already cleared of line breaks, in ASCII, reading the same
+     * once javac has translated it.
+     *
+     * @implNote Non-ASCII and the backslash itself are written as {@code \}{@code u} escapes. A
+     * backslash written raw could start an escape javac translates even inside a comment, so a
+     * version holding one could end the comment's line; a backslash a unicode escape produces cannot
+     * start another (JLS 3.3).
+     */
     static String asciiText(String text) {
         StringBuilder ascii = new StringBuilder();
         for (char character : text.toCharArray()) {
-            ascii.append(character > 0x7e ? unicodeEscape(character) : String.valueOf(character));
+            ascii.append(character > 0x7e || character == '\\' ? unicodeEscape(character) : String.valueOf(character));
         }
         return ascii.toString();
     }
