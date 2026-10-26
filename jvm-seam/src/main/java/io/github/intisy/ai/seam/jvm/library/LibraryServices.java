@@ -1,6 +1,7 @@
 package io.github.intisy.ai.seam.jvm.library;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import io.github.intisy.ai.engine.PluginException;
 import io.github.intisy.ai.engine.PluginHost;
@@ -17,25 +18,41 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Offers each service an opened library declares to the plugins of a host.
  *
  * @implNote No per-function code exists: each service is a {@link Proxy} of the interface the
  * embedder names for it, and every method forwards to {@link LibraryBridge#call} by the symbol its
- * name is declared under, serialising the argument and deserialising the result with Gson.
+ * name is declared under, serialising the argument and deserialising the result with Gson,
+ * which reads a result typed as one of the contract's data interfaces through {@link DataInterfaces}.
  */
 public final class LibraryServices {
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder().registerTypeAdapterFactory(DataInterfaces.typeAdapterFactory()).create();
     private static final String EMBEDDING_HOST = "the embedding host";
 
     private final PluginHost host;
+    private final Supplier<LibraryContext> contextSupplier;
     private final Map<String, String> librariesByServiceId = new HashMap<String, String>();
 
-    /** @param host the host whose plugins this instance offers library services to; hold one instance per host */
+    /**
+     * Offers library services whose contextual functions read the process's own environment and home, and no arguments.
+     *
+     * @param host the host whose plugins this instance offers library services to; hold one instance per host
+     */
     public LibraryServices(PluginHost host) {
+        this(host, LibraryBridge.processContext());
+    }
+
+    /**
+     * @param host the host whose plugins this instance offers library services to; hold one instance per host
+     * @param contextSupplier the facts every library this instance loads is handed, asked afresh at each contextual call
+     */
+    public LibraryServices(PluginHost host, Supplier<LibraryContext> contextSupplier) {
         this.host = host;
+        this.contextSupplier = contextSupplier;
     }
 
     /**
@@ -56,7 +73,7 @@ public final class LibraryServices {
     synchronized LibraryBridge load(LibraryAcquirer acquirer, LibraryPin pin, Path cacheDirectory,
                                     Map<String, Class<?>> interfacesByServiceId) {
         LibraryAcquirer.AcquiredLibrary acquired = acquirer.acquire(pin, cacheDirectory);
-        LibraryBridge bridge = LibraryBridge.open(acquired.binaryPath(), acquired.declaration());
+        LibraryBridge bridge = LibraryBridge.open(acquired.binaryPath(), acquired.declaration(), contextSupplier);
         try {
             register(bridge, acquired.declaration(), interfacesByServiceId, providerOf(acquired.declaration(), pin));
         } catch (RuntimeException refused) {

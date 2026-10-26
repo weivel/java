@@ -14,8 +14,11 @@ import java.io.IOException;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -28,6 +31,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * library's own release function frees it, in a {@code finally}, so a result that turns out not to
  * be UTF-8 or JSON is still released exactly once; a NULL result is never released, since it is
  * how a library that could not allocate its answer reports that, and there is nothing of its to free.
+ * A function declaring {@code context} is sent {@code {"argument": A, "context": {...}}} holding only
+ * the facts it declared, gathered afresh from the context supplier at that call; one declaring none
+ * is sent its argument unchanged, and the supplier is never asked.
  */
 public final class LibraryBridge implements AutoCloseable {
 
@@ -41,10 +47,12 @@ public final class LibraryBridge implements AutoCloseable {
     private static final class BoundFunction {
         private final String label;
         private final Function function;
+        private final List<String> context;
 
-        BoundFunction(String label, Function function) {
+        BoundFunction(String label, Function function, List<String> context) {
             this.label = label;
             this.function = function;
+            this.context = context;
         }
     }
 
@@ -53,16 +61,19 @@ public final class LibraryBridge implements AutoCloseable {
     private final Function release;
     private final Map<String, BoundFunction> functions;
     private final ReleaseObserver releaseObserver;
+    private final Supplier<LibraryContext> contextSupplier;
     private final ReadWriteLock openness = new ReentrantReadWriteLock();
     private boolean closed;
 
     private LibraryBridge(String libraryId, NativeLibrary nativeLibrary, Function release,
-                          Map<String, BoundFunction> functions, ReleaseObserver releaseObserver) {
+                          Map<String, BoundFunction> functions, ReleaseObserver releaseObserver,
+                          Supplier<LibraryContext> contextSupplier) {
         this.libraryId = libraryId;
         this.nativeLibrary = nativeLibrary;
         this.release = release;
         this.functions = functions;
         this.releaseObserver = releaseObserver;
+        this.contextSupplier = contextSupplier;
     }
 
     /**
@@ -74,14 +85,37 @@ public final class LibraryBridge implements AutoCloseable {
      * @throws PluginException naming the library when the binary cannot be loaded or lacks a declared symbol
      */
     public static LibraryBridge open(Path binary, LibraryDeclaration declaration) {
-        return open(binary, declaration, UNOBSERVED);
+        return open(binary, declaration, processContext());
+    }
+
+    /**
+     * Opens a verified binary as {@link #open(Path, LibraryDeclaration)} does, handing its contextual functions the supplied facts.
+     *
+     * @param binary the verified shared library, as {@link LibraryAcquirer} placed it
+     * @param declaration the verified declaration naming its release function and its functions
+     * @param contextSupplier asked once at each call to a function that declares {@code context}, and never otherwise
+     * @return the opened library
+     * @throws PluginException naming the library when the binary cannot be loaded or lacks a declared symbol
+     */
+    public static LibraryBridge open(Path binary, LibraryDeclaration declaration, Supplier<LibraryContext> contextSupplier) {
+        return open(binary, declaration, UNOBSERVED, contextSupplier);
     }
 
     static LibraryBridge open(Path binary, LibraryDeclaration declaration, ReleaseObserver releaseObserver) {
+        return open(binary, declaration, releaseObserver, processContext());
+    }
+
+    static Supplier<LibraryContext> processContext() {
+        return () -> LibraryContext.ofProcess(Collections.<String>emptyList());
+    }
+
+    private static LibraryBridge open(Path binary, LibraryDeclaration declaration, ReleaseObserver releaseObserver,
+                                      Supplier<LibraryContext> contextSupplier) {
         NativeLibrary nativeLibrary = load(binary, declaration.id());
         try {
             Function release = bindSymbol(nativeLibrary, declaration.id(), declaration.release());
-            return new LibraryBridge(declaration.id(), nativeLibrary, release, bindDeclared(nativeLibrary, declaration), releaseObserver);
+            return new LibraryBridge(declaration.id(), nativeLibrary, release, bindDeclared(nativeLibrary, declaration),
+                    releaseObserver, contextSupplier);
         } catch (RuntimeException refused) {
             SharedNativeLibraries.letGo(nativeLibrary);
             throw refused;
@@ -112,7 +146,7 @@ public final class LibraryBridge implements AutoCloseable {
         for (LibraryDeclaration.ServiceDeclaration service : declaration.services()) {
             for (LibraryDeclaration.FunctionDeclaration function : service.functions()) {
                 Function nativeFunction = bindSymbol(nativeLibrary, declaration.id(), function.symbol());
-                bound.put(function.symbol(), new BoundFunction(service.id() + "." + function.name(), nativeFunction));
+                bound.put(function.symbol(), new BoundFunction(service.id() + "." + function.name(), nativeFunction, function.context()));
             }
         }
         return bound;
@@ -139,10 +173,34 @@ public final class LibraryBridge implements AutoCloseable {
                 String reason = closed ? "the library is closed" : symbol + " is not a declared function";
                 throw new PluginException(libraryId, symbol + " cannot be called: " + reason, "call a declared function of an open library");
             }
-            return invoke(bound, argumentJson == null ? "null" : argumentJson);
+            return invoke(bound, withDeclaredContext(bound, argumentJson == null ? "null" : argumentJson));
         } finally {
             openness.readLock().unlock();
         }
+    }
+
+    private String withDeclaredContext(BoundFunction bound, String argumentJson) {
+        if (bound.context.isEmpty()) {
+            return argumentJson;
+        }
+        return "{\"argument\":" + argumentJson + ",\"context\":" + gatherContext(bound.label).declaredFacts(bound.context) + "}";
+    }
+
+    private LibraryContext gatherContext(String label) {
+        LibraryContext context;
+        try {
+            context = contextSupplier.get();
+        } catch (RuntimeException failed) {
+            String reason = failed.getMessage() == null ? failed.getClass().getName() : failed.getMessage();
+            throw new PluginException(libraryId, label + " needs the host's context, and gathering it failed: " + reason,
+                    "fix the host's library context supplier so it returns the facts");
+        }
+        String malformed = LibraryContext.malformedFact(context);
+        if (malformed != null) {
+            throw new PluginException(libraryId, label + " was given a context whose " + malformed + " is malformed",
+                    "make the host's library context supplier return " + malformed + " as " + LibraryContext.shapeOf(malformed));
+        }
+        return context;
     }
 
     private String invoke(BoundFunction bound, String argumentJson) {
