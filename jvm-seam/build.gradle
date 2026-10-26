@@ -12,3 +12,61 @@ dependencies {
     testImplementation "com.h2database:h2:2.2.224"
     testImplementation "org.xerial:sqlite-jdbc:3.45.3.0"
 }
+
+// LibraryTypeGenerator maps a $ref onto a contract type only for a definition weivel/model
+// publishes, so the published set is read from the model sibling at build time, never hand-kept.
+def modelDirectory = rootProject.modelSchema().parentFile
+def modelSchemaFiles = ["plugin.schema.json", "library.schema.json"].collect { new File(modelDirectory, it) }
+def modelDefinitionsDirectory = layout.buildDirectory.dir("generated/model-definitions")
+
+def generateModelDefinitions = tasks.register("generateModelDefinitions") {
+    inputs.property "modelDirectory", modelDirectory.absolutePath
+    modelSchemaFiles.findAll { it.isFile() }.each { inputs.file it }
+    outputs.dir modelDefinitionsDirectory
+    doLast {
+        def missing = modelSchemaFiles.findAll { !it.isFile() }
+        if (!missing.isEmpty()) {
+            throw new GradleException("weivel/model is read beside or inside this repository, or from -Dmodel.schema; not found: "
+                + missing*.absolutePath.join(", ") + " (searched " + rootProject.modelSchemaCandidates()*.absolutePath.join(" or ") + ")")
+        }
+        def definitions = new TreeMap()
+        modelSchemaFiles.each { schemaFile ->
+            def published = new groovy.json.JsonSlurper().parse(schemaFile, "UTF-8").definitions ?: [:]
+            definitions[schemaFile.name] = (published.keySet() as List).sort()
+        }
+        def target = modelDefinitionsDirectory.get().file("io/github/intisy/ai/seam/jvm/library/model-definitions.json").asFile
+        target.parentFile.mkdirs()
+        target.setText(groovy.json.JsonOutput.toJson(definitions), "UTF-8")
+    }
+}
+sourceSets.main.resources.srcDir(generateModelDefinitions)
+
+// The generator's tests read the model sibling's definitions and its echo fixture off disk.
+tasks.named("test") {
+    systemProperty "model.directory", modelDirectory.absolutePath
+    modelSchemaFiles.findAll { it.isFile() }.each { inputs.file it }
+    def echoFixture = new File(modelDirectory, "test/fixtures/echo.library.json")
+    if (echoFixture.isFile()) {
+        inputs.file echoFixture
+    }
+}
+
+// The echo fixture's service interface, which the library tests consume, is generated from the
+// model's echo declaration on every build and never committed, so the tests exercise the generator.
+def echoDeclaration = new File(modelDirectory, "test/fixtures/echo.library.json")
+def generatedEchoTypes = layout.buildDirectory.dir("generated/library-types/echo")
+def generateEchoTypes = tasks.register("generateEchoTypes", JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "io.github.intisy.ai.seam.jvm.library.LibraryTypeGenerator"
+    def output = generatedEchoTypes.get().asFile
+    args echoDeclaration.absolutePath, output.absolutePath, "io.github.intisy.ai.seam.jvm.library"
+    inputs.property "echoDeclaration", echoDeclaration.absolutePath
+    if (echoDeclaration.isFile()) {
+        inputs.file echoDeclaration
+    }
+    outputs.dir output
+    doFirst {
+        project.delete(output)
+    }
+}
+sourceSets.test.java.srcDir(generateEchoTypes)

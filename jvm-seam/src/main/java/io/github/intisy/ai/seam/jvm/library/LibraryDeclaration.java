@@ -32,11 +32,15 @@ public final class LibraryDeclaration {
         private final String name;
         private final String symbol;
         private final String kind;
+        private final JsonElement argument;
+        private final JsonElement result;
 
-        FunctionDeclaration(String name, String symbol, String kind) {
+        FunctionDeclaration(String name, String symbol, String kind, JsonElement argument, JsonElement result) {
             this.name = name;
             this.symbol = symbol;
             this.kind = kind;
+            this.argument = argument;
+            this.result = result;
         }
 
         /** @return the name a plugin calls the function by */
@@ -52,6 +56,16 @@ public final class LibraryDeclaration {
         /** @return how it is called; {@code json} is the only kind */
         public String kind() {
             return kind;
+        }
+
+        /** @return a copy of the JSON Schema the argument is declared by: an object, or a boolean */
+        public JsonElement argument() {
+            return argument.deepCopy();
+        }
+
+        /** @return a copy of the JSON Schema the result is declared by: an object, or a boolean */
+        public JsonElement result() {
+            return result.deepCopy();
         }
     }
 
@@ -305,7 +319,9 @@ public final class LibraryDeclaration {
             functions.add(new FunctionDeclaration(
                     declared.get("name").getAsString(),
                     declared.get("symbol").getAsString(),
-                    declared.get("kind").getAsString()));
+                    declared.get("kind").getAsString(),
+                    declared.get("argument").deepCopy(),
+                    declared.get("result").deepCopy()));
         }
         return new ServiceDeclaration(service.get("id").getAsString(), functions);
     }

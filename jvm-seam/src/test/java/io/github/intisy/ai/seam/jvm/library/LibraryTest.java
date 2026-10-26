@@ -99,7 +99,7 @@ class LibraryTest {
 
     @Test
     void returnsAOneMebibyteResultIntact() {
-        assertEquals(1048576, echo.repeat(new EchoService.Repetition(1048576)).length());
+        assertEquals(1048576, echo.repeat(new EchoService.RepeatArgument(1048576)).length());
     }
 
     @Test
@@ -178,17 +178,17 @@ class LibraryTest {
             }
 
             @Override
-            public JsonElement fail(JsonElement argument) {
+            public JsonObject fail(JsonObject argument) {
                 return argument;
             }
 
             @Override
-            public String repeat(Repetition argument) {
+            public String repeat(RepeatArgument argument) {
                 return "";
             }
 
             @Override
-            public String garbage(JsonElement argument) {
+            public String garbage(JsonObject argument) {
                 return "";
             }
         };

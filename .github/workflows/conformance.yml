@@ -14,5 +14,6 @@ jobs:
       toolchains: node gradle
       driver_build: ./gradlew :conformance-driver:jar
       driver: java -jar conformance-driver/build/libs/conformance-driver.jar
+      extra_repositories: weivel/model model
     secrets:
       envPAT: ${{ secrets.PAT }}

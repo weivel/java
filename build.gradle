@@ -2,6 +2,16 @@ plugins {
     id "io.github.intisy.github-gradle" version "1.10.3" apply false
 }
 
+// weivel/model is named by -Dmodel.schema, the path of its plugin.schema.json; else it is checked out
+// inside this repository, where CI puts the sibling, else beside it. A named path is held to it.
+ext.modelSchemaCandidates = { ->
+    def named = System.getProperty("model.schema")
+    named != null
+        ? [rootProject.file(named)]
+        : [rootProject.file("model/plugin.schema.json"), rootProject.file("../model/plugin.schema.json")]
+}
+ext.modelSchema = { -> modelSchemaCandidates().find { it.isFile() } ?: modelSchemaCandidates()[0] }
+
 subprojects {
     apply plugin: "java-library"
     apply plugin: "io.github.intisy.github-gradle"
