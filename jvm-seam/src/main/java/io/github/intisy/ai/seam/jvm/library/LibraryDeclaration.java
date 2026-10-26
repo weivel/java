@@ -36,13 +36,15 @@ public final class LibraryDeclaration {
         private final String kind;
         private final JsonElement argument;
         private final JsonElement result;
+        private final List<String> context;
 
-        FunctionDeclaration(String name, String symbol, String kind, JsonElement argument, JsonElement result) {
+        FunctionDeclaration(String name, String symbol, String kind, JsonElement argument, JsonElement result, List<String> context) {
             this.name = name;
             this.symbol = symbol;
             this.kind = kind;
             this.argument = argument;
             this.result = result;
+            this.context = Collections.unmodifiableList(new ArrayList<String>(context));
         }
 
         /** @return the name a plugin calls the function by */
@@ -68,6 +70,11 @@ public final class LibraryDeclaration {
         /** @return a copy of the JSON Schema the result is declared by: an object, or a boolean */
         public JsonElement result() {
             return result.deepCopy();
+        }
+
+        /** @return the facts of the calling process the function reads, in declaration order; empty when it declares none */
+        public List<String> context() {
+            return context;
         }
     }
 
@@ -109,10 +116,14 @@ public final class LibraryDeclaration {
     static final Map<String, Pattern> SERVICE_PATTERNS = patterns("id", KEBAB_ID);
     static final int MIN_FUNCTIONS = 1;
 
-    static final Set<String> FUNCTION_KEYS = keys("name", "symbol", "kind", "argument", "result");
+    static final Set<String> FUNCTION_KEYS = keys("name", "symbol", "kind", "argument", "result", "context");
     static final Set<String> FUNCTION_REQUIRED = keys("name", "symbol", "kind", "argument", "result");
     static final Map<String, Pattern> FUNCTION_PATTERNS = patterns("name", FUNCTION_NAME, "symbol", C_IDENTIFIER);
     static final List<String> KINDS = Collections.singletonList("json");
+    static final List<String> CONTEXT_FACTS = Collections.unmodifiableList(Arrays.asList("environment", "home", "arguments"));
+    static final boolean CONTEXT_FACTS_UNIQUE = true;
+    static final int MIN_CONTEXT_FACTS = 1;
+    private static final String CONTEXT_FIX = "list the facts the function reads, each once, from \"environment\", \"home\" and \"arguments\", or remove \"context\"";
 
     private final String id;
     private final String version;
@@ -254,6 +265,28 @@ public final class LibraryDeclaration {
         checkKind(level);
         checkSchemaValue(level, "argument");
         checkSchemaValue(level, "result");
+        checkContext(level);
+    }
+
+    private static void checkContext(Level level) {
+        JsonElement context = level.present("context", CONTEXT_FIX);
+        if (context == null) {
+            return;
+        }
+        if (!context.isJsonArray() || context.getAsJsonArray().size() < MIN_CONTEXT_FACTS) {
+            level.violations.add(new Violation(level.path + "/context must be an array of at least one item", CONTEXT_FIX));
+            return;
+        }
+        JsonArray facts = context.getAsJsonArray();
+        Set<String> seen = new LinkedHashSet<String>();
+        for (int index = 0; index < facts.size(); index++) {
+            JsonElement fact = facts.get(index);
+            if (!isString(fact) || !CONTEXT_FACTS.contains(fact.getAsString())) {
+                level.violations.add(new Violation(level.path + "/context/" + index + " must be one of " + CONTEXT_FACTS, CONTEXT_FIX));
+            } else if (CONTEXT_FACTS_UNIQUE && !seen.add(fact.getAsString())) {
+                level.violations.add(new Violation(level.path + "/context must not repeat \"" + fact.getAsString() + "\"", CONTEXT_FIX));
+            }
+        }
     }
 
     private static void checkKind(Level level) {
@@ -311,9 +344,21 @@ public final class LibraryDeclaration {
                     declared.get("symbol").getAsString(),
                     declared.get("kind").getAsString(),
                     declared.get("argument").deepCopy(),
-                    declared.get("result").deepCopy()));
+                    declared.get("result").deepCopy(),
+                    contextOf(declared)));
         }
         return new ServiceDeclaration(service.get("id").getAsString(), functions);
+    }
+
+    private static List<String> contextOf(JsonObject function) {
+        List<String> facts = new ArrayList<String>();
+        JsonElement context = function.get("context");
+        if (context != null) {
+            for (JsonElement fact : context.getAsJsonArray()) {
+                facts.add(fact.getAsString());
+            }
+        }
+        return facts;
     }
 
     private static Set<String> keys(String... names) {

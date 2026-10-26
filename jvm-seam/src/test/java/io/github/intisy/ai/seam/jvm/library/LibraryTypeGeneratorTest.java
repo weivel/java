@@ -545,7 +545,7 @@ class LibraryTypeGeneratorTest {
     }
 
     @Test
-    void mapsEveryPublishedDefinitionOntoATypeTheContractDeclares() {
+    void leavesAppDeclarationTheOnePublishedDefinitionWithoutAContractType() {
         List<String> missing = new ArrayList<String>();
         for (Map.Entry<String, List<String>> file : ModelDefinitions.published().entrySet()) {
             for (String definition : file.getValue()) {
@@ -556,6 +556,13 @@ class LibraryTypeGeneratorTest {
                 }
             }
         }
-        assertEquals(Collections.emptyList(), missing);
+        assertEquals(Collections.singletonList("plugin.schema.json#appDeclaration"), missing);
+    }
+
+    @Test
+    void refusesARefToAppDeclarationForWhichTheContractDeclaresNoType() {
+        assertRefusedAt("result.$ref names appDeclaration in plugin.schema.json, for which the contract declares no "
+                        + SchemaTypes.CONTRACT_PACKAGE + ".AppDeclaration",
+                declarationWithResult("{\"$ref\":\"https://weivel.github.io/model/plugin.schema.json#/definitions/appDeclaration\"}"));
     }
 }

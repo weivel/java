@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.intisy.ai.engine.PluginException;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 import org.junit.jupiter.api.Test;
 
 class LibraryDeclarationTest {
@@ -103,5 +106,38 @@ class LibraryDeclarationTest {
         String text = "{\"id\":\"echo\",\"version\":\"1\",\"binary\":\"echo\",\"release\":\"echo_release\",\"services\":[{\"id\":\"echo\",\"functions\":[]}]}";
         String detail = refusalOf(text).getDetail();
         assertTrue(detail.contains("/services/0/functions"), detail);
+    }
+
+    private static String echoWithContext(final String context) {
+        return ECHO_DECLARATION.replace("\"argument\":{},\"result\":{}}", "\"argument\":{},\"result\":{},\"context\":" + context + "}");
+    }
+
+    @Test
+    void readsTheContextAFunctionDeclares() {
+        LibraryDeclaration declaration = LibraryDeclaration.parse(echoWithContext("[\"environment\",\"home\",\"arguments\"]"));
+
+        assertEquals(Arrays.asList("environment", "home", "arguments"), declaration.services().get(0).functions().get(0).context());
+        assertEquals(Collections.<String>emptyList(), declaration.services().get(0).functions().get(1).context());
+    }
+
+    @Test
+    void refusesAnUnknownContextFact() {
+        PluginException refusal = refusalOf(echoWithContext("[\"cwd\"]"));
+        assertTrue(refusal.getDetail().contains("/services/0/functions/0/context/0"), refusal.getDetail());
+    }
+
+    @Test
+    void refusesARepeatedContextFact() {
+        PluginException refusal = refusalOf(echoWithContext("[\"home\",\"home\"]"));
+        assertTrue(refusal.getDetail().contains("/services/0/functions/0/context"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("home"), refusal.getDetail());
+    }
+
+    @Test
+    void refusesAContextThatIsNotAListOfFacts() {
+        for (String context : new String[] {"[]", "\"home\"", "[1]"}) {
+            PluginException refusal = refusalOf(echoWithContext(context));
+            assertTrue(refusal.getDetail().contains("/services/0/functions/0/context"), context + ": " + refusal.getDetail());
+        }
     }
 }

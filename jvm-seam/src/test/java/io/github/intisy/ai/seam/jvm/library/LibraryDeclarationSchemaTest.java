@@ -101,6 +101,18 @@ class LibraryDeclarationSchemaTest {
         return values;
     }
 
+    private static JsonObject contextOf(JsonObject level) {
+        return propertiesOf(level).getAsJsonObject("context");
+    }
+
+    private static List<String> contextFacts(JsonObject level) {
+        List<String> values = new ArrayList<String>();
+        for (JsonElement value : contextOf(level).getAsJsonObject("items").getAsJsonArray("enum")) {
+            values.add(value.getAsString());
+        }
+        return values;
+    }
+
     @Test
     void checksTheDeclarationLevelTheSchemaPublishes() {
         assertEquals(propertyNames(declarationLevel), LibraryDeclaration.DECLARATION_KEYS);
@@ -127,5 +139,15 @@ class LibraryDeclarationSchemaTest {
         assertEquals(patterns(functionLevel), patternTexts(LibraryDeclaration.FUNCTION_PATTERNS));
         assertEquals(enumOf(functionLevel, "kind"), LibraryDeclaration.KINDS);
         assertEquals(false, functionLevel.get("additionalProperties").getAsBoolean());
+    }
+
+    @Test
+    void checksTheContextTheSchemaPublishes() {
+        JsonObject context = contextOf(functionLevel);
+        assertEquals("array", context.get("type").getAsString());
+        assertEquals("string", context.getAsJsonObject("items").get("type").getAsString());
+        assertEquals(contextFacts(functionLevel), LibraryDeclaration.CONTEXT_FACTS);
+        assertEquals(context.get("uniqueItems").getAsBoolean(), LibraryDeclaration.CONTEXT_FACTS_UNIQUE);
+        assertEquals(context.get("minItems").getAsInt(), LibraryDeclaration.MIN_CONTEXT_FACTS);
     }
 }
