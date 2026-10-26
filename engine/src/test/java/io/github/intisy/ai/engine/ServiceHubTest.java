@@ -205,4 +205,27 @@ class ServiceHubTest {
         assertEquals(Arrays.asList("store/store:thing"), provided);
         assertEquals(Arrays.asList("reader/store:thing"), consumed);
     }
+
+    @Test
+    void aStaleRegisterHandleLeavesALaterRegistrationOfTheSameIdStanding() {
+        ServiceHub hub = hub(new ManualScheduler());
+        ServiceHub.Registry store = hub.forPlugin("store");
+        Scheduler.Cancellable first = store.register("store:thing", "first");
+        first.cancel();
+        store.register("store:thing", "second");
+
+        first.cancel();
+
+        assertEquals("second", hub.get("store:thing"));
+    }
+
+    @Test
+    void releasingAnEmptyPluginIdLeavesTheHostsOwnServicesStanding() {
+        ServiceHub hub = hub(new ManualScheduler());
+        hub.hostService("host:clock", "the clock");
+
+        hub.releasePlugin("");
+
+        assertEquals("the clock", hub.get("host:clock"));
+    }
 }

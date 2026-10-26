@@ -99,7 +99,13 @@ public final class ServiceHub {
         List<String> ids();
     }
 
-    /** One registration: who owns it, who answers for it, and what its declaration claimed. */
+    /**
+     * One registration: who owns it, who answers for it, and what its declaration claimed.
+     *
+     * @implNote The host owns an entry by having no plugin id rather than a reserved one, because
+     * {@link #releasePlugin} is public and any string a caller can pass would sweep the host's own
+     * services with it.
+     */
     static final class Entry {
         private final String pluginId;
         private final String serviceId;
@@ -116,6 +122,18 @@ public final class ServiceHub {
             this.advertised = advertised == null
                     ? Collections.<String, Double>emptyMap()
                     : Collections.unmodifiableMap(new LinkedHashMap<String, Double>(advertised));
+        }
+
+        static Entry ofHost(String serviceId, Object service) {
+            return new Entry(null, serviceId, ServiceProviders.constant(service), null);
+        }
+
+        boolean ownedBy(String candidate) {
+            return pluginId != null && pluginId.equals(candidate);
+        }
+
+        String ownerName() {
+            return pluginId == null ? "the host" : pluginId;
         }
 
         ServiceProvider getProvider() {
@@ -207,10 +225,6 @@ public final class ServiceHub {
     private List<String> wellKnown = new ArrayList<String>();
     private ConstraintVocabulary vocabulary = ConstraintVocabulary.EMPTY;
     private Handles handles = Handles.UNWRAPPED;
-
-    // No plugin can own this, because a manifest id is never empty, which is what keeps a host's own
-    // service out of every per-plugin sweep.
-    private static final String HOST_OWNER = "";
 
     /**
      * @param scheduler the timer source used to expire an unmet {@code want}; null falls back to {@link Scheduler#NEVER}
@@ -340,7 +354,7 @@ public final class ServiceHub {
         if (replaced != null) {
             replaced.revokeAll();
         }
-        entries.put(id, new Entry(HOST_OWNER, id, ServiceProviders.constant(service), null));
+        entries.put(id, Entry.ofHost(id, service));
         announceArrival(id);
     }
 
@@ -383,8 +397,8 @@ public final class ServiceHub {
         watching.remove(pluginId);
 
         for (Map.Entry<String, Entry> registered : new ArrayList<Map.Entry<String, Entry>>(entries.entrySet())) {
-            if (registered.getValue().pluginId.equals(pluginId)) {
-                unregister(pluginId, registered.getKey());
+            if (registered.getValue().ownedBy(pluginId)) {
+                unregister(registered.getValue());
             }
         }
 
@@ -418,16 +432,17 @@ public final class ServiceHub {
         Entry existing = entries.get(id);
         if (existing != null) {
             throw new PluginException(pluginId,
-                    "service \"" + id + "\" is already registered by " + existing.pluginId,
+                    "service \"" + id + "\" is already registered by " + existing.ownerName(),
                     "disable one of the two plugins, or have each register its own namespaced id so consumers can ask for the one they want");
         }
-        entries.put(id, new Entry(pluginId, id, provider, advertised));
+        final Entry added = new Entry(pluginId, id, provider, advertised);
+        entries.put(id, added);
         provided(pluginId, id);
         announceArrival(id);
         return new Scheduler.Cancellable() {
             @Override
             public void cancel() {
-                unregister(pluginId, id);
+                unregister(added);
             }
         };
     }
@@ -464,14 +479,14 @@ public final class ServiceHub {
         notifyWatchers(id, service, true);
     }
 
-    private void unregister(String pluginId, String id) {
-        Entry entry = entries.get(id);
-        if (entry == null || !entry.pluginId.equals(pluginId)) {
+    /** @implNote Removes this registration only, so a stale handle cannot take a later one of the same id. */
+    private void unregister(Entry entry) {
+        if (entries.get(entry.serviceId) != entry) {
             return;
         }
-        entries.remove(id);
+        entries.remove(entry.serviceId);
         entry.revokeAll();
-        notifyWatchers(id, null, false);
+        notifyWatchers(entry.serviceId, null, false);
     }
 
     /**
