@@ -26,7 +26,37 @@ export function modelSchemaPath(): string {
   return found;
 }
 
-/** @returns the manifest vocabulary as `weivel/model` publishes it */
+const LOCAL_DEFINITION = "#/definitions/";
+
+type Definitions = Record<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function definitionReferenced(node: Record<string, unknown>, definitions: Definitions): unknown {
+  if (typeof node.$ref !== "string" || !node.$ref.startsWith(LOCAL_DEFINITION)) return undefined;
+  return definitions[node.$ref.slice(LOCAL_DEFINITION.length)];
+}
+
+function inlineDefinitions(node: unknown, definitions: Definitions): unknown {
+  if (Array.isArray(node)) return node.map((element) => inlineDefinitions(element, definitions));
+  if (!isRecord(node)) return node;
+  const referenced = definitionReferenced(node, definitions);
+  if (referenced !== undefined) return inlineDefinitions(referenced, definitions);
+  return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, inlineDefinitions(value, definitions)]));
+}
+
+/**
+ * @returns the manifest vocabulary as `weivel/model` publishes it, with each local
+ * `#/definitions/<name>` reference replaced by the definition it names and `definitions` dropped
+ *
+ * @implNote The model names a subschema as a definition so a library declaration can `$ref` it, which
+ * changes where it is written and not what it validates. The bundle builds the same tree inline, so
+ * the comparison is between what the two validate; a reference to anything else is left in place and
+ * fails the comparison visibly. Engine's PublishedSchemaTest inlines the same way.
+ */
 export function readModelSchema(): unknown {
-  return JSON.parse(readFileSync(modelSchemaPath(), "utf8"));
+  const { definitions = {}, ...schema } = JSON.parse(readFileSync(modelSchemaPath(), "utf8")) as Record<string, unknown>;
+  return inlineDefinitions(schema, definitions as Definitions);
 }

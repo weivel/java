@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,8 @@ class PublishedSchemaTest {
 
     private static final File PUBLISHED = new File(System.getProperty("model.schema", "plugin.schema.json"));
 
+    private static final String LOCAL_DEFINITION = "#/definitions/";
+
     private static final String RULE = PUBLISHED.getName() + " is the source every implementation "
             + "validates against, and this package's ManifestSchema no longer implements it.\n"
             + "Edit the file only to change the vocabulary itself; otherwise make the Java match it.";
@@ -38,7 +41,7 @@ class PublishedSchemaTest {
     void implementsThePublishedSchemaExactly() throws IOException {
         assertTrue(PUBLISHED.isFile(), "plugin.schema.json is read from weivel/model, checked out beside this "
                 + "repository; not found at " + System.getProperty("model.schema.searched", PUBLISHED.getAbsolutePath()));
-        Object published = new TestJson(read(PUBLISHED)).read();
+        Object published = withDefinitionsInlined(asMap(new TestJson(read(PUBLISHED)).read()));
         Map<String, Object> java = ManifestSchema.get().toTree();
         List<String> differences = new ArrayList<String>();
         compare("", published, java, differences);
@@ -47,6 +50,55 @@ class PublishedSchemaTest {
 
     private static String read(File file) throws IOException {
         return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * The published schema with each local {@code #/definitions/<name>} reference replaced by the
+     * definition it names, and {@code definitions} dropped.
+     *
+     * @implNote The model names a subschema as a definition so a library declaration can {@code $ref}
+     * it, which changes where it is written and not what it validates. {@link ManifestSchema} builds
+     * the same tree inline, so the comparison is between what the two validate; a reference to
+     * anything else is left in place and fails the comparison visibly. The bundle's parity test in
+     * {@code src/__tests__/model-schema.ts} inlines the same way.
+     */
+    private static Object withDefinitionsInlined(Map<String, Object> schema) {
+        Map<String, Object> definitions = schema.containsKey("definitions")
+                ? asMap(schema.get("definitions"))
+                : new LinkedHashMap<String, Object>();
+        Map<String, Object> withoutDefinitions = new LinkedHashMap<String, Object>(schema);
+        withoutDefinitions.remove("definitions");
+        return inline(withoutDefinitions, definitions);
+    }
+
+    private static Object inline(Object node, Map<String, Object> definitions) {
+        if (node instanceof List) {
+            List<Object> inlined = new ArrayList<Object>();
+            for (Object element : asList(node)) {
+                inlined.add(inline(element, definitions));
+            }
+            return inlined;
+        }
+        if (!(node instanceof Map)) {
+            return node;
+        }
+        Object referenced = definitionReferenced(asMap(node), definitions);
+        if (referenced != null) {
+            return inline(referenced, definitions);
+        }
+        Map<String, Object> inlined = new LinkedHashMap<String, Object>();
+        for (Map.Entry<String, Object> entry : asMap(node).entrySet()) {
+            inlined.put(entry.getKey(), inline(entry.getValue(), definitions));
+        }
+        return inlined;
+    }
+
+    private static Object definitionReferenced(Map<String, Object> node, Map<String, Object> definitions) {
+        Object reference = node.get("$ref");
+        if (!(reference instanceof String) || !((String) reference).startsWith(LOCAL_DEFINITION)) {
+            return null;
+        }
+        return definitions.get(((String) reference).substring(LOCAL_DEFINITION.length()));
     }
 
     private static String report(List<String> differences) {
