@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 final class StrictJson {
 
     private static final TypeAdapter<JsonElement> ELEMENT = new Gson().getAdapter(JsonElement.class);
+    private static final String BYTE_ORDER_MARK = "\uFEFF";
 
     private StrictJson() {
     }
@@ -38,7 +39,16 @@ final class StrictJson {
                 .toString();
     }
 
+    /**
+     * @implNote Gson's reader skips a leading byte order mark on its own (measured), and TypeScript's
+     * {@code TextDecoder} strips one by default, so a marked answer or {@code library.json} is
+     * refused here explicitly, as TypeScript refuses it by keeping the mark: RFC 8259 forbids a
+     * producer to add one, and both hosts must read the same bytes the same way.
+     */
     static JsonElement parse(String text) throws IOException {
+        if (text.startsWith(BYTE_ORDER_MARK)) {
+            throw new MalformedJsonException("a byte order mark precedes the JSON value");
+        }
         JsonReader reader = new JsonReader(new StringReader(text));
         reader.setLenient(false);
         try {

@@ -5,6 +5,10 @@ import static io.github.intisy.ai.seam.jvm.library.EchoFixture.freshCache;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.freshHost;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.loadInto;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.pluginSession;
+import static io.github.intisy.ai.seam.jvm.library.EchoFixture.sha256Of;
+import static io.github.intisy.ai.seam.jvm.library.EchoFixture.stageRelease;
+import static io.github.intisy.ai.seam.jvm.library.EchoFixture.withByteOrderMark;
+import static io.github.intisy.ai.seam.jvm.library.EchoFixture.withMirrorService;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.withDigest;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.withOneDigitChanged;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.withoutDigest;
@@ -28,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -198,8 +203,7 @@ class LibraryTest {
         PluginException refusal = refusalOf(() -> loadInto(new LibraryServices(host), ECHO_PIN, cache));
 
         assertEquals("echo", refusal.getPluginId());
-        assertTrue(refusal.getDetail().contains("already provided on the host"), refusal.getDetail());
-        assertTrue(refusal.getDetail().contains("library echo"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("both the embedding host and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
         EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
         assertEquals(json("\"the embedder's\""), served.echo(new JsonObject()));
     }
@@ -213,12 +217,49 @@ class LibraryTest {
         try {
             PluginException refusal = refusalOf(() -> loadInto(services, ECHO_PIN, cache));
 
-            assertTrue(refusal.getDetail().contains("both library echo 0.1.1 and library echo 0.1.1"), refusal.getDetail());
+            assertTrue(refusal.getDetail().contains("both library echo (weivel/bindings@v0.1.1) and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
             EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
             assertEquals(json("{\"still\":\"served\"}"), served.echo(json("{\"still\":\"served\"}")));
         } finally {
             first.close();
         }
+    }
+
+    @Test
+    void offersNoneOfALibrarysServicesWhenOneOfThemCollides() throws IOException {
+        PluginHost host = freshHost();
+        Object embedderEcho = new Object();
+        host.provideService("echo", embedderEcho);
+        Path cache = freshCache();
+        byte[] declared = Files.readAllBytes(binaryPath.resolveSibling("library.json"));
+        LibraryPin pin = stageRelease(cache, binaryPath, withMirrorService(declared));
+
+        PluginException refusal = refusalOf(() -> loadInto(new LibraryServices(host), pin, cache));
+
+        assertEquals("echo", refusal.getPluginId());
+        assertTrue(refusal.getDetail().contains("both the embedding host and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
+        assertNull(host.service("mirror"));
+        assertNull(pluginSession(host, "mirror-consumer").getServices().get("mirror"));
+        assertSame(embedderEcho, host.service("echo"));
+    }
+
+    @Test
+    void refusesALibraryJsonThatStartsWithAByteOrderMarkAsNotJson() throws IOException {
+        Path cache = freshCache();
+        byte[] declared = Files.readAllBytes(binaryPath.resolveSibling("library.json"));
+        LibraryPin pin = stageRelease(cache, binaryPath, withByteOrderMark(declared));
+
+        PluginException refusal = refusalOf(() -> new LibraryAcquirer().acquire(pin, cache));
+
+        assertTrue(refusal.getDetail().contains("library.json is not JSON"), refusal.getDetail());
+    }
+
+    @Test
+    void pinsTheModelsEchoDeclarationAsTheReleaseCarriesIt() throws IOException {
+        byte[] workingCopy = Files.readAllBytes(Paths.get(System.getProperty("model.directory"), "test", "fixtures", "echo.library.json"));
+        byte[] asCommitted = new String(workingCopy, StandardCharsets.UTF_8).replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8);
+
+        assertEquals(ECHO_PIN.sha256().get("library.json"), sha256Of(asCommitted));
     }
 
     @Test

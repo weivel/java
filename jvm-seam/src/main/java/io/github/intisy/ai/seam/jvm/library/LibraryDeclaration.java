@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,8 @@ import java.util.regex.Pattern;
  * cannot express {@code additionalProperties: false}, and taking a schema library into
  * {@code engine} would break its rule of depending on nothing. Every rule of the published schema
  * is checked, and each violation is named the way the TypeScript implementation names it, with
- * the fix the schema carries.
+ * the fix the schema carries. The rules are package-private constants so that
+ * {@code LibraryDeclarationSchemaTest} holds each one to the published schema.
  */
 public final class LibraryDeclaration {
 
@@ -95,9 +97,22 @@ public final class LibraryDeclaration {
     private static final Pattern C_IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final Pattern FUNCTION_NAME = Pattern.compile("^[a-z][A-Za-z0-9]*$");
     private static final String ID_FIX = "use lowercase words joined by single hyphens, for example \"echo\"";
-    private static final Set<String> DECLARATION_KEYS = keys("$schema", "id", "version", "binary", "release", "services");
-    private static final Set<String> SERVICE_KEYS = keys("id", "functions");
-    private static final Set<String> FUNCTION_KEYS = keys("name", "symbol", "kind", "argument", "result");
+
+    static final Set<String> DECLARATION_KEYS = keys("$schema", "id", "version", "binary", "release", "services");
+    static final Set<String> DECLARATION_REQUIRED = keys("id", "version", "binary", "release", "services");
+    static final Map<String, Pattern> DECLARATION_PATTERNS = patterns("id", KEBAB_ID, "binary", C_IDENTIFIER, "release", C_IDENTIFIER);
+    static final int MIN_VERSION_LENGTH = 1;
+    static final int MIN_SERVICES = 1;
+
+    static final Set<String> SERVICE_KEYS = keys("id", "functions");
+    static final Set<String> SERVICE_REQUIRED = keys("id", "functions");
+    static final Map<String, Pattern> SERVICE_PATTERNS = patterns("id", KEBAB_ID);
+    static final int MIN_FUNCTIONS = 1;
+
+    static final Set<String> FUNCTION_KEYS = keys("name", "symbol", "kind", "argument", "result");
+    static final Set<String> FUNCTION_REQUIRED = keys("name", "symbol", "kind", "argument", "result");
+    static final Map<String, Pattern> FUNCTION_PATTERNS = patterns("name", FUNCTION_NAME, "symbol", C_IDENTIFIER);
+    static final List<String> KINDS = Collections.singletonList("json");
 
     private final String id;
     private final String version;
@@ -192,23 +207,22 @@ public final class LibraryDeclaration {
         if (schemaPointer != null && !isString(schemaPointer)) {
             violations.add(new Violation("/$schema must be a string", "point \"$schema\" at the published library.schema.json"));
         }
-        checkPattern(declaration, "", "id", KEBAB_ID, ID_FIX, violations);
-        checkVersion(declaration, violations);
-        checkPattern(declaration, "", "binary", C_IDENTIFIER, "use a C identifier for the binary's base name, for example \"echo\"", violations);
-        checkPattern(declaration, "", "release", C_IDENTIFIER, "name the exported release function as a C identifier, for example \"echo_release\"", violations);
-        JsonArray services = nonEmptyArray(declaration, "", "services", "declare at least one service under \"services\"", violations);
+        Level level = new Level(declaration, "", DECLARATION_REQUIRED, DECLARATION_PATTERNS, violations);
+        level.checkPattern("id", ID_FIX);
+        checkVersion(level);
+        level.checkPattern("binary", "use a C identifier for the binary's base name, for example \"echo\"");
+        level.checkPattern("release", "name the exported release function as a C identifier, for example \"echo_release\"");
+        JsonArray services = level.arrayOfAtLeast("services", MIN_SERVICES, "declare at least one service under \"services\"");
         for (int index = 0; services != null && index < services.size(); index++) {
             checkService(services.get(index), "/services/" + index, violations);
         }
     }
 
-    private static void checkVersion(JsonObject declaration, List<Violation> violations) {
-        JsonElement version = declaration.get("version");
+    private static void checkVersion(Level level) {
         String fix = "set \"version\" to the library's version, for example \"0.1.0\"";
-        if (version == null) {
-            violations.add(missing("", "version", fix));
-        } else if (!isString(version) || version.getAsString().isEmpty()) {
-            violations.add(new Violation("/version must be a non-empty string", fix));
+        JsonElement version = level.present("version", fix);
+        if (version != null && (!isString(version) || version.getAsString().length() < MIN_VERSION_LENGTH)) {
+            level.violations.add(new Violation("/version must be a non-empty string", fix));
         }
     }
 
@@ -219,8 +233,9 @@ public final class LibraryDeclaration {
         }
         JsonObject service = candidate.getAsJsonObject();
         checkKeys(service, path, SERVICE_KEYS, violations);
-        checkPattern(service, path, "id", KEBAB_ID, ID_FIX, violations);
-        JsonArray functions = nonEmptyArray(service, path, "functions", "declare at least one function under \"functions\"", violations);
+        Level level = new Level(service, path, SERVICE_REQUIRED, SERVICE_PATTERNS, violations);
+        level.checkPattern("id", ID_FIX);
+        JsonArray functions = level.arrayOfAtLeast("functions", MIN_FUNCTIONS, "declare at least one function under \"functions\"");
         for (int index = 0; functions != null && index < functions.size(); index++) {
             checkFunction(functions.get(index), path + "/functions/" + index, violations);
         }
@@ -233,53 +248,28 @@ public final class LibraryDeclaration {
         }
         JsonObject function = candidate.getAsJsonObject();
         checkKeys(function, path, FUNCTION_KEYS, violations);
-        checkPattern(function, path, "name", FUNCTION_NAME, "start \"name\" with a lowercase letter and use letters and digits only, for example \"repeat\"", violations);
-        checkPattern(function, path, "symbol", C_IDENTIFIER, "use a C identifier for the exported symbol, for example \"echo_repeat\"", violations);
-        checkKind(function, path, violations);
-        checkSchemaValue(function, path, "argument", violations);
-        checkSchemaValue(function, path, "result", violations);
+        Level level = new Level(function, path, FUNCTION_REQUIRED, FUNCTION_PATTERNS, violations);
+        level.checkPattern("name", "start \"name\" with a lowercase letter and use letters and digits only, for example \"repeat\"");
+        level.checkPattern("symbol", "use a C identifier for the exported symbol, for example \"echo_repeat\"");
+        checkKind(level);
+        checkSchemaValue(level, "argument");
+        checkSchemaValue(level, "result");
     }
 
-    private static void checkKind(JsonObject function, String path, List<Violation> violations) {
-        JsonElement kind = function.get("kind");
+    private static void checkKind(Level level) {
         String fix = "set \"kind\" to \"json\", the only kind there is";
-        if (kind == null) {
-            violations.add(missing(path, "kind", fix));
-        } else if (!isString(kind) || !kind.getAsString().equals("json")) {
-            violations.add(new Violation(path + "/kind must be \"json\"", fix));
+        JsonElement kind = level.present("kind", fix);
+        if (kind != null && (!isString(kind) || !KINDS.contains(kind.getAsString()))) {
+            level.violations.add(new Violation(level.path + "/kind must be \"json\"", fix));
         }
     }
 
-    private static void checkSchemaValue(JsonObject function, String path, String key, List<Violation> violations) {
-        JsonElement schema = function.get(key);
+    private static void checkSchemaValue(Level level, String key) {
         String fix = "give \"" + key + "\" a JSON Schema: an object, or true or false";
-        if (schema == null) {
-            violations.add(missing(path, key, fix));
-        } else if (!schema.isJsonObject() && !(schema.isJsonPrimitive() && schema.getAsJsonPrimitive().isBoolean())) {
-            violations.add(new Violation(path + "/" + key + " must be a JSON Schema object or a boolean", fix));
+        JsonElement schema = level.present(key, fix);
+        if (schema != null && !schema.isJsonObject() && !(schema.isJsonPrimitive() && schema.getAsJsonPrimitive().isBoolean())) {
+            level.violations.add(new Violation(level.path + "/" + key + " must be a JSON Schema object or a boolean", fix));
         }
-    }
-
-    private static void checkPattern(JsonObject owner, String path, String key, Pattern pattern, String fix, List<Violation> violations) {
-        JsonElement value = owner.get(key);
-        if (value == null) {
-            violations.add(missing(path, key, fix));
-        } else if (!isString(value) || !pattern.matcher(value.getAsString()).matches()) {
-            violations.add(new Violation(path + "/" + key + " must match " + pattern.pattern(), fix));
-        }
-    }
-
-    private static JsonArray nonEmptyArray(JsonObject owner, String path, String key, String fix, List<Violation> violations) {
-        JsonElement value = owner.get(key);
-        if (value == null) {
-            violations.add(missing(path, key, fix));
-            return null;
-        }
-        if (!value.isJsonArray() || value.getAsJsonArray().size() == 0) {
-            violations.add(new Violation(path + "/" + key + " must be an array of at least one item", fix));
-            return null;
-        }
-        return value.getAsJsonArray();
     }
 
     private static void checkKeys(JsonObject owner, String path, Set<String> allowed, List<Violation> violations) {
@@ -328,6 +318,64 @@ public final class LibraryDeclaration {
 
     private static Set<String> keys(String... names) {
         return Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(names)));
+    }
+
+    private static Map<String, Pattern> patterns(Object... keysAndPatterns) {
+        Map<String, Pattern> patterns = new LinkedHashMap<String, Pattern>();
+        for (int index = 0; index < keysAndPatterns.length; index += 2) {
+            patterns.put((String) keysAndPatterns[index], (Pattern) keysAndPatterns[index + 1]);
+        }
+        return Collections.unmodifiableMap(patterns);
+    }
+
+    /** One object of the declaration being checked, with the rules its level of the schema sets. */
+    private static final class Level {
+        private final JsonObject owner;
+        private final String path;
+        private final Set<String> required;
+        private final Map<String, Pattern> patterns;
+        private final List<Violation> violations;
+
+        Level(JsonObject owner, String path, Set<String> required, Map<String, Pattern> patterns, List<Violation> violations) {
+            this.owner = owner;
+            this.path = path;
+            this.required = required;
+            this.patterns = patterns;
+            this.violations = violations;
+        }
+
+        /** @return the value under {@code key}, or null when it is absent, which is a violation only when the key is required */
+        JsonElement present(String key, String fix) {
+            JsonElement value = owner.get(key);
+            if (value == null && required.contains(key)) {
+                violations.add(missing(path, key, fix));
+            }
+            return value;
+        }
+
+        void checkPattern(String key, String fix) {
+            Pattern pattern = patterns.get(key);
+            JsonElement value = present(key, fix);
+            if (value != null && (!isString(value) || !pattern.matcher(value.getAsString()).matches())) {
+                violations.add(new Violation(path + "/" + key + " must match " + pattern.pattern(), fix));
+            }
+        }
+
+        JsonArray arrayOfAtLeast(String key, int minimum, String fix) {
+            JsonElement value = present(key, fix);
+            if (value == null) {
+                return null;
+            }
+            if (!value.isJsonArray() || value.getAsJsonArray().size() < minimum) {
+                violations.add(new Violation(path + "/" + key + " must be an array of at least " + itemCount(minimum), fix));
+                return null;
+            }
+            return value.getAsJsonArray();
+        }
+
+        private static String itemCount(int minimum) {
+            return minimum == 1 ? "one item" : minimum + " items";
+        }
     }
 
     private static final class Violation {

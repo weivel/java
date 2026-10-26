@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import java.util.Map;
 public final class LibraryServices {
 
     private static final Gson GSON = new Gson();
+    private static final String EMBEDDING_HOST = "the embedding host";
 
     private final PluginHost host;
     private final Map<String, String> librariesByServiceId = new HashMap<String, String>();
@@ -34,6 +36,34 @@ public final class LibraryServices {
     /** @param host the host whose plugins this instance offers library services to; hold one instance per host */
     public LibraryServices(PluginHost host) {
         this.host = host;
+    }
+
+    /**
+     * What an embedder does with one pin: acquires the release, opens it, and offers every service
+     * it declares, or nothing.
+     *
+     * @param pin the release to load and the digest of each of its files
+     * @param cacheDirectory where verified releases are kept between runs
+     * @param interfacesByServiceId the interface each declared service is offered as, keyed by service id
+     * @return the opened library, which the embedder closes when the host stops
+     * @throws PluginException naming the release or the library when acquiring, opening or offering
+     * it is refused; nothing is then left open or registered
+     */
+    public synchronized LibraryBridge load(LibraryPin pin, Path cacheDirectory, Map<String, Class<?>> interfacesByServiceId) {
+        return load(new LibraryAcquirer(), pin, cacheDirectory, interfacesByServiceId);
+    }
+
+    synchronized LibraryBridge load(LibraryAcquirer acquirer, LibraryPin pin, Path cacheDirectory,
+                                    Map<String, Class<?>> interfacesByServiceId) {
+        LibraryAcquirer.AcquiredLibrary acquired = acquirer.acquire(pin, cacheDirectory);
+        LibraryBridge bridge = LibraryBridge.open(acquired.binaryPath(), acquired.declaration());
+        try {
+            register(bridge, acquired.declaration(), interfacesByServiceId, providerOf(acquired.declaration(), pin));
+        } catch (RuntimeException refused) {
+            bridge.close();
+            throw refused;
+        }
+        return bridge;
     }
 
     /**
@@ -45,14 +75,25 @@ public final class LibraryServices {
      * @throws PluginException naming the library, before anything registers, when a service has no
      * interface, an interface asks for a function the library does not declare, or a service id is
      * already provided on the host
-     * @implNote A service id the host already offers is refused rather than replaced, because the
-     * host registry replaces a service registered twice and the consumers holding the first would
-     * lose it. Only a library this instance registered can be named as the earlier provider: the
-     * host registry says that an id is taken, not by whom.
      */
     public synchronized void provide(LibraryBridge bridge, LibraryDeclaration declaration,
                                      Map<String, Class<?>> interfacesByServiceId) {
-        String provider = "library " + declaration.id() + " " + declaration.version();
+        register(bridge, declaration, interfacesByServiceId, "library " + declaration.id() + " " + declaration.version());
+    }
+
+    private static String providerOf(LibraryDeclaration declaration, LibraryPin pin) {
+        return "library " + declaration.id() + " (" + pin.label() + ")";
+    }
+
+    /**
+     * @implNote A service id the host already offers is refused rather than replaced, because the
+     * host registry replaces a service registered twice and the consumers holding the first would
+     * lose it. One colliding service refuses the whole library, since a library is one release unit
+     * and a partial offer would split it silently. Only a library this instance registered can be
+     * named as the earlier provider: the host registry says that an id is taken, not by whom.
+     */
+    private void register(LibraryBridge bridge, LibraryDeclaration declaration,
+                          Map<String, Class<?>> interfacesByServiceId, String provider) {
         Map<String, Object> services = new LinkedHashMap<String, Object>();
         for (LibraryDeclaration.ServiceDeclaration service : declaration.services()) {
             refuseCollision(declaration, provider, service.id());
@@ -68,15 +109,11 @@ public final class LibraryServices {
         if (host.service(serviceId) == null) {
             return;
         }
-        String existing = librariesByServiceId.get(serviceId);
-        if (existing == null) {
-            throw new PluginException(declaration.id(),
-                    "service \"" + serviceId + "\" is already provided on the host, so the copy " + provider + " offers is refused",
-                    "rename the service in library.json, or stop the host's other provider offering \"" + serviceId + "\"");
-        }
+        String existing = librariesByServiceId.containsKey(serviceId) ? librariesByServiceId.get(serviceId) : EMBEDDING_HOST;
         throw new PluginException(declaration.id(),
-                "service \"" + serviceId + "\" is offered by both " + existing + " and " + provider + ", so the second copy is refused",
-                "rename the service in one library's library.json, or stop loading one of the two libraries");
+                "service \"" + serviceId + "\" is offered by both " + existing + " and " + provider
+                        + ", so the library is refused with every service it offers",
+                "rename the service in one library's library.json, or stop " + existing + " offering \"" + serviceId + "\"");
     }
 
     private static Class<?> interfaceFor(LibraryDeclaration declaration, LibraryDeclaration.ServiceDeclaration service,
