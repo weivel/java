@@ -305,7 +305,7 @@ public final class JavaDriver {
             }
             units.add(new ActivationUnit(String.valueOf(unit.get("id")), offers, needs));
         }
-        ActivationPlan plan = Activation.order(units, edgeSource);
+        ActivationPlan plan = Activation.order(units, edgeSource, strings(given.get("hostProvided")));
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("order", plan.getOrder());
         result.put("cycle", plan.getCycles().isEmpty() ? null : plan.getCycles().get(0));

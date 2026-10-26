@@ -47,6 +47,15 @@ class ActivationPolicyTest {
     }
 
     @Test
+    void startsAMandatoryConsumerOfAServiceTheHostProvides() {
+        ActivationPlan plan = Activation.order(Arrays.asList(
+                unit("dashboard", offers(), needs(need("clock", false, false)))),
+                DeclarationKind.SERVICE, Arrays.asList("clock"));
+        assertEquals(Arrays.asList("dashboard"), plan.getOrder());
+        assertTrue(plan.getRefusals().isEmpty(), plan.getRefusals().toString());
+    }
+
+    @Test
     void startsWithoutAMissingOptionalRequirement() {
         ActivationPlan plan = Activation.order(Arrays.asList(
                 unit("api.http", offers("api.http"), needs(need("storage.object", true, false)))));

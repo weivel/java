@@ -81,6 +81,43 @@ public final class Activation {
      * genuinely must start before another.
      */
     public static ActivationPlan order(List<ActivationUnit> units, DeclarationKind edgeSource) {
+        return orderUnits(units, edgeSource);
+    }
+
+    /**
+     * Computes an activation order for a set of units, counting services the host itself supplies
+     * as providers.
+     *
+     * @param units the units to order
+     * @param edgeSource which kind of declaration draws the edges, as {@link #order(List, DeclarationKind)} takes it
+     * @param hostProvided service ids the host supplies; they meet a mandatory need exactly as a
+     *                     unit's offer would, but the host is never activated, refused or listed in the order
+     * @return the resulting order, the dependency cycles left out of it, and one refusal per unit
+     * that cannot start
+     * @implNote The host is modelled as a unit that offers its services and needs nothing, so the
+     * refusal fixpoint, which cascades, sees them as providers from its first pass instead of
+     * filtering refusals afterwards.
+     */
+    public static ActivationPlan order(List<ActivationUnit> units, DeclarationKind edgeSource, List<String> hostProvided) {
+        if (hostProvided == null || hostProvided.isEmpty()) {
+            return orderUnits(units, edgeSource);
+        }
+        List<ActivationUnit.Offer> offers = new ArrayList<ActivationUnit.Offer>();
+        for (String serviceId : hostProvided) {
+            offers.add(new ActivationUnit.Offer(DeclarationKind.SERVICE, serviceId));
+        }
+        List<ActivationUnit> withHost = new ArrayList<ActivationUnit>(units);
+        withHost.add(new ActivationUnit(HOST_UNIT_ID, offers, new ArrayList<ActivationUnit.Need>()));
+        ActivationPlan plan = orderUnits(withHost, edgeSource);
+        List<String> order = new ArrayList<String>(plan.getOrder());
+        order.remove(HOST_UNIT_ID);
+        return new ActivationPlan(order, plan.getCycles(), plan.getRefusals());
+    }
+
+    /** No manifest id can be this, because a manifest id is lowercase words joined by hyphens. */
+    private static final String HOST_UNIT_ID = String.valueOf((char) 0) + "host";
+
+    private static ActivationPlan orderUnits(List<ActivationUnit> units, DeclarationKind edgeSource) {
         refuseDuplicateIds(units);
         Set<String> refusedIds = new LinkedHashSet<String>();
         List<PluginException> refusals = new ArrayList<PluginException>();
