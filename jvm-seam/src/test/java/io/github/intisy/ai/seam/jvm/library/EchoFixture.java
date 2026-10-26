@@ -42,11 +42,11 @@ final class EchoFixture {
     }
 
     /** What an embedder does with one pin: acquire, open, offer, and close the library again if it offers nothing. */
-    static LibraryBridge loadInto(PluginHost host, LibraryPin pin, Path cache) {
+    static LibraryBridge loadInto(LibraryServices services, LibraryPin pin, Path cache) {
         LibraryAcquirer.AcquiredLibrary acquired = new LibraryAcquirer().acquire(pin, cache);
         LibraryBridge bridge = LibraryBridge.open(acquired.binaryPath(), acquired.declaration());
         try {
-            LibraryServices.provide(host, bridge, acquired.declaration(), echoInterfaces());
+            services.provide(bridge, acquired.declaration(), echoInterfaces());
         } catch (RuntimeException refused) {
             bridge.close();
             throw refused;

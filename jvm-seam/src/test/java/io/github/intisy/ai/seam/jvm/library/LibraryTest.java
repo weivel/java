@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.intisy.ai.engine.PluginException;
@@ -50,7 +51,7 @@ class LibraryTest {
     static void startAHostOfferingTheEchoLibrary() throws IOException {
         Path cache = freshCache();
         PluginHost host = freshHost();
-        sharedBridge = loadInto(host, ECHO_PIN, cache);
+        sharedBridge = loadInto(new LibraryServices(host), ECHO_PIN, cache);
         echo = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
         LibraryAcquirer.AcquiredLibrary acquired = new LibraryAcquirer().acquire(ECHO_PIN, cache);
         binaryPath = acquired.binaryPath();
@@ -106,6 +107,7 @@ class LibraryTest {
         PluginException refusal = refusalOf(() -> echo.garbage(new JsonObject()));
         assertEquals("echo", refusal.getPluginId());
         assertTrue(refusal.getDetail().contains("garbage"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("not UTF-8"), refusal.getDetail());
     }
 
     @Test
@@ -152,7 +154,7 @@ class LibraryTest {
         host.provideService("greeting", greeting);
         Path cache = freshCache();
 
-        PluginException refusal = refusalOf(() -> loadInto(host, withoutDigest(ECHO_PIN, platformKey), cache));
+        PluginException refusal = refusalOf(() -> loadInto(new LibraryServices(host), withoutDigest(ECHO_PIN, platformKey), cache));
 
         assertTrue(refusal.getDetail().contains(platformKey), refusal.getDetail());
         assertNull(pluginSession(host, "consumer").getServices().get("echo"));
@@ -193,10 +195,10 @@ class LibraryTest {
         host.provideService("echo", embedderEcho);
         Path cache = freshCache();
 
-        PluginException refusal = refusalOf(() -> loadInto(host, ECHO_PIN, cache));
+        PluginException refusal = refusalOf(() -> loadInto(new LibraryServices(host), ECHO_PIN, cache));
 
         assertEquals("echo", refusal.getPluginId());
-        assertTrue(refusal.getDetail().contains("the embedding host"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("already provided on the host"), refusal.getDetail());
         assertTrue(refusal.getDetail().contains("library echo"), refusal.getDetail());
         EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
         assertEquals(json("\"the embedder's\""), served.echo(new JsonObject()));
@@ -206,9 +208,10 @@ class LibraryTest {
     void refusesTheSecondLibrarysCopyOfAServiceIdTheFirstLibraryAlreadyOffers() throws IOException {
         PluginHost host = freshHost();
         Path cache = freshCache();
-        LibraryBridge first = loadInto(host, ECHO_PIN, cache);
+        LibraryServices services = new LibraryServices(host);
+        LibraryBridge first = loadInto(services, ECHO_PIN, cache);
         try {
-            PluginException refusal = refusalOf(() -> loadInto(host, ECHO_PIN, cache));
+            PluginException refusal = refusalOf(() -> loadInto(services, ECHO_PIN, cache));
 
             assertTrue(refusal.getDetail().contains("both library echo 0.1.1 and library echo 0.1.1"), refusal.getDetail());
             EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
@@ -321,7 +324,7 @@ class LibraryTest {
         PluginHost host = freshHost();
         LibraryBridge bridge = LibraryBridge.open(binaryPath, declaration);
         try {
-            PluginException refusal = refusalOf(() -> LibraryServices.provide(host, bridge, declaration,
+            PluginException refusal = refusalOf(() -> new LibraryServices(host).provide(bridge, declaration,
                     Collections.<String, Class<?>>singletonMap("echo", WiderThanTheLibrary.class)));
 
             assertTrue(refusal.getDetail().contains("translate"), refusal.getDetail());
@@ -336,7 +339,7 @@ class LibraryTest {
         PluginHost host = freshHost();
         LibraryBridge bridge = LibraryBridge.open(binaryPath, declaration);
         try {
-            PluginException refusal = refusalOf(() -> LibraryServices.provide(host, bridge, declaration,
+            PluginException refusal = refusalOf(() -> new LibraryServices(host).provide(bridge, declaration,
                     Collections.<String, Class<?>>emptyMap()));
 
             assertTrue(refusal.getDetail().contains("echo"), refusal.getDetail());
@@ -344,5 +347,76 @@ class LibraryTest {
         } finally {
             bridge.close();
         }
+    }
+
+    /** A service shape with a default method, which a JDK proxy would send to the library rather than run. */
+    public interface WithADefaultMethod {
+        JsonElement echo(JsonElement argument);
+
+        default String shout(JsonElement argument) {
+            return "never reached";
+        }
+    }
+
+    @Test
+    void refusesADefaultMethodBeforeAnythingRegisters() {
+        PluginHost host = freshHost();
+        LibraryBridge bridge = LibraryBridge.open(binaryPath, declaration);
+        try {
+            PluginException refusal = refusalOf(() -> new LibraryServices(host).provide(bridge, declaration,
+                    Collections.<String, Class<?>>singletonMap("echo", WithADefaultMethod.class)));
+
+            assertTrue(refusal.getDetail().contains("shout"), refusal.getDetail());
+            assertNull(host.service("echo"));
+        } finally {
+            bridge.close();
+        }
+    }
+
+    /** A service shape whose return type cannot hold what echo answers. */
+    public interface Mistyped {
+        int echo(JsonElement argument);
+    }
+
+    private static Mistyped mistypedOn(PluginHost host, LibraryBridge bridge) {
+        new LibraryServices(host).provide(bridge, declaration, Collections.<String, Class<?>>singletonMap("echo", Mistyped.class));
+        return (Mistyped) host.service("echo");
+    }
+
+    @Test
+    void refusesAResultThatDoesNotFitTheReturnTypeNamingLibraryAndFunction() {
+        LibraryBridge bridge = LibraryBridge.open(binaryPath, declaration);
+        try {
+            Mistyped mistyped = mistypedOn(freshHost(), bridge);
+
+            PluginException refusal = refusalOf(() -> mistyped.echo(json("{\"a\":1}")));
+
+            assertEquals("echo", refusal.getPluginId());
+            assertTrue(refusal.getDetail().contains("echo.echo"), refusal.getDetail());
+            assertTrue(refusal.getDetail().contains("does not fit int"), refusal.getDetail());
+        } finally {
+            bridge.close();
+        }
+    }
+
+    @Test
+    void refusesANullResultForAPrimitiveReturnType() {
+        LibraryBridge bridge = LibraryBridge.open(binaryPath, declaration);
+        try {
+            Mistyped mistyped = mistypedOn(freshHost(), bridge);
+
+            PluginException refusal = refusalOf(() -> mistyped.echo(JsonNull.INSTANCE));
+
+            assertTrue(refusal.getDetail().contains("echo.echo"), refusal.getDetail());
+            assertTrue(refusal.getDetail().contains("null"), refusal.getDetail());
+        } finally {
+            bridge.close();
+        }
+    }
+
+    @Test
+    void refusesAPlatformKeyThatIsNotOsDashArch() {
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> new LibraryAcquirer("../x64"));
+        assertTrue(refusal.getMessage().contains("../x64"), refusal.getMessage());
     }
 }

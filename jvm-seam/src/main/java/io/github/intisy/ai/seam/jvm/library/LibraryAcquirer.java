@@ -61,6 +61,7 @@ public final class LibraryAcquirer {
     private static final String DECLARATION_ASSET = "library.json";
     private static final String RELEASE_HOST = "https://github.com";
     private static final Pattern PATH_SEGMENT = Pattern.compile("^(?!\\.{1,2}$)[A-Za-z0-9_.+-]+$");
+    private static final Pattern PLATFORM_KEY = Pattern.compile("^[a-z0-9]+-[a-z0-9]+$");
     private static final Pattern HEX_DIGEST = Pattern.compile("^[0-9a-fA-F]{64}$");
     private static final int CONNECT_TIMEOUT_MILLIS = 15000;
     private static final int READ_TIMEOUT_MILLIS = 60000;
@@ -74,12 +75,18 @@ public final class LibraryAcquirer {
         this(currentPlatformKey());
     }
 
-    /** @param platformKey the binary to acquire, as a release names it, for example {@code linux-x64} */
+    /**
+     * @param platformKey the binary to acquire, as a release names it, for example {@code linux-x64}
+     * @throws IllegalArgumentException when the key is not {@code <os>-<arch>} in lowercase letters and digits
+     */
     public LibraryAcquirer(String platformKey) {
         this(platformKey, overHttps(), atomicMove());
     }
 
     LibraryAcquirer(String platformKey, Download download, Move move) {
+        if (platformKey == null || !PLATFORM_KEY.matcher(platformKey).matches()) {
+            throw new IllegalArgumentException("a platform key is <os>-<arch> as Node spells them, for example linux-x64, not " + platformKey);
+        }
         this.platformKey = platformKey;
         this.download = download;
         this.move = move;
