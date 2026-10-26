@@ -561,8 +561,7 @@ class LibraryTypeGeneratorTest {
 
     @Test
     void refusesARefToAppDeclarationForWhichTheContractDeclaresNoType() {
-        assertRefusedAt("result.$ref names appDeclaration in plugin.schema.json, for which the contract declares no "
-                        + SchemaTypes.CONTRACT_PACKAGE + ".AppDeclaration",
+        assertRefusedAt("result.$ref names appDeclaration in plugin.schema.json, for which the contract declares no type AppDeclaration",
                 declarationWithResult("{\"$ref\":\"https://weivel.github.io/model/plugin.schema.json#/definitions/appDeclaration\"}"));
     }
 }

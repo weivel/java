@@ -168,8 +168,8 @@ final class SchemaTypes {
         }
         String simpleName = JavaNames.pascalCase(definition);
         if (!contractDeclares(simpleName)) {
-            throw refusal(path + ".$ref", "names " + definition + " in " + file + ", for which the contract declares no "
-                    + CONTRACT_PACKAGE + "." + simpleName, "add the type to the contract, or declare the shape inline");
+            throw refusal(path + ".$ref", "names " + definition + " in " + file + ", for which the contract declares no type "
+                    + simpleName, "add the type to the contract, or declare the shape inline");
         }
         contractTypes.add(simpleName);
         return imported(CONTRACT_PACKAGE + "." + simpleName);

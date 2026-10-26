@@ -274,7 +274,7 @@ public final class LibraryDeclaration {
             return;
         }
         if (!context.isJsonArray() || context.getAsJsonArray().size() < MIN_CONTEXT_FACTS) {
-            level.violations.add(new Violation(level.path + "/context must be an array of at least one item", CONTEXT_FIX));
+            level.violations.add(new Violation(level.path + "/context must be an array of at least " + Level.itemCount(MIN_CONTEXT_FACTS), CONTEXT_FIX));
             return;
         }
         JsonArray facts = context.getAsJsonArray();
