@@ -190,7 +190,7 @@ public final class LibraryBridge implements AutoCloseable {
         LibraryContext context;
         try {
             context = contextSupplier.get();
-        } catch (RuntimeException failed) {
+        } catch (Exception failed) {
             String reason = failed.getMessage() == null ? failed.getClass().getName() : failed.getMessage();
             throw new PluginException(libraryId, label + " needs the host's context, and gathering it failed: " + reason,
                     "fix the host's library context supplier so it returns the facts");

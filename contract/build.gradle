@@ -1,4 +1,5 @@
-// The annotations are SOURCE-retention, so compileOnly is right: nothing needs them at run time.
+// compileOnly is right: every annotation is SOURCE-retention except @TsLiteral, which jvm-seam reads at
+// run time and carries :annotations for; a JVM ignores an annotation whose class is absent.
 dependencies {
     compileOnly project(":annotations")
     annotationProcessor project(":processor")

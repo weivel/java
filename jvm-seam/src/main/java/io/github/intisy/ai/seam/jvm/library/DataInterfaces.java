@@ -2,10 +2,12 @@ package io.github.intisy.ai.seam.jvm.library;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonIOException;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.TypeAdapterFactory;
+import io.github.intisy.ai.tsemit.TsLiteral;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
@@ -17,9 +19,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -29,9 +31,10 @@ import java.util.Map;
  * neither which interfaces are data nor which properties are optional is visible at run time. Any
  * interface whose methods are all abstract and take no arguments is therefore read as data, and an
  * absent property answers null for a reference type and is refused for a primitive one; which
- * properties are required is held by the declaration's result schema. {@code @TsLiteral} is
- * SOURCE-retained too, so an enum constant is read from its own name or from that name in lower
- * case with each {@code _} written {@code -}, the form every contract literal takes.
+ * properties are required is held by the declaration's result schema. An enum constant is read and
+ * written by the processor's own rule: its {@code @TsLiteral} value, which is RUNTIME-retained for
+ * this, or else its name; any other string is refused, as the emitted TypeScript union refuses it.
+ * A data proxy handed back into a call is written as the JSON it was read from.
  */
 final class DataInterfaces {
 
@@ -48,7 +51,8 @@ final class DataInterfaces {
                 if (raw.isEnum()) {
                     return (TypeAdapter<T>) new EnumAdapter(raw);
                 }
-                return isDataInterface(raw) ? (TypeAdapter<T>) new DataInterfaceAdapter(gson, raw) : null;
+                Class<?> dataInterface = isDataProxyClass(raw) ? raw.getInterfaces()[0] : raw;
+                return isDataInterface(dataInterface) ? (TypeAdapter<T>) new DataInterfaceAdapter(gson, dataInterface) : null;
             }
         };
     }
@@ -67,6 +71,10 @@ final class DataInterfaces {
             }
         }
         return true;
+    }
+
+    private static boolean isDataProxyClass(Class<?> candidate) {
+        return Proxy.isProxyClass(candidate) && candidate.getInterfaces().length == 1;
     }
 
     private static List<Method> propertiesOf(Class<?> dataInterface) {
@@ -123,12 +131,28 @@ final class DataInterfaces {
                 throw new JsonParseException(dataInterface.getSimpleName() + "." + property.getName() + " is "
                         + (value == null ? "absent" : "null") + ", and a " + property.getReturnType() + " cannot be");
             }
-            return converted;
+            return unmodifiable(converted);
+        }
+
+        private static Object unmodifiable(Object value) {
+            if (value instanceof List) {
+                return Collections.unmodifiableList((List<?>) value);
+            }
+            return value instanceof Map ? Collections.unmodifiableMap((Map<?, ?>) value) : value;
         }
 
         @Override
-        public void write(JsonWriter writer, Object value) {
-            throw new UnsupportedOperationException(dataInterface.getName() + " is read from JSON and never written to it");
+        public void write(JsonWriter writer, Object value) throws IOException {
+            if (value == null) {
+                writer.nullValue();
+                return;
+            }
+            DataHandler handler = DataHandler.of(value);
+            if (handler == null) {
+                throw new JsonIOException(dataInterface.getName() + " is written only as a value read from JSON, and "
+                        + value.getClass().getName() + " was not");
+            }
+            gson.getAdapter(JsonElement.class).write(writer, handler.json);
         }
     }
 
@@ -159,22 +183,41 @@ final class DataInterfaces {
         }
 
         private boolean isEqualData(Object other) {
-            if (other == null || !Proxy.isProxyClass(other.getClass())) {
-                return false;
+            DataHandler handler = of(other);
+            return handler != null && handler.dataInterface == dataInterface && handler.json.equals(json);
+        }
+
+        /** @return the handler behind a data proxy, or null when the value is not one */
+        static DataHandler of(Object value) {
+            if (value == null || !Proxy.isProxyClass(value.getClass())) {
+                return null;
             }
-            InvocationHandler handler = Proxy.getInvocationHandler(other);
-            return handler instanceof DataHandler
-                    && ((DataHandler) handler).dataInterface == dataInterface
-                    && ((DataHandler) handler).json.equals(json);
+            InvocationHandler handler = Proxy.getInvocationHandler(value);
+            return handler instanceof DataHandler ? (DataHandler) handler : null;
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private static final class EnumAdapter extends TypeAdapter<Object> {
         private final Class<?> enumType;
+        private final Map<String, Object> constantsByLiteral = new LinkedHashMap<String, Object>();
+        private final Map<Object, String> literalsByConstant = new LinkedHashMap<Object, String>();
 
         EnumAdapter(Class<?> enumType) {
             this.enumType = enumType;
+            for (Object constant : enumType.getEnumConstants()) {
+                String literal = literalOf(enumType, ((Enum<?>) constant).name());
+                constantsByLiteral.put(literal, constant);
+                literalsByConstant.put(constant, literal);
+            }
+        }
+
+        private static String literalOf(Class<?> enumType, String constantName) {
+            try {
+                TsLiteral literal = enumType.getField(constantName).getAnnotation(TsLiteral.class);
+                return literal == null ? constantName : literal.value();
+            } catch (NoSuchFieldException impossible) {
+                throw new IllegalStateException("every enum constant is a public field of its enum", impossible);
+            }
         }
 
         @Override
@@ -184,17 +227,12 @@ final class DataInterfaces {
                 return null;
             }
             String literal = reader.nextString();
-            for (Object constant : enumType.getEnumConstants()) {
-                String name = ((Enum) constant).name();
-                if (name.equals(literal) || literalOf(name).equals(literal)) {
-                    return constant;
-                }
+            Object constant = constantsByLiteral.get(literal);
+            if (constant == null) {
+                throw new JsonParseException("\"" + literal + "\" is not one of " + constantsByLiteral.keySet()
+                        + ", the literals of " + enumType.getSimpleName());
             }
-            throw new JsonParseException("\"" + literal + "\" names no constant of " + enumType.getSimpleName());
-        }
-
-        private static String literalOf(String constantName) {
-            return constantName.toLowerCase(Locale.ROOT).replace('_', '-');
+            return constant;
         }
 
         @Override
@@ -202,7 +240,7 @@ final class DataInterfaces {
             if (value == null) {
                 writer.nullValue();
             } else {
-                writer.value(literalOf(((Enum) value).name()));
+                writer.value(literalsByConstant.get(value));
             }
         }
     }

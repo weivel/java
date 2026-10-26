@@ -256,4 +256,21 @@ class LibraryContextTest {
 
         assertEquals(envelope("{\"a\":1}", "{\"home\":\"/h\"}"), echo.contextual(json("{\"a\":1}")));
     }
+
+    @SuppressWarnings("unchecked")
+    private static <E extends Exception> RuntimeException sneakyThrow(Exception checked) throws E {
+        throw (E) checked;
+    }
+
+    @Test
+    void refusesACallWhenTheProviderThrowsACheckedException() {
+        LibraryBridge bridge = open(() -> {
+            throw LibraryContextTest.<RuntimeException>sneakyThrow(new IOException("home unreadable"));
+        }, "home");
+
+        PluginException refusal = refusalOf(bridge);
+
+        assertTrue(refusal.getDetail().contains("echo.contextual"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("home unreadable"), refusal.getDetail());
+    }
 }

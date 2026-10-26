@@ -6,6 +6,8 @@ dependencies {
     // GsonJsonCodec's own surface takes Gson types, so a consumer configuring one needs them too.
     api "com.google.code.gson:gson:2.10.1"
     implementation "net.java.dev.jna:jna:5.19.1"
+    // DataInterfaces reads a contract enum by its @TsLiteral, the one RUNTIME-retained annotation.
+    implementation project(":annotations")
 
     // JdbcStore takes a javax.sql.DataSource the caller supplies; H2 and SQLite are here only to
     // exercise both dialect paths (SQLite has no SELECT ... FOR UPDATE) against real drivers.

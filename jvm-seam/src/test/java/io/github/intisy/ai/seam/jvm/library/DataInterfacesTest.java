@@ -59,6 +59,35 @@ class DataInterfacesTest {
         AppDescriptor echo(JsonElement argument);
     }
 
+    interface PersonWriter {
+        JsonElement echo(Person argument);
+    }
+
+    interface IntegrationEcho {
+        AppIntegration echo(JsonElement argument);
+    }
+
+    interface IntegrationWriter {
+        JsonElement echo(AppIntegration argument);
+    }
+
+    enum Colour {
+        RED,
+        DARK_BLUE
+    }
+
+    interface ColourEcho {
+        Colour echo(Colour argument);
+    }
+
+    interface ColourReader {
+        Colour echo(JsonElement argument);
+    }
+
+    interface ColourWriter {
+        JsonElement echo(Colour argument);
+    }
+
     private static final String ALPHA = "{\"id\":\"alpha\",\"label\":\"Alpha CLI\","
             + "\"home\":{\"envOverride\":\"HUB_ALPHA_DIR\",\"nativeEnv\":\"ALPHA_CONFIG_DIR\",\"candidates\":[\"~/.alpha\",\"~/.config/alpha\"]},"
             + "\"detect\":{\"binary\":\"alpha\",\"pkg\":\"alpha-cli\"},"
@@ -177,5 +206,45 @@ class DataInterfacesTest {
         PluginException refusal = assertThrows(PluginException.class, () -> echo.echo(json(ALPHA.replace("env-baseurl", "smoke-signal"))));
 
         assertTrue(refusal.getDetail().contains("smoke-signal"), refusal.getDetail());
+    }
+
+    @Test
+    void answersListsThatCannotBeChanged() {
+        Person person = echoAs(PersonEcho.class).echo(json("{\"name\":\"Ada\",\"previous\":[{\"city\":\"Paris\"}]}"));
+
+        assertThrows(UnsupportedOperationException.class, () -> person.previous().clear());
+        assertEquals(1, person.previous().size());
+    }
+
+    @Test
+    void writesAReceivedDataValueAsTheJsonItWasReadFrom() {
+        String ada = "{\"name\":\"Ada\",\"address\":{\"city\":\"London\"},\"extra\":[1]}";
+        Person person = echoAs(PersonEcho.class).echo(json(ada));
+
+        assertEquals(json(ada), echoAs(PersonWriter.class).echo(person));
+    }
+
+    @Test
+    void readsAndWritesAnEnumByItsTsLiteral() {
+        assertEquals(AppIntegration.ENV_BASEURL, echoAs(IntegrationEcho.class).echo(json("\"env-baseurl\"")));
+        assertEquals(json("\"env-baseurl\""), echoAs(IntegrationWriter.class).echo(AppIntegration.ENV_BASEURL));
+        assertEquals(json("\"native\""), echoAs(IntegrationWriter.class).echo(AppIntegration.NATIVE));
+    }
+
+    @Test
+    void refusesAnEnumConstantsNameWhenItCarriesATsLiteral() {
+        IntegrationEcho echo = echoAs(IntegrationEcho.class);
+
+        PluginException refusal = assertThrows(PluginException.class, () -> echo.echo(json("\"ENV_BASEURL\"")));
+
+        assertTrue(refusal.getDetail().contains("ENV_BASEURL"), refusal.getDetail());
+    }
+
+    @Test
+    void roundTripsAnEnumWithoutATsLiteralByItsName() {
+        assertEquals(json("\"DARK_BLUE\""), echoAs(ColourWriter.class).echo(Colour.DARK_BLUE));
+        assertEquals(Colour.DARK_BLUE, echoAs(ColourEcho.class).echo(Colour.DARK_BLUE));
+        ColourReader reader = echoAs(ColourReader.class);
+        assertThrows(PluginException.class, () -> reader.echo(json("\"dark-blue\"")));
     }
 }
