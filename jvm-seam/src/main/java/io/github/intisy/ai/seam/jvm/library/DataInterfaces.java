@@ -7,11 +7,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.TypeAdapterFactory;
-import io.github.intisy.ai.tsemit.TsLiteral;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+import io.github.intisy.ai.engine.PluginException;
+import io.github.intisy.ai.tsemit.TsLiteral;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
@@ -20,6 +21,7 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +36,35 @@ import java.util.Map;
  * properties are required is held by the declaration's result schema. An enum constant is read and
  * written by the processor's own rule: its {@code @TsLiteral} value, which is RUNTIME-retained for
  * this, or else its name; any other string is refused, as the emitted TypeScript union refuses it.
- * A data proxy handed back into a call is written as the JSON it was read from.
+ * Building a data proxy checks only that the JSON is an object: each property is converted when its
+ * getter is first read, and refused there, so one badly typed field fails the getter that reads it
+ * rather than every answer holding it, as TypeScript passes such a field through. A data proxy
+ * handed back into a call is written as the JSON it was read from.
  */
 final class DataInterfaces {
 
     private DataInterfaces() {
     }
 
-    /** @return a factory reading every data interface and every enum, and nothing else */
-    static TypeAdapterFactory typeAdapterFactory() {
+    /** The library function an answer came from, which a refusal to read any part of it names. */
+    static final class Origin {
+        private final String libraryId;
+        private final String functionLabel;
+
+        Origin(String libraryId, String functionLabel) {
+            this.libraryId = libraryId;
+            this.functionLabel = functionLabel;
+        }
+
+        PluginException unfitting(String subject, String reason) {
+            return new PluginException(libraryId, functionLabel + " answered " + subject + ": " + reason,
+                    "regenerate the interface from this release's library.json, or report it to the maintainers of " + libraryId
+                            + " if its answer breaks its declared result schema");
+        }
+    }
+
+    /** @return a factory reading every data interface and every enum, and nothing else, refusing a property in the name of {@code origin} */
+    static TypeAdapterFactory typeAdapterFactory(final Origin origin) {
         return new TypeAdapterFactory() {
             @Override
             @SuppressWarnings({"unchecked", "rawtypes"})
@@ -52,7 +74,7 @@ final class DataInterfaces {
                     return (TypeAdapter<T>) new EnumAdapter(raw);
                 }
                 Class<?> dataInterface = isDataProxyClass(raw) ? raw.getInterfaces()[0] : raw;
-                return isDataInterface(dataInterface) ? (TypeAdapter<T>) new DataInterfaceAdapter(gson, dataInterface) : null;
+                return isDataInterface(dataInterface) ? (TypeAdapter<T>) new DataInterfaceAdapter(gson, dataInterface, origin) : null;
             }
         };
     }
@@ -97,10 +119,12 @@ final class DataInterfaces {
     private static final class DataInterfaceAdapter extends TypeAdapter<Object> {
         private final Gson gson;
         private final Class<?> dataInterface;
+        private final Origin origin;
 
-        DataInterfaceAdapter(Gson gson, Class<?> dataInterface) {
+        DataInterfaceAdapter(Gson gson, Class<?> dataInterface, Origin origin) {
             this.gson = gson;
             this.dataInterface = dataInterface;
+            this.origin = origin;
         }
 
         @Override
@@ -112,33 +136,8 @@ final class DataInterfaces {
             if (!element.isJsonObject()) {
                 throw new JsonParseException(dataInterface.getSimpleName() + " is read from a JSON object, and the answer holds " + element);
             }
-            JsonObject object = element.getAsJsonObject();
             return Proxy.newProxyInstance(dataInterface.getClassLoader(), new Class<?>[] {dataInterface},
-                    new DataHandler(dataInterface, object, valuesOf(object)));
-        }
-
-        private Map<String, Object> valuesOf(JsonObject object) {
-            Map<String, Object> values = new LinkedHashMap<String, Object>();
-            for (Method property : propertiesOf(dataInterface)) {
-                values.put(property.getName(), valueOf(property, object.get(property.getName())));
-            }
-            return values;
-        }
-
-        private Object valueOf(Method property, JsonElement value) {
-            Object converted = value == null ? null : gson.getAdapter(TypeToken.get(property.getGenericReturnType())).fromJsonTree(value);
-            if (converted == null && property.getReturnType().isPrimitive()) {
-                throw new JsonParseException(dataInterface.getSimpleName() + "." + property.getName() + " is "
-                        + (value == null ? "absent" : "null") + ", and a " + property.getReturnType() + " cannot be");
-            }
-            return unmodifiable(converted);
-        }
-
-        private static Object unmodifiable(Object value) {
-            if (value instanceof List) {
-                return Collections.unmodifiableList((List<?>) value);
-            }
-            return value instanceof Map ? Collections.unmodifiableMap((Map<?, ?>) value) : value;
+                    new DataHandler(gson, dataInterface, origin, element.getAsJsonObject()));
         }
 
         @Override
@@ -156,22 +155,25 @@ final class DataInterfaces {
         }
     }
 
-    /** Answers each property from the values read when the proxy was built, and compares by the JSON it was read from. */
+    /** Answers each property by converting it on its first read, and compares by the JSON it was read from. */
     private static final class DataHandler implements InvocationHandler {
+        private final Gson gson;
         private final Class<?> dataInterface;
+        private final Origin origin;
         private final JsonObject json;
-        private final Map<String, Object> values;
+        private final Map<String, Object> converted = new HashMap<String, Object>();
 
-        DataHandler(Class<?> dataInterface, JsonObject json, Map<String, Object> values) {
+        DataHandler(Gson gson, Class<?> dataInterface, Origin origin, JsonObject json) {
+            this.gson = gson;
             this.dataInterface = dataInterface;
+            this.origin = origin;
             this.json = json;
-            this.values = values;
         }
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] arguments) {
             if (!isObjectMethod(method)) {
-                return values.get(method.getName());
+                return valueOf(method);
             }
             if (method.getName().equals("equals")) {
                 return isEqualData(arguments[0]);
@@ -180,6 +182,39 @@ final class DataInterfaces {
                 return json.hashCode();
             }
             return dataInterface.getSimpleName() + json;
+        }
+
+        private synchronized Object valueOf(Method property) {
+            String name = property.getName();
+            if (!converted.containsKey(name)) {
+                converted.put(name, convert(property, json.get(name)));
+            }
+            return converted.get(name);
+        }
+
+        private Object convert(Method property, JsonElement value) {
+            Object result;
+            try {
+                result = value == null ? null : gson.getAdapter(TypeToken.get(property.getGenericReturnType())).fromJsonTree(value);
+            } catch (JsonParseException | IllegalStateException unfitting) {
+                throw refusal(property, unfitting.getMessage());
+            }
+            if (result == null && property.getReturnType().isPrimitive()) {
+                throw refusal(property, "it is " + (value == null ? "absent" : "null") + ", and a " + property.getReturnType() + " cannot be");
+            }
+            return unmodifiable(result);
+        }
+
+        private PluginException refusal(Method property, String reason) {
+            return origin.unfitting("a " + dataInterface.getSimpleName() + " whose " + property.getName() + " does not fit "
+                    + property.getGenericReturnType().getTypeName(), reason);
+        }
+
+        private static Object unmodifiable(Object value) {
+            if (value instanceof List) {
+                return Collections.unmodifiableList((List<?>) value);
+            }
+            return value instanceof Map ? Collections.unmodifiableMap((Map<?, ?>) value) : value;
         }
 
         private boolean isEqualData(Object other) {

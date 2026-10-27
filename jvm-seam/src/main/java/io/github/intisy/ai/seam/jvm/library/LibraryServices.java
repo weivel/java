@@ -30,7 +30,6 @@ import java.util.function.Supplier;
  */
 public final class LibraryServices {
 
-    private static final Gson GSON = new GsonBuilder().registerTypeAdapterFactory(DataInterfaces.typeAdapterFactory()).create();
     private static final String EMBEDDING_HOST = "the embedding host";
 
     private final PluginHost host;
@@ -183,12 +182,21 @@ public final class LibraryServices {
         private final String libraryId;
         private final String serviceId;
         private final Map<String, String> symbolsByName;
+        private final Map<String, Gson> gsonsByName = new HashMap<String, Gson>();
 
         ServiceHandler(LibraryBridge bridge, String libraryId, String serviceId, Map<String, String> symbolsByName) {
             this.bridge = bridge;
             this.libraryId = libraryId;
             this.serviceId = serviceId;
             this.symbolsByName = symbolsByName;
+            for (String name : symbolsByName.keySet()) {
+                gsonsByName.put(name, new GsonBuilder()
+                        .registerTypeAdapterFactory(DataInterfaces.typeAdapterFactory(originOf(name))).create());
+            }
+        }
+
+        private DataInterfaces.Origin originOf(String name) {
+            return new DataInterfaces.Origin(libraryId, serviceId + "." + name);
         }
 
         @Override
@@ -196,9 +204,10 @@ public final class LibraryServices {
             if (method.getDeclaringClass() == Object.class) {
                 return objectMethod(proxy, method, arguments);
             }
+            Gson gson = gsonsByName.get(method.getName());
             Object argument = arguments == null || arguments.length == 0 ? null : arguments[0];
-            String result = bridge.call(symbolsByName.get(method.getName()), GSON.toJson(argument));
-            return resultAs(method, result);
+            String result = bridge.call(symbolsByName.get(method.getName()), gson.toJson(argument));
+            return resultAs(gson, method, result);
         }
 
         /**
@@ -206,12 +215,12 @@ public final class LibraryServices {
          * unboxing it into a primitive with a bare {@code NullPointerException}, so that case is
          * refused here alongside a result Gson cannot fit.
          */
-        private Object resultAs(Method method, String result) {
+        private Object resultAs(Gson gson, Method method, String result) {
             Type returnType = method.getGenericReturnType();
             Object converted;
             try {
-                converted = GSON.fromJson(result, returnType);
-            } catch (JsonParseException unfitting) {
+                converted = gson.fromJson(result, returnType);
+            } catch (JsonParseException | IllegalStateException unfitting) {
                 throw unfitting(method, returnType, unfitting.getMessage());
             }
             Class<?> returnClass = method.getReturnType();
@@ -222,10 +231,7 @@ public final class LibraryServices {
         }
 
         private PluginException unfitting(Method method, Type returnType, String reason) {
-            return new PluginException(libraryId,
-                    serviceId + "." + method.getName() + " answered a result that does not fit " + returnType.getTypeName() + ": " + reason,
-                    "regenerate the interface from this release's library.json, or report it to the maintainers of " + libraryId
-                            + " if its answer breaks its declared result schema");
+            return originOf(method.getName()).unfitting("a result that does not fit " + returnType.getTypeName(), reason);
         }
 
         private Object objectMethod(Object proxy, Method method, Object[] arguments) {

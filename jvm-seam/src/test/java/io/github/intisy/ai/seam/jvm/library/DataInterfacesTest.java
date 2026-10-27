@@ -7,6 +7,7 @@ import static io.github.intisy.ai.seam.jvm.library.EchoFixture.pluginSession;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +58,10 @@ class DataInterfacesTest {
 
     interface DescriptorEcho {
         AppDescriptor echo(JsonElement argument);
+    }
+
+    interface DescriptorsEcho {
+        List<AppDescriptor> echo(JsonElement argument);
     }
 
     interface PersonWriter {
@@ -143,22 +148,61 @@ class DataInterfacesTest {
     }
 
     @Test
-    void refusesAnAbsentPrimitiveProperty() {
-        AgedEcho echo = echoAs(AgedEcho.class);
+    void refusesAnAbsentPrimitivePropertyWhenItIsRead() {
+        Aged aged = echoAs(AgedEcho.class).echo(json("{\"name\":\"Ada\"}"));
 
-        PluginException refusal = assertThrows(PluginException.class, () -> echo.echo(json("{\"name\":\"Ada\"}")));
-
+        assertEquals("Ada", aged.name());
+        PluginException refusal = assertThrows(PluginException.class, aged::age);
         assertEquals("echo", refusal.getPluginId());
+        assertTrue(refusal.getDetail().contains("echo.echo"), refusal.getDetail());
         assertTrue(refusal.getDetail().contains("age"), refusal.getDetail());
     }
 
     @Test
-    void refusesANullPrimitiveProperty() {
-        AgedEcho echo = echoAs(AgedEcho.class);
+    void refusesANullPrimitivePropertyWhenItIsRead() {
+        Aged aged = echoAs(AgedEcho.class).echo(json("{\"name\":\"Ada\",\"age\":null}"));
 
-        PluginException refusal = assertThrows(PluginException.class, () -> echo.echo(json("{\"name\":\"Ada\",\"age\":null}")));
-
+        PluginException refusal = assertThrows(PluginException.class, aged::age);
         assertTrue(refusal.getDetail().contains("age"), refusal.getDetail());
+    }
+
+    @Test
+    void readsEveryOtherPropertyOfADescriptorWhosePortIsNotANumber() {
+        AppDescriptor alpha = echoAs(DescriptorEcho.class).echo(json(ALPHA.replace("40001", "\"x\"")));
+
+        assertEquals("alpha", alpha.id());
+        assertEquals(AppIntegration.ENV_BASEURL, alpha.integration());
+        PluginException refusal = assertThrows(PluginException.class, alpha::proxyPort);
+        assertEquals("echo", refusal.getPluginId());
+        assertTrue(refusal.getDetail().contains("echo.echo"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("proxyPort"), refusal.getDetail());
+    }
+
+    @Test
+    void answersAListOfDescriptorsWhenOneHoldsAnUnknownIntegration() {
+        List<AppDescriptor> apps = echoAs(DescriptorsEcho.class).echo(json("[" + ALPHA + "," + ALPHA.replace("env-baseurl", "Native") + "]"));
+
+        assertEquals(2, apps.size());
+        assertEquals(AppIntegration.ENV_BASEURL, apps.get(0).integration());
+        assertEquals("alpha", apps.get(1).id());
+        assertEquals(40001, apps.get(1).proxyPort());
+        PluginException refusal = assertThrows(PluginException.class, () -> apps.get(1).integration());
+        assertTrue(refusal.getDetail().contains("Native"), refusal.getDetail());
+    }
+
+    @Test
+    void convertsEachPropertyOnceAndAnswersTheSameValueAfter() {
+        Person person = echoAs(PersonEcho.class).echo(json("{\"name\":\"Ada\",\"address\":{\"city\":\"London\"}}"));
+
+        assertSame(person.address(), person.address());
+    }
+
+    @Test
+    void refusesABadlyTypedPropertyEachTimeItIsRead() {
+        Aged aged = echoAs(AgedEcho.class).echo(json("{\"name\":\"Ada\",\"age\":\"old\"}"));
+
+        assertThrows(PluginException.class, aged::age);
+        assertThrows(PluginException.class, aged::age);
     }
 
     @Test
@@ -200,12 +244,21 @@ class DataInterfacesTest {
     }
 
     @Test
-    void refusesAnIntegrationNoConstantCarries() {
-        DescriptorEcho echo = echoAs(DescriptorEcho.class);
+    void refusesAnIntegrationNoConstantCarriesWhenItIsRead() {
+        AppDescriptor alpha = echoAs(DescriptorEcho.class).echo(json(ALPHA.replace("env-baseurl", "smoke-signal")));
 
-        PluginException refusal = assertThrows(PluginException.class, () -> echo.echo(json(ALPHA.replace("env-baseurl", "smoke-signal"))));
-
+        assertEquals("Alpha CLI", alpha.label());
+        PluginException refusal = assertThrows(PluginException.class, alpha::integration);
         assertTrue(refusal.getDetail().contains("smoke-signal"), refusal.getDetail());
+    }
+
+    @Test
+    void comparesDescriptorsByTheirJsonWithoutReadingABadlyTypedProperty() {
+        DescriptorEcho echo = echoAs(DescriptorEcho.class);
+        String unknown = ALPHA.replace("env-baseurl", "smoke-signal");
+
+        assertEquals(echo.echo(json(unknown)), echo.echo(json(unknown)));
+        assertEquals(echo.echo(json(unknown)).hashCode(), echo.echo(json(unknown)).hashCode());
     }
 
     @Test
