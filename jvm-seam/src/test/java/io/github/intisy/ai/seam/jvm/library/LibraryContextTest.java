@@ -189,7 +189,7 @@ class LibraryContextTest {
         Map<String, Class<?>> interfaces = Collections.<String, Class<?>>singletonMap("echo", ContextualEcho.class);
         LibraryBridge bridge = new LibraryServices(host).load(pin, cache, interfaces);
         OPENED.add(bridge);
-        ContextualEcho echo = (ContextualEcho) pluginSession(host, "consumer").getServices().get("echo");
+        ContextualEcho echo = (ContextualEcho) pluginSession(host, "consumer", "echo").getServices().get("echo");
 
         assertNoArgumentsRefusal(assertThrows(PluginException.class, () -> echo.contextual(json("{}"))));
     }
@@ -297,7 +297,7 @@ class LibraryContextTest {
 
         LibraryBridge bridge = new LibraryServices(host, LibraryContextTest::facts).load(pin, cache, interfaces);
         OPENED.add(bridge);
-        ContextualEcho echo = (ContextualEcho) pluginSession(host, "consumer").getServices().get("echo");
+        ContextualEcho echo = (ContextualEcho) pluginSession(host, "consumer", "echo").getServices().get("echo");
 
         assertEquals(envelope("{\"a\":1}", "{\"home\":\"/h\"}"), echo.contextual(json("{\"a\":1}")));
     }

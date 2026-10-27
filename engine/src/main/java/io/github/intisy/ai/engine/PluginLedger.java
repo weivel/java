@@ -15,6 +15,7 @@ import java.util.Map;
 public final class PluginLedger {
 
     private final Map<String, LedgerEntry> entries = new LinkedHashMap<String, LedgerEntry>();
+    private final List<ServiceRefusal> refused = new ArrayList<ServiceRefusal>();
 
     /**
      * Every entry, as copies a caller may keep.
@@ -95,6 +96,35 @@ public final class PluginLedger {
      */
     public void recordTopic(String pluginId, String topic) {
         ensure(pluginId).addTopic(topic);
+    }
+
+    /**
+     * Records that a plugin was refused a service, and answers whether this is the first time.
+     *
+     * @param pluginId the plugin that reached for the service
+     * @param serviceId the service id it reached for without declaring it
+     * @return true when this plugin and id were not refused before, false when they already were
+     * @implNote Kept across activations rather than reset with an entry, because the record exists
+     * to report a refusal once per plugin and id, and a plugin polling an id it never declared would
+     * otherwise be reported again every time it restarts.
+     */
+    public boolean recordServiceRefused(String pluginId, String serviceId) {
+        for (ServiceRefusal refusal : refused) {
+            if (refusal.concerns(pluginId, serviceId)) {
+                return false;
+            }
+        }
+        refused.add(new ServiceRefusal(pluginId, serviceId));
+        return true;
+    }
+
+    /**
+     * Every service a plugin reached for without declaring it, once per plugin and id.
+     *
+     * @return the refusals in the order first reported, or empty when there were none
+     */
+    public List<ServiceRefusal> refusals() {
+        return new ArrayList<ServiceRefusal>(refused);
     }
 
     /**

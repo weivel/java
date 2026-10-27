@@ -28,7 +28,8 @@ public final class PluginSession {
     }
 
     /**
-     * Scoped so a registration outside this plugin's namespace is refused, and fenced once it stops.
+     * Scoped so a registration outside this plugin's namespace is refused and a service it did not
+     * declare is out of reach, and fenced once it stops.
      *
      * @return this plugin's service registry
      */

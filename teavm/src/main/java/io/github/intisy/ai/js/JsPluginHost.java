@@ -235,7 +235,9 @@ final class JsPluginHost implements JSObject {
         List<String> capabilities = strings(member(tree, "capabilities"));
         List<String> permissions = strings(member(tree, "permissions"));
         List<String> targets = strings(member(tree, "targets"));
-        return new ManifestFacts(id, api, capabilities, permissions, targets, manifestObj);
+        Object services = member(tree, "services");
+        return new ManifestFacts(id, api, capabilities, permissions, targets, manifestObj)
+                .withServices(entries(member(services, "consumes")), entries(member(services, "provides")));
     }
 
     private static PluginException errorOf(String pluginId, JSObject error) {
@@ -316,6 +318,10 @@ final class JsPluginHost implements JSObject {
     private static int intOr(Object tree, String name, int fallback) {
         Object found = member(tree, name);
         return found instanceof Number ? ((Number) found).intValue() : fallback;
+    }
+
+    private static List<?> entries(Object value) {
+        return value instanceof List ? (List<?>) value : null;
     }
 
     private static List<String> strings(Object value) {

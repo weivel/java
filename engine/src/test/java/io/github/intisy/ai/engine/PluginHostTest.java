@@ -20,7 +20,8 @@ class PluginHostTest {
     private static final Object MANIFEST = new Object();
 
     private static ManifestFacts screens() {
-        return new ManifestFacts("config-ledger", 1, Arrays.asList("screens"), Arrays.asList("config:write"), MANIFEST);
+        return new ManifestFacts("config-ledger", 1, Arrays.asList("screens"), Arrays.asList("config:write"), MANIFEST)
+                .withServices(Arrays.asList("accounts", "routing"), null);
     }
 
     private static PluginHost host() {

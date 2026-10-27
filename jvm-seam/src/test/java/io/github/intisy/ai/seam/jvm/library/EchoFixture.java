@@ -95,9 +95,11 @@ final class EchoFixture {
         }
     }
 
-    /** A plugin's session on the host, which is how a plugin reaches what the host offers. */
-    static PluginSession pluginSession(PluginHost host, String pluginId) {
-        return host.sessionFor(new ManifestFacts(pluginId, 1, null, null, null), new SilentBus());
+    /** A plugin's session on the host, declaring the one service it consumes so it may reach it. */
+    static PluginSession pluginSession(PluginHost host, String pluginId, String consumed) {
+        ManifestFacts facts = new ManifestFacts(pluginId, 1, null, null, null)
+                .withServices(Collections.singletonList(consumed), null);
+        return host.sessionFor(facts, new SilentBus());
     }
 
     static LibraryPin withDigest(LibraryPin pin, String key, String digest) {

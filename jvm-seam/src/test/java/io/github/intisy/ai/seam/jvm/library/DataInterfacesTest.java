@@ -121,7 +121,7 @@ class DataInterfacesTest {
     private static <T> T echoAs(Class<T> serviceInterface) {
         PluginHost host = freshHost();
         OPENED.add(new LibraryServices(host).load(ECHO_PIN, cache, Collections.<String, Class<?>>singletonMap("echo", serviceInterface)));
-        return serviceInterface.cast(pluginSession(host, "consumer").getServices().get("echo"));
+        return serviceInterface.cast(pluginSession(host, "consumer", "echo").getServices().get("echo"));
     }
 
     private static JsonElement json(String text) {

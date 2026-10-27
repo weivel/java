@@ -530,7 +530,7 @@ describe("startPlugins", () => {
 describe("ledgerRows", () => {
   it("reports what each plugin declared, provided, consumed and subscribed to", async () => {
     const scan = scanOf({
-      manifest: manifest("recorder", { permissions: ["network"], services: { provides: ["recorder:store"] } }),
+      manifest: manifest("recorder", { permissions: ["network"], services: { provides: ["recorder:store"], consumes: ["accounts"] } }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => {
@@ -559,7 +559,7 @@ describe("ledgerRows", () => {
 
   it("names a consumed service nothing in this home provides", async () => {
     const scan = scanOf({
-      manifest: manifest("lonely", { capabilities: [] }),
+      manifest: manifest("lonely", { capabilities: [], services: { consumes: ["routing"] } }),
       module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("routing"); }, deactivate: () => {} } },
     });
     const [row] = ledgerRows(await startPlugins(options(scan)));

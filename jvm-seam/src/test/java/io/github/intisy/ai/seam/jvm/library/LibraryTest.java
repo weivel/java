@@ -57,7 +57,7 @@ class LibraryTest {
         Path cache = freshCache();
         PluginHost host = freshHost();
         sharedBridge = loadInto(new LibraryServices(host), ECHO_PIN, cache);
-        echo = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
+        echo = (EchoService) pluginSession(host, "consumer", "echo").getServices().get("echo");
         LibraryAcquirer.AcquiredLibrary acquired = new LibraryAcquirer().acquire(ECHO_PIN, cache);
         binaryPath = acquired.binaryPath();
         declaration = acquired.declaration();
@@ -162,8 +162,8 @@ class LibraryTest {
         PluginException refusal = refusalOf(() -> loadInto(new LibraryServices(host), withoutDigest(ECHO_PIN, platformKey), cache));
 
         assertTrue(refusal.getDetail().contains(platformKey), refusal.getDetail());
-        assertNull(pluginSession(host, "consumer").getServices().get("echo"));
-        assertSame(greeting, pluginSession(host, "bystander").getServices().get("greeting"));
+        assertNull(pluginSession(host, "consumer", "echo").getServices().get("echo"));
+        assertSame(greeting, pluginSession(host, "bystander", "greeting").getServices().get("greeting"));
     }
 
     @Test
@@ -204,7 +204,7 @@ class LibraryTest {
 
         assertEquals("echo", refusal.getPluginId());
         assertTrue(refusal.getDetail().contains("both the embedding host and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
-        EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
+        EchoService served = (EchoService) pluginSession(host, "consumer", "echo").getServices().get("echo");
         assertEquals(json("\"the embedder's\""), served.echo(new JsonObject()));
     }
 
@@ -218,7 +218,7 @@ class LibraryTest {
             PluginException refusal = refusalOf(() -> loadInto(services, ECHO_PIN, cache));
 
             assertTrue(refusal.getDetail().contains("both library echo (weivel/bindings@v0.1.1) and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
-            EchoService served = (EchoService) pluginSession(host, "consumer").getServices().get("echo");
+            EchoService served = (EchoService) pluginSession(host, "consumer", "echo").getServices().get("echo");
             assertEquals(json("{\"still\":\"served\"}"), served.echo(json("{\"still\":\"served\"}")));
         } finally {
             first.close();
@@ -239,7 +239,7 @@ class LibraryTest {
         assertEquals("echo", refusal.getPluginId());
         assertTrue(refusal.getDetail().contains("both the embedding host and library echo (weivel/bindings@v0.1.1)"), refusal.getDetail());
         assertNull(host.service("mirror"));
-        assertNull(pluginSession(host, "mirror-consumer").getServices().get("mirror"));
+        assertNull(pluginSession(host, "mirror-consumer", "mirror").getServices().get("mirror"));
         assertSame(embedderEcho, host.service("echo"));
     }
 

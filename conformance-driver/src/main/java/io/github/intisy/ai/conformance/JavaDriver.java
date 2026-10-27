@@ -129,6 +129,9 @@ public final class JavaDriver {
         if ("scope".equals(op)) {
             return scope(given);
         }
+        if ("reach".equals(op)) {
+            return Reach.run(given);
+        }
         throw new IllegalArgumentException("unknown op '" + op + "'");
     }
 
@@ -471,7 +474,7 @@ public final class JavaDriver {
         }
     }
 
-    private static final EventBus SILENT_BUS = new EventBus() {
+    static final EventBus SILENT_BUS = new EventBus() {
         @Override
         public void publish(String topic, Object payload) {
         }
@@ -526,16 +529,16 @@ public final class JavaDriver {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> map(Object value) {
+    static Map<String, Object> map(Object value) {
         return value instanceof Map ? (Map<String, Object>) value : new LinkedHashMap<String, Object>();
     }
 
     @SuppressWarnings("unchecked")
-    private static List<Object> list(Object value) {
+    static List<Object> list(Object value) {
         return value instanceof List ? (List<Object>) value : new ArrayList<Object>();
     }
 
-    private static List<String> strings(Object value) {
+    static List<String> strings(Object value) {
         List<String> out = new ArrayList<String>();
         for (Object entry : list(value)) {
             out.add(String.valueOf(entry));

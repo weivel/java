@@ -207,7 +207,8 @@ public final class PluginHost {
         String pluginId = facts.getId();
         revoked.remove(pluginId);
         ledger.recordDeclared(pluginId, facts.getCapabilities(), facts.getPermissions());
-        return new PluginSession(this, facts, fenced(pluginId, hub.forPlugin(pluginId)), recording(pluginId, bus));
+        return new PluginSession(this, facts, fenced(pluginId, declaredServices(facts), hub.forPlugin(pluginId)),
+                recording(pluginId, bus));
     }
 
     /**
@@ -342,29 +343,39 @@ public final class PluginHost {
     }
 
     /**
-     * @implNote get stays open: it installs nothing, and its honest answer to a revoked plugin is the
-     * same null every other caller gets for a service nobody registered.
+     * @implNote The declaration is checked before lateness, so an undeclared call is refused as
+     * undeclared whether or not the plugin is still running, and only a declared call takes the late
+     * path. A late get is let through: it installs nothing, and its honest answer to a revoked plugin
+     * is the same null every other caller gets for a service nobody registered. {@code ids} filters
+     * by the declaration without refusing or reporting, because listing is not an attempt, and it
+     * ignores lateness the same way a late get does.
      */
-    private ServiceHub.Registry fenced(final String pluginId, final ServiceHub.Registry registry) {
+    private ServiceHub.Registry fenced(final String pluginId, final Set<String> declared, final ServiceHub.Registry registry) {
         return new ServiceHub.Registry() {
             @Override
             public Object get(String id) {
+                if (!declared.contains(id)) {
+                    refuseUndeclared(pluginId, id);
+                    return null;
+                }
                 return registry.get(id);
             }
 
             @Override
             public Pending<Object> want(String id) {
-                return refuseLate(pluginId, "a late want of service", id) ? refuseWant(pluginId, id) : registry.want(id);
+                PluginException refusal = refusal(pluginId, declared, "want", id);
+                return refusal != null ? rejected(refusal) : registry.want(id);
             }
 
             @Override
             public Pending<Object> want(String id, long timeoutMillis) {
-                return refuseLate(pluginId, "a late want of service", id) ? refuseWant(pluginId, id) : registry.want(id, timeoutMillis);
+                PluginException refusal = refusal(pluginId, declared, "want", id);
+                return refusal != null ? rejected(refusal) : registry.want(id, timeoutMillis);
             }
 
             @Override
             public Scheduler.Cancellable watch(String id, ServiceHub.Listener listener) {
-                return refuseLate(pluginId, "a late watch of service", id) ? inert() : registry.watch(id, listener);
+                return refusal(pluginId, declared, "watch", id) != null ? inert() : registry.watch(id, listener);
             }
 
             @Override
@@ -381,16 +392,52 @@ public final class PluginHost {
 
             @Override
             public Pending<Object> want(ServiceRequirement requirement, Budget budget) {
-                return refuseLate(pluginId, "a late want of service", requirement.getId())
-                        ? refuseWant(pluginId, requirement.getId())
-                        : registry.want(requirement, budget);
+                PluginException refusal = refusal(pluginId, declared, "want", requirement.getId());
+                return refusal != null ? rejected(refusal) : registry.want(requirement, budget);
             }
 
             @Override
             public List<String> ids() {
-                return registry.ids();
+                List<String> reachable = new ArrayList<String>();
+                for (String id : registry.ids()) {
+                    if (declared.contains(id)) {
+                        reachable.add(id);
+                    }
+                }
+                return reachable;
             }
         };
+    }
+
+    /** Why a want or a watch is refused, having reported it, or null to let it through. */
+    private PluginException refusal(String pluginId, Set<String> declared, String attempt, String id) {
+        if (!declared.contains(id)) {
+            return refuseUndeclared(pluginId, id);
+        }
+        return refuseLate(pluginId, "a late " + attempt + " of service", id) ? ServiceHub.stoppedWaiting(pluginId, id) : null;
+    }
+
+    /**
+     * Refuses a service the plugin did not declare, reporting it once per plugin and id (invariant 12).
+     *
+     * @implNote Every attempt is refused and only the first is reported, so a plugin polling an id
+     * it never declared does not flood the sink.
+     */
+    private PluginException refuseUndeclared(String pluginId, String serviceId) {
+        PluginException refusal = new PluginException(pluginId,
+                "reached for service \"" + serviceId + "\", which it does not declare",
+                "add \"" + serviceId + "\" to services.consumes in its plugin.json");
+        if (ledger.recordServiceRefused(pluginId, serviceId)) {
+            Diagnostics.report("refused service \"" + serviceId + "\" to " + pluginId
+                    + ", which does not declare it: " + refusal.getFix());
+        }
+        return refusal;
+    }
+
+    private static Set<String> declaredServices(ManifestFacts facts) {
+        Set<String> declared = new HashSet<String>(facts.getServicesConsumed());
+        declared.addAll(facts.getServicesProvided());
+        return declared;
     }
 
     private EventBus recording(final String pluginId, final EventBus bus) {
@@ -471,9 +518,9 @@ public final class PluginHost {
         }
     }
 
-    private static Pending<Object> refuseWant(String pluginId, String id) {
+    private static Pending<Object> rejected(PluginException reason) {
         Pending<Object> refused = new Pending<Object>();
-        refused.reject(ServiceHub.stoppedWaiting(pluginId, id));
+        refused.reject(reason);
         return refused;
     }
 

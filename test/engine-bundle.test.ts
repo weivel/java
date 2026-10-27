@@ -79,7 +79,14 @@ function runtime() {
   };
 }
 
-const SCREENS = { id: "config-ledger", api: 1, entry: "dist/index.js", capabilities: ["screens"], permissions: ["config:write"] };
+const SCREENS = {
+  id: "config-ledger",
+  api: 1,
+  entry: "dist/index.js",
+  capabilities: ["screens"],
+  permissions: ["config:write"],
+  services: { consumes: ["accounts", "provider-support"], provides: ["config-ledger:store"] },
+};
 
 it("hands a plugin a context carrying its own manifest object and the host descriptor", () => {
   const host = createPluginHost({ app: "claude", api: 1, surfaces: ["tui"] });
@@ -270,7 +277,7 @@ it("answers context.services.get with undefined precisely, and the service by id
   expect(context.services.get("accounts")).toBe(accounts);
 });
 
-it("lists every service id currently registered", () => {
+it("lists every service id currently registered that the plugin may reach", () => {
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
   const context = host.contextFor(SCREENS, runtime());
   expect(context.services.ids()).toEqual([]);
