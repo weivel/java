@@ -6,6 +6,7 @@ import static io.github.intisy.ai.seam.jvm.library.EchoFixture.freshHost;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.pluginSession;
 import static io.github.intisy.ai.seam.jvm.library.EchoFixture.stageRelease;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +14,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import io.github.intisy.ai.engine.PluginException;
 import io.github.intisy.ai.engine.PluginHost;
 
@@ -141,12 +143,11 @@ class LibraryContextTest {
 
     @Test
     void defaultsToTheProcesssOwnFacts() {
-        LibraryBridge bridge = open(null, "environment", "home", "arguments");
+        LibraryBridge bridge = open(null, "environment", "home");
 
         JsonObject context = call(bridge, null).getAsJsonObject().getAsJsonObject("context");
 
         assertEquals(System.getProperty("user.home"), context.get("home").getAsString());
-        assertEquals(new JsonArray(), context.get("arguments"));
         Map<String, String> environment = new HashMap<String, String>();
         for (Map.Entry<String, JsonElement> variable : context.getAsJsonObject("environment").entrySet()) {
             environment.put(variable.getKey(), variable.getValue().getAsString());
@@ -161,6 +162,50 @@ class LibraryContextTest {
         assertEquals(Arrays.asList("java", "-jar", "host.jar"), context.arguments());
         assertEquals(System.getProperty("user.home"), context.home());
         assertEquals(System.getenv(), context.environment());
+    }
+
+    @Test
+    void refusesAnArgumentsCallWhenTheEmbedderSuppliedNoArguments() {
+        LibraryBridge bridge = open(null, "home", "arguments");
+
+        PluginException refusal = refusalOf(bridge);
+
+        assertNoArgumentsRefusal(refusal);
+    }
+
+    @Test
+    void refusesAnArgumentsCallFromTheProcessContextWithoutArguments() {
+        LibraryBridge bridge = open(LibraryContext::ofProcess, "arguments");
+
+        assertNoArgumentsRefusal(refusalOf(bridge));
+        assertNull(LibraryContext.ofProcess().arguments());
+    }
+
+    @Test
+    void refusesAnArgumentsCallThroughServicesGivenNoContext() throws IOException {
+        Path cache = freshCache();
+        LibraryPin pin = stageRelease(cache, binaryPath, declaringContext("arguments").getBytes(StandardCharsets.UTF_8));
+        PluginHost host = freshHost();
+        Map<String, Class<?>> interfaces = Collections.<String, Class<?>>singletonMap("echo", ContextualEcho.class);
+        LibraryBridge bridge = new LibraryServices(host).load(pin, cache, interfaces);
+        OPENED.add(bridge);
+        ContextualEcho echo = (ContextualEcho) pluginSession(host, "consumer").getServices().get("echo");
+
+        assertNoArgumentsRefusal(assertThrows(PluginException.class, () -> echo.contextual(json("{}"))));
+    }
+
+    @Test
+    void handsTheProcessContextWithoutArgumentsToAFunctionNotDeclaringThem() {
+        LibraryBridge bridge = open(LibraryContext::ofProcess, "home");
+
+        assertEquals(envelope("{}", "{\"home\":" + new JsonPrimitive(System.getProperty("user.home")) + "}"), call(bridge, "{}"));
+    }
+
+    private static void assertNoArgumentsRefusal(PluginException refusal) {
+        assertEquals("echo", refusal.getPluginId());
+        assertTrue(refusal.getDetail().contains("echo.contextual"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("arguments"), refusal.getDetail());
+        assertTrue(refusal.getFix().contains("process arguments"), refusal.getFix());
     }
 
     @Test

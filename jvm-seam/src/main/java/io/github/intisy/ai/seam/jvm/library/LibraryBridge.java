@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +105,7 @@ public final class LibraryBridge implements AutoCloseable {
     }
 
     static Supplier<LibraryContext> processContext() {
-        return () -> LibraryContext.ofProcess(Collections.<String>emptyList());
+        return LibraryContext::ofProcess;
     }
 
     private static LibraryBridge open(Path binary, LibraryDeclaration declaration, ReleaseObserver releaseObserver,
@@ -183,10 +182,11 @@ public final class LibraryBridge implements AutoCloseable {
         if (bound.context.isEmpty()) {
             return argumentJson;
         }
-        return "{\"argument\":" + argumentJson + ",\"context\":" + gatherContext(bound.label).declaredFacts(bound.context) + "}";
+        return "{\"argument\":" + argumentJson + ",\"context\":" + gatherContext(bound).declaredFacts(bound.context) + "}";
     }
 
-    private LibraryContext gatherContext(String label) {
+    private LibraryContext gatherContext(BoundFunction bound) {
+        String label = bound.label;
         LibraryContext context;
         try {
             context = contextSupplier.get();
@@ -199,6 +199,11 @@ public final class LibraryBridge implements AutoCloseable {
         if (malformed != null) {
             throw new PluginException(libraryId, label + " was given a context whose " + malformed + " is malformed",
                     "make the host's library context supplier return " + malformed + " as " + LibraryContext.shapeOf(malformed));
+        }
+        if (bound.context.contains(LibraryContext.ARGUMENTS) && !context.argumentsSupplied()) {
+            throw new PluginException(libraryId, label + " declares the host's arguments, and the embedder supplied none",
+                    "supply the process arguments: give the library a context supplier answering LibraryContext.ofProcess(arguments)"
+                            + " with the argument vector the host was started with");
         }
         return context;
     }

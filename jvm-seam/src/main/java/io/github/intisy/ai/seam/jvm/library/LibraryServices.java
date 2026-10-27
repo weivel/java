@@ -37,7 +37,8 @@ public final class LibraryServices {
     private final Map<String, String> librariesByServiceId = new HashMap<String, String>();
 
     /**
-     * Offers library services whose contextual functions read the process's own environment and home, and no arguments.
+     * Offers library services whose contextual functions read the process's own environment and home; a function
+     * declaring the process arguments is refused, since none were supplied.
      *
      * @param host the host whose plugins this instance offers library services to; hold one instance per host
      */

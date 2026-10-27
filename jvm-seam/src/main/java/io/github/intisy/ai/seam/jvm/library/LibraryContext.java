@@ -28,6 +28,7 @@ public final class LibraryContext {
     private final Map<String, String> environment;
     private final String home;
     private final List<String> arguments;
+    private final boolean argumentsSupplied;
 
     /**
      * @param environment every environment variable, by name
@@ -35,9 +36,14 @@ public final class LibraryContext {
      * @param arguments the host process's argument vector
      */
     public LibraryContext(Map<String, String> environment, String home, List<String> arguments) {
+        this(environment, home, arguments, true);
+    }
+
+    private LibraryContext(Map<String, String> environment, String home, List<String> arguments, boolean argumentsSupplied) {
         this.environment = environment == null ? null : Collections.unmodifiableMap(new LinkedHashMap<String, String>(environment));
         this.home = home;
         this.arguments = arguments == null ? null : Collections.unmodifiableList(new ArrayList<String>(arguments));
+        this.argumentsSupplied = argumentsSupplied;
     }
 
     /**
@@ -51,6 +57,16 @@ public final class LibraryContext {
         return new LibraryContext(System.getenv(), System.getProperty("user.home"), arguments);
     }
 
+    /**
+     * The facts of the running process without its argument vector, so a call to a function that
+     * declares {@code arguments} is refused rather than sent an empty one.
+     *
+     * @return the process's environment and home directory, with no arguments supplied
+     */
+    public static LibraryContext ofProcess() {
+        return new LibraryContext(System.getenv(), System.getProperty("user.home"), null, false);
+    }
+
     /** @return every environment variable, by name */
     public Map<String, String> environment() {
         return environment;
@@ -61,7 +77,7 @@ public final class LibraryContext {
         return home;
     }
 
-    /** @return the host process's argument vector */
+    /** @return the host process's argument vector, or null when the embedder supplied none */
     public List<String> arguments() {
         return arguments;
     }
@@ -74,10 +90,15 @@ public final class LibraryContext {
         if (context.home == null) {
             return HOME;
         }
-        if (!isStringCollection(context.arguments)) {
+        if (context.argumentsSupplied && !isStringCollection(context.arguments)) {
             return ARGUMENTS;
         }
         return null;
+    }
+
+    /** @return whether the embedder supplied an argument vector, which {@link #ofProcess()} does not */
+    boolean argumentsSupplied() {
+        return argumentsSupplied;
     }
 
     static String shapeOf(String fact) {
