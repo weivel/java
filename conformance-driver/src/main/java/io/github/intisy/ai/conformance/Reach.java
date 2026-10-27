@@ -58,7 +58,7 @@ final class Reach {
             Map<String, Object> plugin = JavaDriver.map(each);
             String pluginId = String.valueOf(plugin.get("id"));
             ManifestFacts facts = new ManifestFacts(pluginId, 1, null, null, null)
-                .withServices(JavaDriver.strings(plugin.get("consumes")), JavaDriver.strings(plugin.get("provides")));
+                .withServices(JavaDriver.list(plugin.get("consumes")),JavaDriver.strings(plugin.get("provides")));
             sessions.put(pluginId, host.sessionFor(facts, JavaDriver.SILENT_BUS));
         }
         for (String id : JavaDriver.strings(given.get("hostProvided"))) {

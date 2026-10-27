@@ -179,4 +179,31 @@ class PluginHostReachTest {
         assertTrue(diagnostics.get(1).contains("services.consumes"), diagnostics.get(1));
         assertEquals("stopped while waiting for service \"clock\"", declared.failure().getDetail());
     }
+
+    @Test
+    void reportsARefusalOnceForTheLifeOfTheHostAcrossARestartOfThePlugin() {
+        PluginHost host = host();
+        session(host, "calendar", none(), Arrays.asList("calendar:events")).getServices().register("calendar:events", new Object());
+        assertNull(session(host, "notes", none(), none()).getServices().get("calendar:events"));
+        host.release("notes");
+
+        assertNull(session(host, "notes", none(), none()).getServices().get("calendar:events"));
+
+        assertEquals(Arrays.asList(Arrays.asList("notes", "calendar:events")), refusals(host));
+        assertEquals(1, diagnostics.size(), diagnostics.toString());
+        assertTrue(diagnostics.get(0).contains("services.consumes"), diagnostics.get(0));
+    }
+
+    @Test
+    void stillListsARevokedPluginsDeclaredRegisteredIds() {
+        PluginHost host = host();
+        host.provideService("clock", new Object());
+        session(host, "calendar", none(), Arrays.asList("calendar:events")).getServices().register("calendar:events", new Object());
+        PluginSession agenda = session(host, "agenda", Arrays.asList("calendar:events", "clock"), none());
+        host.release("agenda");
+
+        List<String> listed = new ArrayList<String>(agenda.getServices().ids());
+        Collections.sort(listed);
+        assertEquals(Arrays.asList("calendar:events", "clock"), listed);
+    }
 }
