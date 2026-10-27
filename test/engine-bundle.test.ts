@@ -277,6 +277,15 @@ it("answers context.services.get with undefined precisely, and the service by id
   expect(context.services.get("accounts")).toBe(accounts);
 });
 
+it("answers nothing to an undeclared get and records the refusal on the ledger once", () => {
+  const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
+  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", { list: () => [] });
+  const undeclared = host.contextFor({ id: "notes", api: 1 }, runtime());
+  expect(undeclared.services.get("accounts")).toBeUndefined();
+  expect(undeclared.services.get("accounts")).toBeUndefined();
+  expect(host.ledger.refusals()).toEqual([{ pluginId: "notes", serviceId: "accounts" }]);
+});
+
 it("lists every service id currently registered that the plugin may reach", () => {
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
   const context = host.contextFor(SCREENS, runtime());
@@ -330,7 +339,7 @@ it("assembles the host object with exactly these keys, pinning it against HostSu
     "supports",
     "verifyActivation",
   ]);
-  expect(Object.keys(host.ledger).sort()).toEqual(["entries", "entry", "recordDeclared"]);
+  expect(Object.keys(host.ledger).sort()).toEqual(["entries", "entry", "recordDeclared", "refusals"]);
 });
 
 it("assembles the context object with exactly these keys, pinning it against ContextSurface drift", () => {

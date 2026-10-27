@@ -29,4 +29,11 @@ public interface LedgerFacadeShape {
      * @param manifest the parsed plugin.json object being recorded
      */
     void recordDeclared(Object manifest);
+
+    /**
+     * Every service a plugin reached for without declaring it, once per plugin and id.
+     *
+     * @return the refusals in the order first reported, or empty when there were none
+     */
+    List<ServiceRefusalShape> refusals();
 }

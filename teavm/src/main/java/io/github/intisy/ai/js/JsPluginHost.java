@@ -11,6 +11,7 @@ import io.github.intisy.ai.engine.PluginSession;
 import io.github.intisy.ai.engine.PluginStatus;
 import io.github.intisy.ai.engine.Pending;
 import io.github.intisy.ai.engine.Scheduler;
+import io.github.intisy.ai.engine.ServiceRefusal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -191,7 +192,19 @@ final class JsPluginHost implements JSObject {
                 host.getLedger().recordDeclared(facts.getId(), facts.getCapabilities(), facts.getPermissions());
             }
         };
-        JSObject ledger = ledgerObject(entries, entry, recordDeclared);
+        EntriesFn refusals = new EntriesFn() {
+            @Override
+            public JSObject call() {
+                List<ServiceRefusal> refused = host.getLedger().refusals();
+                JSArray<JSObject> out = JSArray.create();
+                for (int index = 0; index < refused.size(); index++) {
+                    ServiceRefusal refusal = refused.get(index);
+                    out.set(index, serviceRefusal(refusal.getPluginId(), refusal.getServiceId()));
+                }
+                return out;
+            }
+        };
+        JSObject ledger = ledgerObject(entries, entry, recordDeclared, refusals);
 
         return assemble(descriptor, ledger, supports, contextFor, verifyActivation, capability, service,
                 provideService, markBroken, release);
@@ -337,9 +350,13 @@ final class JsPluginHost implements JSObject {
     @JSBody(params = {"app", "api", "surfaces"}, script = "return { app: app, api: api, surfaces: surfaces };")
     private static native JSObject descriptorObject(String app, int api, JSObject surfaces);
 
-    @JSBody(params = {"entries", "entry", "recordDeclared"}, script =
-            "return { entries: entries, entry: entry, recordDeclared: recordDeclared };")
-    private static native JSObject ledgerObject(EntriesFn entries, IdFn entry, RecordDeclaredFn recordDeclared);
+    @JSBody(params = {"entries", "entry", "recordDeclared", "refusals"}, script =
+            "return { entries: entries, entry: entry, recordDeclared: recordDeclared, refusals: refusals };")
+    private static native JSObject ledgerObject(EntriesFn entries, IdFn entry, RecordDeclaredFn recordDeclared,
+            EntriesFn refusals);
+
+    @JSBody(params = {"pluginId", "serviceId"}, script = "return { pluginId: pluginId, serviceId: serviceId };")
+    private static native JSObject serviceRefusal(String pluginId, String serviceId);
 
     @JSBody(params = {"pluginId", "implementation"}, script = "return { pluginId: pluginId, implementation: implementation };")
     private static native JSObject capabilityRecord(String pluginId, JSObject implementation);
