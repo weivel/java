@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * Checks a parsed plugin.json against the schema and against the rules the schema cannot express,
- * which are the ones that need one field to know about another.
+ * which are the ones that need one field to know about another: VALIDATION.md V1, V2 and V3.
  *
  * @implNote The well-known service ids arrive as a parameter rather than a constant, because this
  * package mints no vocabulary of its own. There is deliberately no overload defaulting them to
@@ -45,6 +45,7 @@ public final class ManifestValidator {
         issues.addAll(providedServiceIssues(value, wellKnownServices));
         issues.addAll(duplicateIssues("services.provides", serviceIds(listAt(mapAt(value, "services"), "provides"))));
         issues.addAll(duplicateIssues("services.consumes", serviceIds(listAt(mapAt(value, "services"), "consumes"))));
+        issues.addAll(DescriptionRules.issues(value));
         return issues;
     }
 

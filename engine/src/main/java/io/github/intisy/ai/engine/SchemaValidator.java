@@ -51,6 +51,8 @@ public final class SchemaValidator {
             checkNumber(value, schema, path, issues);
         } else if ("boolean".equals(type) && !(value instanceof Boolean)) {
             issues.add(typeIssue(value, schema, path));
+        } else if (type == null) {
+            checkUntyped(value, schema, path, issues);
         }
         checkConditional(value, schema, path, issues);
     }
@@ -116,6 +118,24 @@ public final class SchemaValidator {
         return ("object".equals(type) || "array".equals(type) || "integer".equals(type) ? "an " : "a ") + type;
     }
 
+    /**
+     * @implNote A schema with no type constrains a value of any kind, so only {@code enum} applies
+     * here; the string keywords are draft-07's to apply only to a string, which is how a
+     * {@code then} branch can test one property's value without restating its type.
+     */
+    private static void checkUntyped(Object value, JsonSchema schema, String path, List<SchemaIssue> issues) {
+        if (value instanceof String) {
+            checkString(value, schema, path, issues);
+            return;
+        }
+        List<String> allowed = schema.getEnumValues();
+        if (allowed != null) {
+            String joined = join(allowed);
+            issues.add(new SchemaIssue(path, describe(value) + " is not one of " + joined,
+                    schema.getFix() != null ? schema.getFix() : "set " + path + " to one of " + joined));
+        }
+    }
+
     private static void checkObject(Object value, JsonSchema schema, String path, List<SchemaIssue> issues, String source) {
         if (!(value instanceof Map)) {
             issues.add(typeIssue(value, schema, path));
@@ -135,6 +155,7 @@ public final class SchemaValidator {
                         child != null && child.getFix() != null ? child.getFix() : "add \"" + key + "\" to " + path));
             }
         }
+        checkPropertyNames(record, schema.getPropertyNames(), path, issues);
         for (Map.Entry<?, ?> entry : record.entrySet()) {
             if (entry.getValue() == null) {
                 continue;
@@ -151,6 +172,19 @@ public final class SchemaValidator {
                 continue;
             }
             check(entry.getValue(), childSchema, childPath(path, key), issues, source);
+        }
+    }
+
+    /**
+     * @implNote Reported at the object's own path, as a draft-07 validator reports it: the key is
+     * the thing that is wrong, and it has no path of its own to be reported at.
+     */
+    private static void checkPropertyNames(Map<?, ?> record, JsonSchema names, String path, List<SchemaIssue> issues) {
+        if (names == null) {
+            return;
+        }
+        for (Object key : record.keySet()) {
+            checkString(String.valueOf(key), names, path, issues);
         }
     }
 

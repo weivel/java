@@ -296,4 +296,30 @@ class ManifestValidatorTest {
         assertEquals(1, issues.size(), issues.toString());
         assertEquals("services.consumes[1]", issues.get(0).getPath());
     }
+
+    @Test
+    void refusesAWindowsReservedIdButNotAWordThatStartsWithOne() {
+        for (String reserved : Arrays.asList("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9")) {
+            Map<String, Object> manifest = valid();
+            manifest.put("id", reserved);
+            List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+            assertEquals(1, issues.size(), reserved + ": " + issues);
+            assertEquals("id", issues.get(0).getPath());
+        }
+        for (String allowed : Arrays.asList("con-tools", "console", "com10")) {
+            Map<String, Object> manifest = valid();
+            manifest.put("id", allowed);
+            assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty(), allowed);
+        }
+    }
+
+    @Test
+    void refusesARawColourWhereAToneGoes() {
+        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"services\": {\"provides\": [\"demo:screens\"]}, "
+                + "\"views\": {\"main\": {\"title\": \"Main\", \"nodes\": [{\"id\": \"root\", \"component\": \"stack\", \"tone\": \"#ff0000\"}]}}}").read();
+        List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertEquals(1, issues.size(), issues.toString());
+        assertEquals("views.main.nodes[0].tone", issues.get(0).getPath());
+        assertTrue(issues.get(0).getFix().contains("a raw colour is not accepted"), issues.toString());
+    }
 }

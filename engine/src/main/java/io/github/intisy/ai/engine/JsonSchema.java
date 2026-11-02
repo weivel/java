@@ -25,6 +25,7 @@ public final class JsonSchema {
     private List<String> required;
     private JsonSchema items;
     private JsonSchema additionalProperties;
+    private JsonSchema propertyNames;
     private String pattern;
     private Integer minimum;
     private Integer maximum;
@@ -140,6 +141,16 @@ public final class JsonSchema {
     /** @param value the schema an object's undeclared properties must satisfy */
     public void setAdditionalProperties(JsonSchema value) {
         this.additionalProperties = value;
+    }
+
+    /** @return the schema every property name of a matching object must satisfy, or null when names are unconstrained */
+    public JsonSchema getPropertyNames() {
+        return propertyNames;
+    }
+
+    /** @param value the schema every property name of a matching object must satisfy */
+    public void setPropertyNames(JsonSchema value) {
+        this.propertyNames = value;
     }
 
     /** @return the regular expression a matching string must contain a match for, or null when unset */
@@ -312,6 +323,9 @@ public final class JsonSchema {
         }
         if (additionalProperties != null) {
             out.put("additionalProperties", additionalProperties.toTree());
+        }
+        if (propertyNames != null) {
+            out.put("propertyNames", propertyNames.toTree());
         }
         put(out, "pattern", pattern);
         put(out, "minimum", minimum);

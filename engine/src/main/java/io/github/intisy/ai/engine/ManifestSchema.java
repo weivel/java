@@ -24,6 +24,10 @@ public final class ManifestSchema {
     /** Draft the published schema declares, which no validator in this package reads. */
     public static final String DRAFT = "http://json-schema.org/draft-07/schema#";
 
+    private static final String KEY_PATTERN = "^[a-z][A-Za-z0-9]*(?![\\s\\S])";
+
+    private static final String ICON_PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])";
+
     private ManifestSchema() {
     }
 
@@ -34,8 +38,8 @@ public final class ManifestSchema {
                 "Pointer at the published manifest schema, for an editor's completion and validation."));
 
         JsonSchema id = described(JsonSchema.ofType("string"), "The plugin's permanent identity, matching its repository name.");
-        id.setPattern("^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])");
-        id.setFix("use lowercase words joined by single hyphens, for example \"config-ledger\"");
+        id.setPattern("^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?![\\s\\S]))[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])");
+        id.setFix("use lowercase words joined by single hyphens, for example \"config-ledger\", and not a Windows reserved name (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)");
         properties.put("id", id);
 
         JsonSchema api = described(JsonSchema.ofType("integer"), "The lowest API major version this plugin needs. A floor, not a build tag.");
@@ -88,6 +92,9 @@ public final class ManifestSchema {
         properties.put("publish", publish());
         properties.put("repo", repo());
         properties.put("marketplace", marketplace());
+        properties.put("settings", uiSettings());
+        properties.put("actions", actions());
+        properties.put("views", views());
         properties.put("app", app());
 
         JsonSchema root = described(JsonSchema.ofType("object"), "The single machine-readable description of a plugin, whichever application it targets.");
@@ -582,6 +589,180 @@ public final class ManifestSchema {
         modelCatalog.setRequired(Arrays.asList("files", "providerKey"));
         modelCatalog.setProperties(properties);
         return modelCatalog;
+    }
+
+    private static JsonSchema keyedBy(JsonSchema record, String fix) {
+        JsonSchema names = JsonSchema.ofType(null);
+        names.setPattern(KEY_PATTERN);
+        names.setFix(fix);
+        record.setPropertyNames(names);
+        return record;
+    }
+
+    private static JsonSchema withFix(JsonSchema schema, String fix) {
+        schema.setFix(fix);
+        return schema;
+    }
+
+    private static JsonSchema enumerated(String description, String fix, String... values) {
+        JsonSchema schema = described(JsonSchema.ofType("string"), description);
+        schema.setEnumValues(Arrays.asList(values));
+        schema.setFix(fix);
+        return schema;
+    }
+
+    private static JsonSchema uiTone() {
+        return enumerated("A semantic colour role; a host maps it to its own palette.",
+                "set the tone to one of neutral, accent, success, warning or danger; a raw colour is not accepted",
+                "neutral", "accent", "success", "warning", "danger");
+    }
+
+    private static JsonSchema uiBinding() {
+        JsonSchema method = described(JsonSchema.ofType("string"), "The service method to call.");
+        method.setPattern(KEY_PATTERN);
+        method.setFix("start a method name with a lowercase letter, then letters and digits only, for example \"read\"");
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("service", described(JsonSchema.ofType("string"), "The id of a service this plugin provides."));
+        properties.put("method", method);
+        properties.put("argument", described(JsonSchema.ofType("object"), "The argument sent with the call."));
+        JsonSchema binding = described(JsonSchema.ofType("object"), "A call into one of this plugin's own services.");
+        binding.setProperties(properties);
+        binding.setRequired(Arrays.asList("service", "method"));
+        binding.setFix("write the binding as {\"service\": \"<id>\", \"method\": \"<name>\"}, optionally with an \"argument\" object");
+        return binding;
+    }
+
+    private static JsonSchema uiSettings() {
+        JsonSchema settings = described(JsonSchema.ofType("object"), "Settings this plugin lets a user change, keyed by setting key.");
+        keyedBy(settings, "start a setting key with a lowercase letter, then letters and digits only, for example \"retryLimit\"");
+        settings.setAdditionalProperties(setting());
+        settings.setFix("map each setting key to an object carrying \"type\" and \"label\"");
+        return settings;
+    }
+
+    private static JsonSchema setting() {
+        JsonSchema choices = described(JsonSchema.ofType("array"), "The values a choice or multi-choice setting offers.");
+        choices.setItems(JsonSchema.ofType("string"));
+        choices.setFix("list the allowed values as strings, for example [\"fast\", \"safe\"]");
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("type", enumerated("How a host edits the value.",
+                "set the type to one of text, secret, number, toggle, choice, multi-choice, path, list or key-value",
+                "text", "secret", "number", "toggle", "choice", "multi-choice", "path", "list", "key-value"));
+        properties.put("label", described(JsonSchema.ofType("string"), "The text a host shows beside the control."));
+        properties.put("help", described(JsonSchema.ofType("string"), "A sentence a host shows under the control."));
+        properties.put("default", described(JsonSchema.ofType(null), "The value in force until a user changes it."));
+        properties.put("layer", enumerated(
+                "Whether the value travels with the user (portable) or stays with this installation (application). Absent means portable.",
+                "set the layer to portable or application", "portable", "application"));
+        properties.put("choices", choices);
+        properties.put("minimum", described(JsonSchema.ofType("integer"), "The lowest value a number setting accepts."));
+        properties.put("maximum", described(JsonSchema.ofType("integer"), "The highest value a number setting accepts."));
+        properties.put("pattern", described(JsonSchema.ofType("string"), "A regular expression a text value must match."));
+        JsonSchema setting = described(JsonSchema.ofType("object"), "One setting: its type, its label and the limits a host enforces.");
+        setting.setProperties(properties);
+        setting.setRequired(Arrays.asList("type", "label"));
+        setting.setIf(choiceTyped());
+        setting.setThen(choicesListed());
+        setting.setFix("write the setting as an object carrying \"type\" and \"label\"");
+        return setting;
+    }
+
+    private static JsonSchema choiceTyped() {
+        JsonSchema choiceType = JsonSchema.ofType(null);
+        choiceType.setEnumValues(Arrays.asList("choice", "multi-choice"));
+        return requiring("type", choiceType);
+    }
+
+    private static JsonSchema choicesListed() {
+        JsonSchema atLeastOne = JsonSchema.ofType("array");
+        atLeastOne.setMinItems(Integer.valueOf(1));
+        return withFix(requiring("choices", atLeastOne), "a choice or multi-choice setting needs \"choices\", for example [\"fast\", \"safe\"]");
+    }
+
+    private static JsonSchema actions() {
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("label", described(JsonSchema.ofType("string"), "The text a host shows on the control."));
+        properties.put("call", uiBinding());
+        properties.put("confirm", described(JsonSchema.ofType("string"),
+                "A question a host asks before running the action. Absent means it runs at once."));
+        properties.put("input", uiSettings());
+        properties.put("tone", uiTone());
+        JsonSchema action = described(JsonSchema.ofType("object"), "One action: what a host labels it and which service method it calls.");
+        action.setProperties(properties);
+        action.setRequired(Arrays.asList("label", "call"));
+        action.setFix("write the action as an object carrying \"label\" and \"call\", for example {\"label\": \"Refresh\", \"call\": {\"service\": \"demo:screens\", \"method\": \"refresh\"}}");
+        JsonSchema actions = described(JsonSchema.ofType("object"),
+                "Operations a host offers the user for this plugin, each a call into one of its own services.");
+        keyedBy(actions, "start an action id with a lowercase letter, then letters and digits only, for example \"refresh\"");
+        actions.setAdditionalProperties(action);
+        actions.setFix("map each action id to an object carrying \"label\" and \"call\"");
+        return actions;
+    }
+
+    private static JsonSchema views() {
+        JsonSchema nodes = described(JsonSchema.ofType("array"),
+                "The view's nodes as a flat list; a node's \"parent\" names the node it sits under, which must come earlier in the list.");
+        nodes.setMinItems(Integer.valueOf(1));
+        nodes.setItems(uiNode());
+        nodes.setFix("list at least one node, each an object carrying \"id\" and \"component\"");
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("title", described(JsonSchema.ofType("string"), "The name a host shows for the view."));
+        properties.put("nodes", nodes);
+        JsonSchema view = described(JsonSchema.ofType("object"), "One view: a title and the nodes that make it up.");
+        view.setProperties(properties);
+        view.setRequired(Arrays.asList("title", "nodes"));
+        view.setFix("write the view as an object carrying \"title\" and a non-empty \"nodes\" list");
+        JsonSchema views = described(JsonSchema.ofType("object"),
+                "Screens a host draws for this plugin, each a flat list of nodes that name their parent.");
+        keyedBy(views, "start a view id with a lowercase letter, then letters and digits only, for example \"screens\"");
+        views.setAdditionalProperties(view);
+        views.setFix("map each view id to an object carrying \"title\" and \"nodes\"");
+        return views;
+    }
+
+    private static JsonSchema uiNode() {
+        JsonSchema id = described(JsonSchema.ofType("string"), "The node's identity within its view.");
+        id.setPattern(KEY_PATTERN);
+        id.setFix("start a node id with a lowercase letter, then letters and digits only, for example \"mainTable\"");
+        JsonSchema icon = described(JsonSchema.ofType("string"), "The name of a host icon.");
+        icon.setPattern(ICON_PATTERN);
+        icon.setFix("name the icon in lowercase words joined by single hyphens, for example \"arrow-right\"");
+        JsonSchema span = described(JsonSchema.ofType("integer"), "How many of a grid's twelve columns the node takes.");
+        span.setMinimum(Integer.valueOf(1));
+        span.setMaximum(Integer.valueOf(12));
+        span.setFix("set the span to a whole number from 1 to 12");
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("id", id);
+        properties.put("parent", described(JsonSchema.ofType("string"), "The id of the node this one sits under. Absent means the view's root."));
+        properties.put("component", component());
+        properties.put("size", enumerated("The node's size as a role.",
+                "set the size to small, medium or large; a pixel value is not accepted", "small", "medium", "large"));
+        properties.put("emphasis", enumerated("How much attention the node asks for.",
+                "set the emphasis to low, normal or high", "low", "normal", "high"));
+        properties.put("tone", uiTone());
+        properties.put("label", described(JsonSchema.ofType("string"), "Text a host shows as the node's heading or caption."));
+        properties.put("text", described(JsonSchema.ofType("string"), "The node's own text."));
+        properties.put("icon", icon);
+        properties.put("bind", uiBinding());
+        properties.put("action", described(JsonSchema.ofType("string"), "The id of one of this plugin's actions the node runs."));
+        properties.put("field", described(JsonSchema.ofType("string"), "The key of one of this plugin's settings the node edits."));
+        properties.put("chart", enumerated("The chart form of a chart node.",
+                "set the chart to line, bar, sparkline or meter", "line", "bar", "sparkline", "meter"));
+        properties.put("span", span);
+        JsonSchema node = described(JsonSchema.ofType("object"),
+                "One element of a view. It names what it is and how it looks as roles, never as raw colours or sizes.");
+        node.setProperties(properties);
+        node.setRequired(Arrays.asList("id", "component"));
+        node.setFix("write the node as an object carrying \"id\" and \"component\"");
+        return node;
+    }
+
+    private static JsonSchema component() {
+        return enumerated("What the node is.",
+                "set the component to one of stack, grid, split, tabs, section, card, divider, text, list, table, tree, detail, chart, log, code, diff, badge, icon, field, search, form, button, dialog, toast, progress, spinner, empty, loading, error or unavailable",
+                "stack", "grid", "split", "tabs", "section", "card", "divider", "text", "list", "table",
+                "tree", "detail", "chart", "log", "code", "diff", "badge", "icon", "field", "search",
+                "form", "button", "dialog", "toast", "progress", "spinner", "empty", "loading", "error", "unavailable");
     }
 
     private static JsonSchema described(JsonSchema schema, String description) {
