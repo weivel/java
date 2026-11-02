@@ -30,6 +30,30 @@ class ManifestValidatorTest {
     }
 
     @Test
+    void refusesAnIdEndingInANewline() {
+        Map<String, Object> manifest = valid();
+        manifest.put("id", "config-ledger\n");
+        assertRefusedByItsPattern(manifest);
+    }
+
+    @Test
+    void refusesAPathCommandNameEndingInANewline() {
+        Map<String, Object> manifest = valid();
+        manifest.put("pathCommands", Collections.singletonMap("requested", Arrays.asList("tool")));
+        List<SchemaIssue> accepted = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertTrue(accepted.isEmpty(), accepted.toString());
+        manifest.put("pathCommands", Collections.singletonMap("requested", Arrays.asList("tool\n")));
+        assertRefusedByItsPattern(manifest);
+    }
+
+    /** @implNote Java's bare $ also matches before a final line terminator, which ECMAScript's does not. */
+    private static void assertRefusedByItsPattern(Map<String, Object> manifest) {
+        List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertEquals(1, issues.size(), issues.toString());
+        assertTrue(issues.get(0).getMessage().contains("does not match"), issues.toString());
+    }
+
+    @Test
     void acceptsAManifestThatTargetsAnApplication() {
         Map<String, Object> manifest = valid();
         manifest.put("targets", Arrays.asList("forebay"));

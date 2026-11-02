@@ -34,7 +34,7 @@ public final class ManifestSchema {
                 "Pointer at the published manifest schema, for an editor's completion and validation."));
 
         JsonSchema id = described(JsonSchema.ofType("string"), "The plugin's permanent identity, matching its repository name.");
-        id.setPattern("^[a-z0-9]+(-[a-z0-9]+)*$");
+        id.setPattern("^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])");
         id.setFix("use lowercase words joined by single hyphens, for example \"config-ledger\"");
         properties.put("id", id);
 
@@ -228,7 +228,7 @@ public final class ManifestSchema {
 
     private static JsonSchema commandName() {
         JsonSchema name = JsonSchema.ofType("string");
-        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
+        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?![\\s\\S])");
         name.setFix("name each command as one portable file name: a letter or digit, then letters, digits, \".\", \"_\" or \"-\", at most 64 characters");
         return name;
     }
