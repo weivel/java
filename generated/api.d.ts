@@ -829,7 +829,7 @@ export interface UiBinding {
 }
 
 /** A node's size as a role, never a pixel value. */
-export type Size = "small" | "medium" | "large";
+export type UiSize = "small" | "medium" | "large";
 
 /** A semantic colour role; a host maps it to its own palette. */
 export type UiTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -860,7 +860,7 @@ export interface WantOptions {
 }
 
 /** How much attention a node asks for. */
-export type Emphasis = "low" | "normal" | "high";
+export type UiEmphasis = "low" | "normal" | "high";
 
 /** How the repo is published, to npm and as Java release assets. */
 export interface ManifestPublish {
@@ -920,11 +920,11 @@ export interface UiNode {
   /** The service call whose result the node shows. */
   bind?: UiBinding;
   /** The chart form of a chart node. */
-  chart?: ChartForm;
+  chart?: UiChart;
   /** What the node is. */
-  component: ComponentName;
+  component: UiComponent;
   /** How much attention the node asks for. */
-  emphasis?: Emphasis;
+  emphasis?: UiEmphasis;
   /** The key of one of this plugin's settings the node edits. */
   field?: string;
   /** The name of a host icon. */
@@ -936,7 +936,7 @@ export interface UiNode {
   /** The id of the node this one sits under, which must come earlier in the view. Absent means the view's root. */
   parent?: string;
   /** The node's size as a role. */
-  size?: Size;
+  size?: UiSize;
   /** How many of a grid's twelve columns the node takes, a whole number from 1 to 12. */
   span?: number;
   /** The node's own text. */
@@ -1027,7 +1027,7 @@ export interface SettingDeclaration {
   /** The text a host shows beside the control. */
   label: string;
   /** Whether the value travels with the user or stays with this installation. Absent means portable. */
-  layer?: "application" | "portable";
+  layer?: SettingsLayer;
   /** The highest value a number setting accepts. */
   maximum?: number;
   /** The lowest value a number setting accepts. */
@@ -1067,7 +1067,7 @@ export interface RepoMeta {
 }
 
 /** The form a chart node draws. */
-export type ChartForm = "line" | "bar" | "sparkline" | "meter";
+export type UiChart = "line" | "bar" | "sparkline" | "meter";
 
 /** The session-storage formats an app writes, for a usage reader. */
 export interface AppUsage {
@@ -1076,7 +1076,7 @@ export interface AppUsage {
 }
 
 /** What a node is; a host draws each in its own style. */
-export type ComponentName = "stack" | "grid" | "split" | "tabs" | "section" | "card" | "divider" | "text" | "list" | "table" | "tree" | "detail" | "chart" | "log" | "code" | "diff" | "badge" | "icon" | "field" | "search" | "form" | "button" | "dialog" | "toast" | "progress" | "spinner" | "empty" | "loading" | "error" | "unavailable";
+export type UiComponent = "stack" | "grid" | "split" | "tabs" | "section" | "card" | "divider" | "text" | "list" | "table" | "tree" | "detail" | "chart" | "log" | "code" | "diff" | "badge" | "icon" | "field" | "search" | "form" | "button" | "dialog" | "toast" | "progress" | "spinner" | "empty" | "loading" | "error" | "unavailable";
 
 /** What this plugin contributes to a host's catalog of installable things. */
 export interface ManifestMarketplace {
@@ -1087,7 +1087,7 @@ export interface ManifestMarketplace {
 /** Where a settings write goes. */
 export interface ConfigSetOptions {
   /** The layer written to. Absent means `"application"`, the per-application file. */
-  layer?: "application" | "portable";
+  layer?: SettingsLayer;
 }
 
 /** Where an app keeps its home directory, in the order a resolver tries. */
@@ -1109,4 +1109,7 @@ export interface ManifestLifecycle {
   /** The entry exports `repair(ctx)`, run on demand from a host. */
   repair?: boolean;
 }
+
+/** Which settings file a write goes to. */
+export type SettingsLayer = "application" | "portable";
 

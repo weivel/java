@@ -18537,10 +18537,11 @@ igiae_ManifestSchema_choiceTyped = () => {
     return igiae_ManifestSchema_requiring($rt_s(324), $choiceType);
 },
 igiae_ManifestSchema_choicesListed = () => {
-    let $atLeastOne;
-    $atLeastOne = igiae_JsonSchema_ofType($rt_s(432));
+    let $fix, $atLeastOne;
+    $fix = $rt_s(737);
+    $atLeastOne = igiae_ManifestSchema_withFix(igiae_JsonSchema_ofType($rt_s(432)), $fix);
     igiae_JsonSchema_setMinItems($atLeastOne, jl_Integer_valueOf(1));
-    return igiae_ManifestSchema_withFix(igiae_ManifestSchema_requiring($rt_s(731), $atLeastOne), $rt_s(737));
+    return igiae_ManifestSchema_withFix(igiae_ManifestSchema_requiring($rt_s(731), $atLeastOne), $fix);
 },
 igiae_ManifestSchema_actions = () => {
     let $properties, $action, $actions;

@@ -5,7 +5,7 @@ import io.github.intisy.ai.tsemit.TsLiteral;
 
 /** The form a chart node draws. */
 @TsEnum
-public enum ChartForm {
+public enum UiChart {
     /** A line over a series. */
     @TsLiteral("line")
     LINE,

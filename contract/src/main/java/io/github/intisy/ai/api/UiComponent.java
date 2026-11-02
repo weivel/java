@@ -5,7 +5,7 @@ import io.github.intisy.ai.tsemit.TsLiteral;
 
 /** What a node is; a host draws each in its own style. */
 @TsEnum
-public enum ComponentName {
+public enum UiComponent {
     /** Children one after another. */
     @TsLiteral("stack")
     STACK,
@@ -122,7 +122,7 @@ public enum ComponentName {
     @TsLiteral("error")
     ERROR,
 
-    /** What a view shows when its service is absent. */
+    /** An item that is detected or available but not installed, shown with an install action. */
     @TsLiteral("unavailable")
     UNAVAILABLE
 }

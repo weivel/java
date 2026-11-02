@@ -5,7 +5,7 @@ import io.github.intisy.ai.tsemit.TsLiteral;
 
 /** How much attention a node asks for. */
 @TsEnum
-public enum Emphasis {
+public enum UiEmphasis {
     /** Less than its neighbours. */
     @TsLiteral("low")
     LOW,

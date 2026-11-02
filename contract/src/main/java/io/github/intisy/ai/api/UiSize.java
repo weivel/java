@@ -5,7 +5,7 @@ import io.github.intisy.ai.tsemit.TsLiteral;
 
 /** A node's size as a role, never a pixel value. */
 @TsEnum
-public enum Size {
+public enum UiSize {
     /** Smaller than the host's default. */
     @TsLiteral("small")
     SMALL,

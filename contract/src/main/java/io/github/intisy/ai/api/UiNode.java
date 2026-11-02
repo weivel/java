@@ -26,7 +26,7 @@ public interface UiNode {
      *
      * @return the component
      */
-    ComponentName component();
+    UiComponent component();
 
     /**
      * The node's size as a role.
@@ -34,7 +34,7 @@ public interface UiNode {
      * @return the size, or absent for the host's default
      */
     @TsOptional
-    Size size();
+    UiSize size();
 
     /**
      * How much attention the node asks for.
@@ -42,7 +42,7 @@ public interface UiNode {
      * @return the emphasis, or absent for normal
      */
     @TsOptional
-    Emphasis emphasis();
+    UiEmphasis emphasis();
 
     /**
      * The node's colour role.
@@ -106,7 +106,7 @@ public interface UiNode {
      * @return the chart form, or absent when the node is not a chart
      */
     @TsOptional
-    ChartForm chart();
+    UiChart chart();
 
     /**
      * How many of a grid's twelve columns the node takes, a whole number from 1 to 12.
