@@ -1,6 +1,7 @@
 package io.github.intisy.ai.tsemit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -134,6 +135,25 @@ class ShapeAnnotationTest {
                 "  muted",
                 "}"));
         assertTrue(emitted.contains("tone(): \"normal\" | \"muted\" | (string & {});"), emitted);
+    }
+
+    @Test
+    void aRenamedMemberIsEmittedUnderItsGivenNameAndSortedByIt() {
+        String emitted = EmitHarness.surface(String.join("\n",
+                "package fixture;",
+                "import io.github.intisy.ai.tsemit.TsInterface;",
+                "import io.github.intisy.ai.tsemit.TsName;",
+                "import io.github.intisy.ai.tsemit.TsOptional;",
+                "@TsInterface(data = true)",
+                "interface Setting {",
+                "  String label();",
+                "  @TsOptional",
+                "  @TsName(\"default\")",
+                "  Object defaultValue();",
+                "  String choice();",
+                "}"));
+        assertTrue(emitted.contains("  choice: string;\n  default?: unknown;\n  label: string;\n"), emitted);
+        assertFalse(emitted.contains("defaultValue"), emitted);
     }
 
     @Test

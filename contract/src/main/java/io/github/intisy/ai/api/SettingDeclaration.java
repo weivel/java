@@ -1,6 +1,7 @@
 package io.github.intisy.ai.api;
 
 import io.github.intisy.ai.tsemit.TsInterface;
+import io.github.intisy.ai.tsemit.TsName;
 import io.github.intisy.ai.tsemit.TsOptional;
 import java.util.List;
 
@@ -28,6 +29,15 @@ public interface SettingDeclaration {
      */
     @TsOptional
     String help();
+
+    /**
+     * The value in force until a user changes it.
+     *
+     * @return the default value, or absent when the setting has none
+     */
+    @TsOptional
+    @TsName("default")
+    Object defaultValue();
 
     /**
      * Whether the value travels with the user or stays with this installation. Absent means portable.

@@ -418,13 +418,13 @@ public class TsEmitProcessor extends AbstractProcessor {
         Set<String> taken = new HashSet<String>();
         for (TypeElement each : selfThenSupertypes(type)) {
             for (VariableElement field : instanceFields(each)) {
-                String name = field.getSimpleName().toString();
+                String name = emittedName(field);
                 if (taken.add(name)) {
                     members.add(new Member(name, "", field(field, literalFor(discriminant, name))));
                 }
             }
             for (ExecutableElement method : sortedMethods(each)) {
-                String name = method.getSimpleName().toString();
+                String name = emittedName(method);
                 String signature = method.toString();
                 if (taken.add(method.getParameters().isEmpty() ? name : signature)) {
                     members.add(new Member(name, signature, method(method, spec)));
@@ -461,7 +461,7 @@ public class TsEmitProcessor extends AbstractProcessor {
         if (property && asProperty != null && asProperty.readOnly()) {
             out.append("readonly ");
         }
-        out.append(method.getSimpleName());
+        out.append(emittedName(method));
         if (method.getAnnotation(TsOptional.class) != null) {
             out.append("?");
         }
@@ -489,12 +489,17 @@ public class TsEmitProcessor extends AbstractProcessor {
         if (field.getModifiers().contains(Modifier.FINAL)) {
             out.append("readonly ");
         }
-        out.append(field.getSimpleName());
+        out.append(emittedName(field));
         if (field.getAnnotation(TsOptional.class) != null) {
             out.append("?");
         }
         String emitted = literalType != null ? literalType : valueType(field);
         return out.append(": ").append(emitted).append(";\n").toString();
+    }
+
+    private static String emittedName(Element member) {
+        TsName renamed = member.getAnnotation(TsName.class);
+        return renamed != null ? renamed.value() : member.getSimpleName().toString();
     }
 
     private List<VariableElement> instanceFields(TypeElement type) {

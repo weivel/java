@@ -1020,6 +1020,8 @@ export interface ManifestOffer {
 export interface SettingDeclaration {
   /** The values a choice or multi-choice setting offers. */
   choices?: string[];
+  /** The value in force until a user changes it. */
+  default?: unknown;
   /** A sentence a host shows under the control. */
   help?: string;
   /** The text a host shows beside the control. */
