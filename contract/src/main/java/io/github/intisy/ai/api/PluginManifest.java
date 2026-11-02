@@ -210,6 +210,30 @@ public interface PluginManifest {
     ManifestMarketplace marketplace();
 
     /**
+     * Settings a user can change, keyed by setting key.
+     *
+     * @return the settings, or absent when this plugin offers none
+     */
+    @TsOptional
+    UiSettings settings();
+
+    /**
+     * Operations a host offers the user, each a call into one of this plugin's own services.
+     *
+     * @return the actions keyed by action id, or absent when this plugin offers none
+     */
+    @TsOptional
+    Map<String, ActionDeclaration> actions();
+
+    /**
+     * Screens a host draws, keyed by view id, each a flat list of nodes that name their parent.
+     *
+     * @return the views keyed by view id, or absent when this plugin draws none
+     */
+    @TsOptional
+    Map<String, ViewDeclaration> views();
+
+    /**
      * The app this repo is the loader for, declared by the app's own project.
      *
      * @implNote Present only on a repo that IS an app's loader, which is what makes "whose loader is

@@ -441,6 +441,17 @@ export interface ManifestCommand {
 }
 
 /**
+ * Settings keyed by setting key.
+ *
+ * @remarks
+ * An interface rather than a `Map`, because the model's `uiSettings`
+ * definition resolves to a contract type by name, and a map has none.
+ */
+export interface UiSettings {
+  [key: string]: SettingDeclaration;
+}
+
+/**
  * The absolute storage directories of the app home a plugin is running in.
  *
  * @remarks
@@ -507,6 +518,8 @@ export interface PluginManifest {
    * TypeScript could not include a field their own plugin.json has.
    */
   $schema?: string;
+  /** Operations a host offers the user, each a call into one of this plugin's own services. */
+  actions?: Record<string, ActionDeclaration>;
   /** The lowest API major version this plugin needs. A floor, not a build tag. */
   api: number;
   /**
@@ -571,6 +584,8 @@ export interface PluginManifest {
   repo?: RepoMeta;
   /** The inter-plugin contract. */
   services?: ManifestServices;
+  /** Settings a user can change, keyed by setting key. */
+  settings?: UiSettings;
   /**
    * The applications this artifact is for. Absent means every application.
    *
@@ -581,6 +596,8 @@ export interface PluginManifest {
    * disjoint.
    */
   targets?: string[];
+  /** Screens a host draws, keyed by view id, each a flat list of nodes that name their parent. */
+  views?: Record<string, ViewDeclaration>;
 }
 
 /**
@@ -801,6 +818,22 @@ export interface MarketplaceMatch {
   topics?: string[];
 }
 
+/** A call into one of this plugin's own services. */
+export interface UiBinding {
+  /** The argument sent with the call. */
+  argument?: Record<string, unknown>;
+  /** The service method to call. */
+  method: string;
+  /** The id of a service this plugin provides. */
+  service: string;
+}
+
+/** A node's size as a role, never a pixel value. */
+export type Size = "small" | "medium" | "large";
+
+/** A semantic colour role; a host maps it to its own palette. */
+export type UiTone = "neutral" | "accent" | "success" | "warning" | "danger";
+
 /** A service id paired, in the type system, with the contract that id promises. */
 export interface ServiceType<T> {
   /** Never present at run time. It exists so two keys parameterised differently cannot be interchanged. */
@@ -817,11 +850,17 @@ export interface TopicType<T> {
   readonly id: string;
 }
 
+/** How a host edits a setting's value. */
+export type SettingType = "text" | "secret" | "number" | "toggle" | "choice" | "multi-choice" | "path" | "list" | "key-value";
+
 /** How long a plugin is willing to wait for a service that is not registered yet. */
 export interface WantOptions {
   /** Milliseconds to wait before giving up. Absent means wait without bound (invariant 8). */
   timeoutMs?: number;
 }
+
+/** How much attention a node asks for. */
+export type Emphasis = "low" | "normal" | "high";
 
 /** How the repo is published, to npm and as Java release assets. */
 export interface ManifestPublish {
@@ -850,6 +889,20 @@ export interface AppDetect {
   pkg: string;
 }
 
+/** One action: what a host labels it and which of this plugin's service methods it calls. */
+export interface ActionDeclaration {
+  /** The service method the action calls. */
+  call: UiBinding;
+  /** A question a host asks before running the action. Absent means it runs at once. */
+  confirm?: string;
+  /** Values a host asks for before running the action, declared as settings are. */
+  input?: UiSettings;
+  /** The text a host shows on the control. */
+  label: string;
+  /** The control's colour role. */
+  tone?: UiTone;
+}
+
 /** One category a plugin adds to a host's catalog of installable things. */
 export interface MarketplaceCategory {
   /** The category's id, unique across every plugin declaring one. */
@@ -858,6 +911,38 @@ export interface MarketplaceCategory {
   label?: string;
   /** Which entries this category holds. */
   match: MarketplaceMatch;
+}
+
+/** One element of a view. It names what it is and how it looks as roles, never as raw colours or sizes. */
+export interface UiNode {
+  /** The id of one of this plugin's actions the node runs. */
+  action?: string;
+  /** The service call whose result the node shows. */
+  bind?: UiBinding;
+  /** The chart form of a chart node. */
+  chart?: ChartForm;
+  /** What the node is. */
+  component: ComponentName;
+  /** How much attention the node asks for. */
+  emphasis?: Emphasis;
+  /** The key of one of this plugin's settings the node edits. */
+  field?: string;
+  /** The name of a host icon. */
+  icon?: string;
+  /** The node's identity within its view. */
+  id: string;
+  /** Text a host shows as the node's heading or caption. */
+  label?: string;
+  /** The id of the node this one sits under, which must come earlier in the view. Absent means the view's root. */
+  parent?: string;
+  /** The node's size as a role. */
+  size?: Size;
+  /** How many of a grid's twelve columns the node takes, a whole number from 1 to 12. */
+  span?: number;
+  /** The node's own text. */
+  text?: string;
+  /** The node's colour role. */
+  tone?: UiTone;
 }
 
 /** One plugin's configuration, already resolved by the host. */
@@ -931,6 +1016,34 @@ export interface ManifestOffer {
   id: string;
 }
 
+/** One setting; `choices` is required, with at least one value, when the type is `choice` or `multi-choice`. */
+export interface SettingDeclaration {
+  /** The values a choice or multi-choice setting offers. */
+  choices?: string[];
+  /** A sentence a host shows under the control. */
+  help?: string;
+  /** The text a host shows beside the control. */
+  label: string;
+  /** Whether the value travels with the user or stays with this installation. Absent means portable. */
+  layer?: "application" | "portable";
+  /** The highest value a number setting accepts. */
+  maximum?: number;
+  /** The lowest value a number setting accepts. */
+  minimum?: number;
+  /** A regular expression a text value must match. */
+  pattern?: string;
+  /** How a host edits the value. */
+  type: SettingType;
+}
+
+/** One view: a title and the nodes that make it up. */
+export interface ViewDeclaration {
+  /** The view's nodes as a flat list, at least one; a node's `parent` names a node listed before it. */
+  nodes: UiNode[];
+  /** The name a host shows for the view. */
+  title: string;
+}
+
 /** Repository metadata, from which the GitHub description and topic set are derived. */
 export interface RepoMeta {
   /** The single category topic, for example `core-library` or `dashboard`. */
@@ -951,11 +1064,17 @@ export interface RepoMeta {
   topics?: string[];
 }
 
+/** The form a chart node draws. */
+export type ChartForm = "line" | "bar" | "sparkline" | "meter";
+
 /** The session-storage formats an app writes, for a usage reader. */
 export interface AppUsage {
   /** Format ids, each of which a consumer maps to a parser of its own. */
   formats: string[];
 }
+
+/** What a node is; a host draws each in its own style. */
+export type ComponentName = "stack" | "grid" | "split" | "tabs" | "section" | "card" | "divider" | "text" | "list" | "table" | "tree" | "detail" | "chart" | "log" | "code" | "diff" | "badge" | "icon" | "field" | "search" | "form" | "button" | "dialog" | "toast" | "progress" | "spinner" | "empty" | "loading" | "error" | "unavailable";
 
 /** What this plugin contributes to a host's catalog of installable things. */
 export interface ManifestMarketplace {
