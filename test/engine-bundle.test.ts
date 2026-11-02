@@ -97,6 +97,43 @@ it("hands a plugin a context carrying its own manifest object and the host descr
   expect(() => context.services.register("plugin-updater:catalog", {})).toThrow(/belongs to another plugin/);
 });
 
+it("leaves secrets and the portable path absent on a host that offers neither", () => {
+  const context = createPluginHost({ app: "claude", api: 1 }).contextFor(SCREENS, runtime());
+  expect("secrets" in context).toBe(false);
+  expect("portable" in context.paths).toBe(false);
+});
+
+it("hands over the runtime's secrets and portable path by identity", () => {
+  const secrets = { get: async () => "token", set: async () => {}, delete: async () => {} };
+  const offered = runtime();
+  const paths = { ...offered.paths, portable: "/portable/config-ledger" };
+  const context = createPluginHost({ app: "claude", api: 1 }).contextFor(SCREENS, { ...offered, paths, secrets });
+  expect(context.secrets).toBe(secrets);
+  expect(context.paths).toBe(paths);
+});
+
+it("refuses a portable write without the layer and hands the runtime nothing", async () => {
+  const handed: unknown[][] = [];
+  const offered = runtime();
+  const config = { ...offered.config, set: async (...written: unknown[]) => void handed.push(written) };
+  const context = createPluginHost({ app: "claude", api: 1 }).contextFor(SCREENS, { ...offered, config });
+  const refused = context.config.set("theme", "dark", { layer: "portable" });
+  await expect(refused).rejects.toMatchObject({ detail: "this host has no portable settings layer" });
+  await context.config.set("theme", "dark");
+  await context.config.set("theme", "dark", { layer: "application" });
+  expect(handed).toEqual([["theme", "dark"], ["theme", "dark", { layer: "application" }]]);
+});
+
+it("passes a portable write through on a host with the layer", async () => {
+  const handed: unknown[][] = [];
+  const offered = runtime();
+  const config = { ...offered.config, set: async (...written: unknown[]) => void handed.push(written) };
+  const paths = { ...offered.paths, portable: "/portable/config-ledger" };
+  const context = createPluginHost({ app: "claude", api: 1 }).contextFor(SCREENS, { ...offered, config, paths });
+  await context.config.set("theme", "dark", { layer: "portable" });
+  expect(handed).toEqual([["theme", "dark", { layer: "portable" }]]);
+});
+
 it("reads the id off a typed key, so the contract's provide reaches the engine", () => {
   const host = createPluginHost({ app: "claude", api: 1 });
   const screens = { screens: () => [] };

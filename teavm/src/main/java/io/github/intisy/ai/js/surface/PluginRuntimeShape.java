@@ -41,4 +41,12 @@ public interface PluginRuntimeShape {
      */
     @TsOptional
     HomeRegistryShape homes();
+
+    /**
+     * The plugin's secrets, already scoped to its id. Absent means this host has no secret store.
+     *
+     * @return the secret store, opaque to this surface, or absent when this host has none
+     */
+    @TsOptional
+    Object secrets();
 }

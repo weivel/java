@@ -94,4 +94,12 @@ public interface JsRuntime extends JSObject {
      */
     @JSProperty
     Homes getHomes();
+
+    /**
+     * The plugin's secrets, already scoped to its id.
+     *
+     * @return the secret store, or undefined when this host has none
+     */
+    @JSProperty
+    JSObject getSecrets();
 }

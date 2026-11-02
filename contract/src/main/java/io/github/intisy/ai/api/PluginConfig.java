@@ -35,4 +35,17 @@ public interface PluginConfig {
      * @return a stage that completes once the setting is written
      */
     CompletionStage<Void> set(String key, Object value);
+
+    /**
+     * Writes one setting to the layer the options name.
+     *
+     * @implNote Refused, as a failed stage naming the missing layer, when the layer is
+     * {@code "portable"} on a host that offers no {@code paths.portable}, rather than landing in the
+     * application layer where the plugin would never read it back.
+     * @param key the setting's name
+     * @param value the value to write
+     * @param options which layer to write to
+     * @return a stage that completes once the setting is written
+     */
+    CompletionStage<Void> set(String key, Object value, ConfigSetOptions options);
 }

@@ -1,6 +1,7 @@
 package io.github.intisy.ai.js.surface;
 
 import io.github.intisy.ai.tsemit.TsInterface;
+import io.github.intisy.ai.tsemit.TsOptional;
 
 /** The storage directories of the home a plugin runs in. */
 @TsInterface(data = true)
@@ -39,4 +40,13 @@ public interface PluginPathsShape {
      * @return the config directory path
      */
     String config();
+
+    /**
+     * The plugin's own folder in the user's portable home, present only on a host with a portable
+     * settings layer.
+     *
+     * @return the portable folder path, or absent on a host without a portable layer
+     */
+    @TsOptional
+    String portable();
 }

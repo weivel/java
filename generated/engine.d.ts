@@ -366,6 +366,8 @@ export interface ContextSurface {
    * @param implementation - the value the plugin provides for that capability
    */
   provide(key: unknown, implementation: unknown): void;
+  /** The plugin's secrets, present only on a host with a secret store. */
+  readonly secrets?: unknown;
   /**
    * The typed key for a service id.
    *
@@ -448,6 +450,11 @@ export interface PluginPathsShape {
   home: string;
   /** Where deployed bundles and their manifest sidecars live. */
   plugin: string;
+  /**
+   * The plugin's own folder in the user's portable home, present only on a host with a portable
+   * settings layer.
+   */
+  portable?: string;
   /** Where plugin checkouts live. */
   repos: string;
 }
@@ -487,6 +494,8 @@ export interface PluginRuntimeShape {
   log: unknown;
   /** The storage directories of the home the plugin runs in. */
   paths: PluginPathsShape;
+  /** The plugin's secrets, already scoped to its id. Absent means this host has no secret store. */
+  secrets?: unknown;
 }
 
 /** What a host tells a plugin about itself. */

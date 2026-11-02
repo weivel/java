@@ -1,6 +1,7 @@
 package io.github.intisy.ai.js.surface;
 
 import io.github.intisy.ai.tsemit.TsInterface;
+import io.github.intisy.ai.tsemit.TsOptional;
 import io.github.intisy.ai.tsemit.TsProperty;
 import java.util.List;
 
@@ -46,6 +47,15 @@ public interface ContextSurface {
      */
     @TsProperty(readOnly = true)
     PluginPathsShape paths();
+
+    /**
+     * The plugin's secrets, present only on a host with a secret store.
+     *
+     * @return the secret store, opaque to this surface, or absent when the host has none
+     */
+    @TsProperty(readOnly = true)
+    @TsOptional
+    Object secrets();
 
     /**
      * Every app home the host knows about, asked fresh on each call.

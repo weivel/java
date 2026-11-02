@@ -2,6 +2,7 @@ package io.github.intisy.ai.api;
 
 import io.github.intisy.ai.api.seam.Logger;
 import io.github.intisy.ai.tsemit.TsInterface;
+import io.github.intisy.ai.tsemit.TsOptional;
 import io.github.intisy.ai.tsemit.TsProperty;
 import java.util.List;
 
@@ -103,6 +104,15 @@ public interface PluginContext {
      */
     @TsProperty(readOnly = true)
     PluginPaths paths();
+
+    /**
+     * This plugin's secrets, present only on a host with a secret store.
+     *
+     * @return this plugin's secrets, or null on a host without a secret store
+     */
+    @TsProperty(readOnly = true)
+    @TsOptional
+    PluginSecrets secrets();
 
     /**
      * This plugin's own manifest, as the host validated it.

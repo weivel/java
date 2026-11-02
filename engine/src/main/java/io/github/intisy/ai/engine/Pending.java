@@ -45,6 +45,19 @@ public final class Pending<T> {
     }
 
     /**
+     * One already carrying its failure, for a refusal a caller could have had synchronously.
+     *
+     * @param <T> the type of the value it will never carry
+     * @param reason the failure the returned instance is already rejected with
+     * @return a new instance that is already rejected with {@code reason}
+     */
+    public static <T> Pending<T> failed(PluginException reason) {
+        Pending<T> refused = new Pending<T>();
+        refused.reject(reason);
+        return refused;
+    }
+
+    /**
      * @param handler called with the value or the failure once this instance settles
      * @implNote Runs immediately when the outcome already happened, so a handler attached late never
      * waits for something that will not come again.

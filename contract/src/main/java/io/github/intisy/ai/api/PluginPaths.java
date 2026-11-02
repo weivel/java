@@ -1,6 +1,7 @@
 package io.github.intisy.ai.api;
 
 import io.github.intisy.ai.tsemit.TsInterface;
+import io.github.intisy.ai.tsemit.TsOptional;
 
 /**
  * The absolute storage directories of the app home a plugin is running in.
@@ -44,4 +45,13 @@ public interface PluginPaths {
      * @return the absolute config directory path
      */
     String config();
+
+    /**
+     * The plugin's own folder in the user's portable home, present only on a host with a portable
+     * settings layer.
+     *
+     * @return the absolute portable folder path, or null on a host without a portable layer
+     */
+    @TsOptional
+    String portable();
 }

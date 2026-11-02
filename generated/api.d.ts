@@ -15,6 +15,38 @@ export interface CapabilityType<T> {
 }
 
 /**
+ * A plugin's secrets, scoped to its own id, on a host that has a secret store.
+ *
+ * @remarks
+ * A value is a UTF-8 string of any length, and a secret is shared across applications. A
+ * plugin keeps a credential here and never in a file of its own.
+ */
+export interface PluginSecrets {
+  /**
+   * Removes one secret; removing one that is not there succeeds.
+   *
+   * @param name - the secret's name within this plugin
+   * @returns a stage that completes once the secret is gone
+   */
+  delete(name: string): Promise<void>;
+  /**
+   * One secret, absent when it was never set.
+   *
+   * @param name - the secret's name within this plugin
+   * @returns a stage that completes with the value, or with nothing when it was never set
+   */
+  get(name: string): Promise<string | undefined>;
+  /**
+   * Stores one secret, replacing any value it had.
+   *
+   * @param name - the secret's name within this plugin
+   * @param value - the value to store
+   * @returns a stage that completes once the secret is stored
+   */
+  set(name: string, value: string): Promise<void>;
+}
+
+/**
  * A plugin's settings as it ships them.
  *
  * @remarks
@@ -108,6 +140,8 @@ export interface PluginContext {
    * @param implementation - this plugin's implementation of that capability
    */
   provide<T>(type: CapabilityType<T>, implementation: T): void;
+  /** This plugin's secrets, present only on a host with a secret store. */
+  readonly secrets?: PluginSecrets;
   /**
    * The typed key for a service id, so a plugin can reach another's API, or offer its own, without
    * linking the library that mints the id.
@@ -421,6 +455,11 @@ export interface PluginPaths {
   home: string;
   /** Where deployed plugin bundles and their manifest sidecars live. */
   plugin: string;
+  /**
+   * The plugin's own folder in the user's portable home, present only on a host with a portable
+   * settings layer.
+   */
+  portable?: string;
   /** Where plugin checkouts live. */
   repos: string;
 }
@@ -813,6 +852,19 @@ export interface PluginConfig {
    * @returns a stage that completes once the setting is written
    */
   set(key: string, value: unknown): Promise<void>;
+  /**
+   * Writes one setting to the layer the options name.
+   *
+   * @remarks
+   * Refused, as a failed stage naming the missing layer, when the layer is
+   * `"portable"` on a host that offers no `paths.portable`, rather than landing in the
+   * application layer where the plugin would never read it back.
+   * @param key - the setting's name
+   * @param value - the value to write
+   * @param options - which layer to write to
+   * @returns a stage that completes once the setting is written
+   */
+  set(key: string, value: unknown, options: ConfigSetOptions): Promise<void>;
 }
 
 /** One service a plugin asks for, and what its absence or its shortfall costs. */
@@ -874,6 +926,12 @@ export interface AppUsage {
 export interface ManifestMarketplace {
   /** Categories this plugin adds. */
   categories: MarketplaceCategory[];
+}
+
+/** Where a settings write goes. */
+export interface ConfigSetOptions {
+  /** The layer written to. Absent means `"application"`, the per-application file. */
+  layer?: "application" | "portable";
 }
 
 /** Where an app keeps its home directory, in the order a resolver tries. */
