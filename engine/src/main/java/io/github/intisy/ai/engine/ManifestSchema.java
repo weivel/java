@@ -226,10 +226,17 @@ public final class ManifestSchema {
         return packages;
     }
 
+    private static JsonSchema commandName() {
+        JsonSchema name = JsonSchema.ofType("string");
+        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
+        name.setFix("name each command as one portable file name: a letter or digit, then letters, digits, \".\", \"_\" or \"-\", at most 64 characters");
+        return name;
+    }
+
     private static JsonSchema pathCommands() {
         JsonSchema requested = described(JsonSchema.ofType("array"),
                 "The command names this host asks for, which a name already held may turn into a fallback.");
-        requested.setItems(JsonSchema.ofType("string"));
+        requested.setItems(commandName());
         requested.setUniqueItems(Boolean.TRUE);
         JsonSchema minimum = described(JsonSchema.ofType("integer"),
                 "How many of its commands this host must keep: 1 means it cannot be left with none, 0 means it can. Absent means 0.");
