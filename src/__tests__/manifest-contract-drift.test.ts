@@ -57,6 +57,7 @@ const NESTED: Array<{ field: string; iface: string }> = [
   { field: "commands", iface: "ManifestCommand" },
   { field: "config", iface: "ManifestConfig" },
   { field: "data", iface: "ManifestData" },
+  { field: "pathCommands", iface: "ManifestPathCommands" },
   { field: "lifecycle", iface: "ManifestLifecycle" },
   { field: "publish", iface: "ManifestPublish" },
   { field: "repo", iface: "RepoMeta" },

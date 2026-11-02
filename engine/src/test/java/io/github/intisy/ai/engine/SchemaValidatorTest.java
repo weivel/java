@@ -90,6 +90,17 @@ class SchemaValidatorTest {
     }
 
     @Test
+    void enforcesAMaximum() {
+        JsonSchema flag = JsonSchema.ofType("integer");
+        flag.setMinimum(Integer.valueOf(0));
+        flag.setMaximum(Integer.valueOf(1));
+        assertEquals(0, SchemaValidator.validate(Integer.valueOf(1), flag, "minimum", null).size());
+        List<SchemaIssue> issues = SchemaValidator.validate(Integer.valueOf(2), flag, "minimum", null);
+        assertEquals(1, issues.size());
+        assertTrue(issues.get(0).getMessage().contains("<= 1"));
+    }
+
+    @Test
     void checksEveryValueOfARecordAgainstItsAdditionalPropertiesSchema() {
         JsonSchema record = JsonSchema.ofType("object");
         record.setAdditionalProperties(JsonSchema.ofType("string"));

@@ -69,6 +69,11 @@ public final class ManifestSchema {
         targets.setFix("list the application ids this is built for, for example [\"forebay\"], or remove \"targets\" to mean every application");
         properties.put("targets", targets);
 
+        properties.put("kind", kind());
+        properties.put("installMethod", installMethod());
+        properties.put("packages", packages());
+        properties.put("pathCommands", pathCommands());
+        properties.put("methods", methods());
         properties.put("services", services());
         properties.put("commands", commands());
         properties.put("config", config());
@@ -184,6 +189,70 @@ public final class ManifestSchema {
         JsonSchema keyed = described(JsonSchema.ofType("object"), description);
         keyed.setAdditionalProperties(described(JsonSchema.ofType("number"), valueDescription));
         return keyed;
+    }
+
+    private static JsonSchema kind() {
+        JsonSchema kind = described(JsonSchema.ofType("string"),
+                "What this manifest describes. Absent means a plugin; a loader is a host.");
+        kind.setEnumValues(Arrays.asList("plugin", "host"));
+        kind.setFix("set \"kind\" to \"plugin\" or \"host\", or remove it to mean a plugin");
+        return kind;
+    }
+
+    private static JsonSchema installMethod() {
+        JsonSchema installMethod = described(JsonSchema.ofType("string"),
+                "The install method this listing is a provider for, for example npm. Absent means it provides none.");
+        installMethod.setMinLength(Integer.valueOf(1));
+        installMethod.setFix("set \"installMethod\" to the id of the package manager this listing provides, for example \"npm\"");
+        return installMethod;
+    }
+
+    private static JsonSchema packages() {
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("name", described(JsonSchema.ofType("string"), "The package name under this method."));
+        properties.put("options", described(JsonSchema.ofType("object"),
+                "Method-specific options, which only that method's provider reads."));
+        JsonSchema withOptions = described(JsonSchema.ofType("object"),
+                "A package name with the options its method takes, for example a registry or a tap.");
+        withOptions.setRequired(Arrays.asList("name"));
+        withOptions.setProperties(properties);
+        JsonSchema entry = described(JsonSchema.anyOf(Arrays.asList(JsonSchema.ofType("string"), withOptions)),
+                "The package name under one method, or the name with that method's options.");
+        entry.setFix("write the package as a name string, for example \"@scope/tool\", or an object carrying \"name\" and optionally \"options\"");
+        JsonSchema packages = described(JsonSchema.ofType("object"),
+                "The package this item is under each install method, keyed by method id.");
+        packages.setAdditionalProperties(entry);
+        packages.setFix("map each install method id to a package name string, or to an object carrying \"name\" and optionally \"options\", for example {\"npm\": \"@scope/tool\"}");
+        return packages;
+    }
+
+    private static JsonSchema pathCommands() {
+        JsonSchema requested = described(JsonSchema.ofType("array"),
+                "The command names this host asks for, which a name already held may turn into a fallback.");
+        requested.setItems(JsonSchema.ofType("string"));
+        requested.setUniqueItems(Boolean.TRUE);
+        JsonSchema minimum = described(JsonSchema.ofType("integer"),
+                "How many of its commands this host must keep: 1 means it cannot be left with none, 0 means it can. Absent means 0.");
+        minimum.setMinimum(Integer.valueOf(0));
+        minimum.setMaximum(Integer.valueOf(1));
+        minimum.setFix("set \"minimum\" to 0 when the host works without a command on PATH, or 1 when it needs one");
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("requested", requested);
+        properties.put("minimum", minimum);
+        JsonSchema pathCommands = described(JsonSchema.ofType("object"),
+                "The executables this host puts on the user's PATH, not the in-application slash commands, which are \"commands\".");
+        pathCommands.setRequired(Arrays.asList("requested"));
+        pathCommands.setProperties(properties);
+        pathCommands.setFix("declare the PATH commands as {\"requested\": [\"name\"], \"minimum\": 0 or 1}; slash commands go in \"commands\" instead");
+        return pathCommands;
+    }
+
+    private static JsonSchema methods() {
+        JsonSchema methods = described(JsonSchema.ofType("array"), "The install methods this listing supports, by method id.");
+        methods.setItems(JsonSchema.ofType("string"));
+        methods.setUniqueItems(Boolean.TRUE);
+        methods.setFix("list install method ids as strings, for example [\"npm\", \"homebrew\"]");
+        return methods;
     }
 
     private static JsonSchema commands() {

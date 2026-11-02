@@ -95,6 +95,49 @@ public interface PluginManifest {
     List<String> targets();
 
     /**
+     * What this manifest describes. Absent means a plugin; a loader is a host.
+     *
+     * @return the kind, or absent when this is a plugin
+     */
+    @TsOptional
+    ManifestKind kind();
+
+    /**
+     * The install method this listing is a provider for, for example {@code npm}.
+     *
+     * @return the method id this listing provides, or absent when it provides none
+     */
+    @TsOptional
+    String installMethod();
+
+    /**
+     * The package this item is under each install method, keyed by method id.
+     *
+     * @implNote Each value is a package name string, or an object carrying {@code name} and
+     * optionally {@code options}; the published schema checks which, because Java has no union for
+     * a map's values.
+     * @return the method ids mapped to their package, or absent when none is declared
+     */
+    @TsOptional
+    Map<String, Object> packages();
+
+    /**
+     * The executables this host puts on the user's PATH.
+     *
+     * @return the PATH commands this host asks for, or absent when it asks for none
+     */
+    @TsOptional
+    ManifestPathCommands pathCommands();
+
+    /**
+     * The install methods this listing supports, by method id.
+     *
+     * @return the method ids, or absent when the listing declares none
+     */
+    @TsOptional
+    List<String> methods();
+
+    /**
      * The inter-plugin contract.
      *
      * @return the services this plugin provides and consumes, or absent when it declares none

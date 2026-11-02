@@ -27,6 +27,7 @@ public final class JsonSchema {
     private JsonSchema additionalProperties;
     private String pattern;
     private Integer minimum;
+    private Integer maximum;
     private Integer minLength;
     private Integer minItems;
     private Boolean uniqueItems;
@@ -149,6 +150,16 @@ public final class JsonSchema {
     /** @param value the regular expression a matching string must contain a match for */
     public void setPattern(String value) {
         this.pattern = value;
+    }
+
+    /** @return the highest value a matching number may hold, or null when unset */
+    public Integer getMaximum() {
+        return maximum;
+    }
+
+    /** @param value the highest value a matching number may hold */
+    public void setMaximum(Integer value) {
+        this.maximum = value;
     }
 
     /** @return the lowest value a matching number may hold, or null when unset */
@@ -304,6 +315,7 @@ public final class JsonSchema {
         }
         put(out, "pattern", pattern);
         put(out, "minimum", minimum);
+        put(out, "maximum", maximum);
         put(out, "minLength", minLength);
         put(out, "minItems", minItems);
         put(out, "uniqueItems", uniqueItems);

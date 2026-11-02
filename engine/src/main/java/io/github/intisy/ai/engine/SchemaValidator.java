@@ -228,6 +228,12 @@ public final class SchemaValidator {
                     "expected a value >= " + minimum + ", got " + describeNumber((Number) value),
                     schema.getFix() != null ? schema.getFix() : "set " + path + " to a value >= " + minimum));
         }
+        Integer maximum = schema.getMaximum();
+        if (maximum != null && ((Number) value).doubleValue() > maximum.doubleValue()) {
+            issues.add(new SchemaIssue(path,
+                    "expected a value <= " + maximum + ", got " + describeNumber((Number) value),
+                    schema.getFix() != null ? schema.getFix() : "set " + path + " to a value <= " + maximum));
+        }
     }
 
     private static boolean isNotANumber(Number value) {
