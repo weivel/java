@@ -674,9 +674,10 @@ public final class ManifestSchema {
     }
 
     private static JsonSchema choicesListed() {
-        JsonSchema atLeastOne = JsonSchema.ofType("array");
+        String fix = "a choice or multi-choice setting needs \"choices\", for example [\"fast\", \"safe\"]";
+        JsonSchema atLeastOne = withFix(JsonSchema.ofType("array"), fix);
         atLeastOne.setMinItems(Integer.valueOf(1));
-        return withFix(requiring("choices", atLeastOne), "a choice or multi-choice setting needs \"choices\", for example [\"fast\", \"safe\"]");
+        return withFix(requiring("choices", atLeastOne), fix);
     }
 
     private static JsonSchema actions() {
