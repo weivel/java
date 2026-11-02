@@ -18,8 +18,9 @@ export interface CapabilityType<T> {
  * A plugin's secrets, scoped to its own id, on a host that has a secret store.
  *
  * @remarks
- * A value is a UTF-8 string of any length, and a secret is shared across applications. A
- * plugin keeps a credential here and never in a file of its own.
+ * A value is a UTF-8 string of at most 2,560,000 bytes, and a secret is shared across
+ * applications. A plugin keeps a credential here and never in a file of its own. Names differing only
+ * in case may name the same secret on some stores; do not rely on case.
  */
 export interface PluginSecrets {
   /**
