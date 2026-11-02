@@ -38,7 +38,7 @@ public final class ManifestValidator {
         String source = declaredId != null && !declaredId.isEmpty() ? declaredId : "the manifest";
         List<SchemaIssue> structural = SchemaValidator.validate(value, ManifestSchema.get(), "(root)", source);
         if (!structural.isEmpty()) {
-            return structural;
+            return firstPerPath(structural);
         }
 
         List<SchemaIssue> issues = new ArrayList<SchemaIssue>();
@@ -46,7 +46,23 @@ public final class ManifestValidator {
         issues.addAll(duplicateIssues("services.provides", serviceIds(listAt(mapAt(value, "services"), "provides"))));
         issues.addAll(duplicateIssues("services.consumes", serviceIds(listAt(mapAt(value, "services"), "consumes"))));
         issues.addAll(DescriptionRules.issues(value));
-        return issues;
+        return firstPerPath(issues);
+    }
+
+    /**
+     * @implNote A refusal names each wrong field once, as the conformance kit's {@code paths}
+     * compares it: two failing keywords at one path, or two bad keys reported at their object's
+     * path, are one wrong field, and the first issue found there is the one reported.
+     */
+    private static List<SchemaIssue> firstPerPath(List<SchemaIssue> issues) {
+        Set<String> seen = new HashSet<String>();
+        List<SchemaIssue> first = new ArrayList<SchemaIssue>();
+        for (SchemaIssue issue : issues) {
+            if (seen.add(issue.getPath())) {
+                first.add(issue);
+            }
+        }
+        return first;
     }
 
     /**

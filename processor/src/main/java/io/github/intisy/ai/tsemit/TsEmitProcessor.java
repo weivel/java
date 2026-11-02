@@ -8,8 +8,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -416,9 +418,11 @@ public class TsEmitProcessor extends AbstractProcessor {
     private List<Member> sortedMembers(TypeElement type, TsInterface spec, TsDiscriminant discriminant) {
         List<Member> members = new ArrayList<Member>();
         Set<String> taken = new HashSet<String>();
+        Map<String, String> javaNameByEmitted = new HashMap<String, String>();
         for (TypeElement each : selfThenSupertypes(type)) {
             for (VariableElement field : instanceFields(each)) {
                 String name = emittedName(field);
+                refuseCollision(javaNameByEmitted, field, name, type);
                 if (taken.add(name)) {
                     members.add(new Member(name, "", field(field, literalFor(discriminant, name))));
                 }
@@ -426,6 +430,9 @@ public class TsEmitProcessor extends AbstractProcessor {
             for (ExecutableElement method : sortedMethods(each)) {
                 String name = emittedName(method);
                 String signature = method.toString();
+                if (method.getParameters().isEmpty()) {
+                    refuseCollision(javaNameByEmitted, method, name, type);
+                }
                 if (taken.add(method.getParameters().isEmpty() ? name : signature)) {
                     members.add(new Member(name, signature, method(method, spec)));
                 }
@@ -495,6 +502,21 @@ public class TsEmitProcessor extends AbstractProcessor {
         }
         String emitted = literalType != null ? literalType : valueType(field);
         return out.append(": ").append(emitted).append(";\n").toString();
+    }
+
+    /**
+     * @implNote Two members under one Java name are an override and emit once, which is how a
+     * redeclaration carries annotations; two DIFFERENT Java names under one emitted name can only
+     * come from {@link TsName}, and silently keeping the first would drop the other from the surface.
+     */
+    private void refuseCollision(Map<String, String> javaNameByEmitted, Element member, String emitted, TypeElement type) {
+        String javaName = member.getSimpleName().toString();
+        String earlier = javaNameByEmitted.putIfAbsent(emitted, javaName);
+        if (earlier != null && !earlier.equals(javaName)) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "two members of " + type.getSimpleName() + " are emitted as \"" + emitted + "\": " + earlier + " and " + javaName,
+                    member);
+        }
     }
 
     private static String emittedName(Element member) {

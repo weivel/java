@@ -322,4 +322,15 @@ class ManifestValidatorTest {
         assertEquals("views.main.nodes[0].tone", issues.get(0).getPath());
         assertTrue(issues.get(0).getFix().contains("a raw colour is not accepted"), issues.toString());
     }
+
+    @Test
+    void reportsTwoBadSettingKeysOnceWithTheKeyFix() {
+        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"settings\": {"
+                + "\"Bad-Key\": {\"type\": \"text\", \"label\": \"Bad\"}, \"9lives\": {\"type\": \"text\", \"label\": \"Lives\"}}}").read();
+        List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertEquals(1, issues.size(), issues.toString());
+        assertEquals("settings", issues.get(0).getPath());
+        assertEquals("start a setting key with a lowercase letter, then letters and digits only, for example \"retryLimit\"",
+                issues.get(0).getFix());
+    }
 }

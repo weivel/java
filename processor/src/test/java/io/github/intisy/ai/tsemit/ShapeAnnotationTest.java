@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ShapeAnnotationTest {
@@ -154,6 +155,22 @@ class ShapeAnnotationTest {
                 "}"));
         assertTrue(emitted.contains("  choice: string;\n  default?: unknown;\n  label: string;\n"), emitted);
         assertFalse(emitted.contains("defaultValue"), emitted);
+    }
+
+    @Test
+    void twoMembersEmittedUnderOneNameAreRefused() {
+        List<String> errors = EmitHarness.errors("fixture.Setting", String.join("\n",
+                "package fixture;",
+                "import io.github.intisy.ai.tsemit.TsInterface;",
+                "import io.github.intisy.ai.tsemit.TsName;",
+                "@TsInterface(data = true)",
+                "interface Setting {",
+                "  String label();",
+                "  @TsName(\"label\")",
+                "  String caption();",
+                "}"));
+        assertEquals(1, errors.size(), errors.toString());
+        assertTrue(errors.get(0).contains("two members of Setting are emitted as \"label\""), errors.toString());
     }
 
     @Test

@@ -13834,13 +13834,25 @@ igiae_ManifestValidator_validate = ($value, $wellKnownServices) => {
         $source = $rt_s(358);
     $structural = igiae_SchemaValidator_validate($value, igiae_ManifestSchema_get(), $rt_s(359), $source);
     if (!$structural.$isEmpty())
-        return $structural;
+        return igiae_ManifestValidator_firstPerPath($structural);
     $issues = ju_ArrayList__init_();
     $issues.$addAll(igiae_ManifestValidator_providedServiceIssues($value, $wellKnownServices));
     $issues.$addAll(igiae_ManifestValidator_duplicateIssues($rt_s(360), igiae_ManifestValidator_serviceIds(igiae_ManifestValidator_listAt(igiae_ManifestValidator_mapAt($value, $rt_s(38)), $rt_s(39)))));
     $issues.$addAll(igiae_ManifestValidator_duplicateIssues($rt_s(361), igiae_ManifestValidator_serviceIds(igiae_ManifestValidator_listAt(igiae_ManifestValidator_mapAt($value, $rt_s(38)), $rt_s(52)))));
     $issues.$addAll(igiae_DescriptionRules_issues($value));
-    return $issues;
+    return igiae_ManifestValidator_firstPerPath($issues);
+},
+igiae_ManifestValidator_firstPerPath = $issues => {
+    let $seen, $first, var$4, $issue;
+    $seen = ju_HashSet__init_0();
+    $first = ju_ArrayList__init_();
+    var$4 = $issues.$iterator();
+    while (var$4.$hasNext()) {
+        $issue = var$4.$next();
+        if ($seen.$add1(igiae_SchemaIssue_getPath($issue)))
+            $first.$add1($issue);
+    }
+    return $first;
 },
 igiae_ManifestValidator_require = ($value, $wellKnownServices) => {
     let $issues, $pluginId, $first;
