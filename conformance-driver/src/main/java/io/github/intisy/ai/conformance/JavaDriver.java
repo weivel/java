@@ -132,6 +132,9 @@ public final class JavaDriver {
         if ("reach".equals(op)) {
             return Reach.run(given);
         }
+        if ("context".equals(op)) {
+            return ContextOp.run(given);
+        }
         throw new IllegalArgumentException("unknown op '" + op + "'");
     }
 
