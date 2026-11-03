@@ -48,7 +48,7 @@ class PublishedSchemaTest {
         assertTrue(differences.isEmpty(), report(differences));
     }
 
-    private static String read(File file) throws IOException {
+    static String read(File file) throws IOException {
         return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
     }
 
@@ -69,6 +69,11 @@ class PublishedSchemaTest {
         Map<String, Object> withoutDefinitions = new LinkedHashMap<String, Object>(schema);
         withoutDefinitions.remove("definitions");
         return inline(withoutDefinitions, definitions);
+    }
+
+    static Object inlinedDefinition(Map<String, Object> schema, String name) {
+        Map<String, Object> definitions = asMap(schema.get("definitions"));
+        return inline(definitions.get(name), definitions);
     }
 
     private static Object inline(Object node, Map<String, Object> definitions) {
@@ -109,7 +114,7 @@ class PublishedSchemaTest {
         return out.toString();
     }
 
-    private static void compare(String path, Object published, Object java, List<String> out) {
+    static void compare(String path, Object published, Object java, List<String> out) {
         if (published instanceof Map && java instanceof Map) {
             compareObjects(path, asMap(published), asMap(java), out);
         } else if (published instanceof List && java instanceof List) {
@@ -171,7 +176,7 @@ class PublishedSchemaTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> asMap(Object value) {
+    static Map<String, Object> asMap(Object value) {
         return (Map<String, Object>) value;
     }
 }

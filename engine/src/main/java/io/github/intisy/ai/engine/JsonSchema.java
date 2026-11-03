@@ -35,6 +35,7 @@ public final class JsonSchema {
     private JsonSchema ifSchema;
     private JsonSchema thenSchema;
     private List<String> enumValues;
+    private Object constValue;
     private String fix;
 
     private JsonSchema(String type) {
@@ -248,6 +249,20 @@ public final class JsonSchema {
     }
 
     /**
+     * Named constValue because const is a Java keyword.
+     *
+     * @return the one value a matching value must equal, or null when unset
+     */
+    public Object getConst() {
+        return constValue;
+    }
+
+    /** @param value the one value a matching value must equal */
+    public void setConst(Object value) {
+        this.constValue = value;
+    }
+
+    /**
      * @return the fix instruction to report when a value fails this schema, or null when unset
      * @implNote Not a JSON Schema keyword. Validators ignore unknown keywords, so carrying the fix
      * beside the rule keeps errors-that-teach a property of the data rather than of the reporter.
@@ -334,6 +349,7 @@ public final class JsonSchema {
         put(out, "minItems", minItems);
         put(out, "uniqueItems", uniqueItems);
         put(out, "enum", enumValues);
+        put(out, "const", constValue);
         put(out, "fix", fix);
         if (ifSchema != null) {
             out.put("if", ifSchema.toTree());

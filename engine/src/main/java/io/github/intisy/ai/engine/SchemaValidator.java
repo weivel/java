@@ -51,6 +51,8 @@ public final class SchemaValidator {
             checkNumber(value, schema, path, issues);
         } else if ("boolean".equals(type) && !(value instanceof Boolean)) {
             issues.add(typeIssue(value, schema, path));
+        } else if ("null".equals(type) && value != null) {
+            issues.add(typeIssue(value, schema, path));
         } else if (type == null) {
             checkUntyped(value, schema, path, issues);
         }
@@ -124,6 +126,7 @@ public final class SchemaValidator {
      * {@code then} branch can test one property's value without restating its type.
      */
     private static void checkUntyped(Object value, JsonSchema schema, String path, List<SchemaIssue> issues) {
+        checkConst(value, schema, path, issues);
         if (value instanceof String) {
             checkString(value, schema, path, issues);
             return;
@@ -133,6 +136,14 @@ public final class SchemaValidator {
             String joined = join(allowed);
             issues.add(new SchemaIssue(path, describe(value) + " is not one of " + joined,
                     schema.getFix() != null ? schema.getFix() : "set " + path + " to one of " + joined));
+        }
+    }
+
+    private static void checkConst(Object value, JsonSchema schema, String path, List<SchemaIssue> issues) {
+        Object expected = schema.getConst();
+        if (expected != null && !expected.equals(value)) {
+            issues.add(new SchemaIssue(path, "expected " + expected + ", got " + value,
+                    schema.getFix() != null ? schema.getFix() : "set " + path + " to " + expected));
         }
     }
 

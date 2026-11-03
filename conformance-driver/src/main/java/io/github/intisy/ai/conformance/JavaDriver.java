@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import io.github.intisy.ai.engine.Activation;
+import io.github.intisy.ai.engine.AnswerValidator;
 import io.github.intisy.ai.engine.Budget;
 import io.github.intisy.ai.engine.ConstraintVocabulary;
 import io.github.intisy.ai.engine.Diagnostics;
@@ -134,6 +135,9 @@ public final class JavaDriver {
         }
         if ("context".equals(op)) {
             return ContextOp.run(given);
+        }
+        if ("answer".equals(op)) {
+            return answerOf(given);
         }
         throw new IllegalArgumentException("unknown op '" + op + "'");
     }
@@ -285,6 +289,19 @@ public final class JavaDriver {
         result.put("refusal", issues.isEmpty()
             ? null
             : refusalOf(issues.get(0).getMessage(), issues.get(0).getFix()));
+        return result;
+    }
+
+    private static Map<String, Object> answerOf(Map<String, Object> given) {
+        List<SchemaIssue> issues = AnswerValidator.validate(String.valueOf(given.get("schema")),
+            String.valueOf(given.get("definition")), given.get("value"));
+        List<String> paths = new ArrayList<String>();
+        for (SchemaIssue issue : issues) {
+            paths.add(issue.getPath());
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("valid", Boolean.valueOf(issues.isEmpty()));
+        result.put("paths", paths);
         return result;
     }
 

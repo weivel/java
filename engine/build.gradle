@@ -47,6 +47,8 @@ tasks.named("test") {
     systemProperty "model.schema.searched", candidates*.absolutePath.join(" or ")
     if (schema.isFile()) {
         inputs.file schema
+        inputs.file new File(schema.parentFile, "ui-data.schema.json")
+        inputs.file new File(schema.parentFile, "install-method.schema.json")
     }
     inputs.file file("../test/parity/manifests.json")
 }
