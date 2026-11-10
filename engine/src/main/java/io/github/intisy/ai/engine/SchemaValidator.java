@@ -36,6 +36,11 @@ public final class SchemaValidator {
     }
 
     private static void check(Object value, JsonSchema schema, String path, List<SchemaIssue> issues, String source) {
+        if (schema.isNever()) {
+            issues.add(new SchemaIssue(path, "is not allowed here",
+                    schema.getFix() != null ? schema.getFix() : "remove " + path));
+            return;
+        }
         if (schema.getAnyOf() != null) {
             checkAlternatives(value, schema, path, issues, source);
             return;
@@ -67,11 +72,14 @@ public final class SchemaValidator {
      */
     private static void checkConditional(Object value, JsonSchema schema, String path, List<SchemaIssue> issues) {
         JsonSchema condition = schema.getIf();
-        JsonSchema consequence = schema.getThen();
-        if (condition == null || consequence == null || !validate(value, condition, path, null).isEmpty()) {
+        if (condition == null) {
             return;
         }
-        issues.addAll(validate(value, consequence, path, null));
+        boolean conditionHolds = validate(value, condition, path, null).isEmpty();
+        JsonSchema consequence = conditionHolds ? schema.getThen() : schema.getElse();
+        if (consequence != null) {
+            issues.addAll(validate(value, consequence, path, null));
+        }
     }
 
     /**

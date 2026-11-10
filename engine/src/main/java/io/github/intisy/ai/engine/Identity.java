@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
  */
 public final class Identity {
 
-    /** The grammar of an id: {@code local:<name>}, or a forge, an optional host and a numeric repository id, then path segments. */
+    /** The grammar of an id: {@code local:<name>}, or a forge, an optional host and a numeric repository id, then path segments, none of them {@code .} or {@code ..}. */
     public static final String ID_PATTERN =
-            "^(local:[^/\\s]+|[a-z][a-z0-9-]*(@[a-z0-9.-]+)?:[0-9]+)(/[a-z0-9._-]+)*(?![\\s\\S])";
+            "^(local:[^/\\s]+|[a-z][a-z0-9-]*(@[a-z0-9.-]+)?:[0-9]+)(/(?!\\.{1,2}(/|(?![\\s\\S])))[a-z0-9._-]+)*(?![\\s\\S])";
 
     private static final Pattern ID = Pattern.compile(ID_PATTERN);
 
@@ -44,7 +44,7 @@ public final class Identity {
 
     /**
      * @param value a string offered as a repository identity
-     * @return true when it is {@code local:<name>}, or a forge (with an optional host) and a numeric repository id, then any path segments
+     * @return true when it is {@code local:<name>}, or a forge (with an optional host) and a numeric repository id, then any path segments, none of them {@code .} or {@code ..}
      */
     public static boolean isValidId(String value) {
         return value != null && ID.matcher(value).find();

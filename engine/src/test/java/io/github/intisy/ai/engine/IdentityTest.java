@@ -32,6 +32,17 @@ class IdentityTest {
     }
 
     @Test
+    void refusesADotSegmentAndAcceptsANameThatOnlyContainsDots() {
+        assertFalse(Identity.isValidId("github:1/.."));
+        assertFalse(Identity.isValidId("github:1/."));
+        assertFalse(Identity.isValidId("github:1/../calendar_identity"));
+        assertFalse(Identity.isValidId("github:1/a/../b"));
+        assertFalse(Identity.isValidId("github:1/..\n"));
+        assertTrue(Identity.isValidId("github:1/.hidden"));
+        assertTrue(Identity.isValidId("github:1/a..b"));
+    }
+
+    @Test
     void refusesAnIdEndingInANewline() {
         assertFalse(Identity.isValidId("github:1\n"));
     }

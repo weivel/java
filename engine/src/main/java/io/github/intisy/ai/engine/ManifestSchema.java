@@ -84,6 +84,8 @@ public final class ManifestSchema {
         properties.put("config", config());
         properties.put("data", data());
 
+        properties.put("dependencies", dependencies());
+
         JsonSchema permissions = described(JsonSchema.ofType("array"), "Declared permissions, surfaced at install and in dashboards.");
         permissions.setItems(JsonSchema.ofType("string"));
         permissions.setUniqueItems(Boolean.TRUE);
@@ -127,6 +129,45 @@ public final class ManifestSchema {
         properties.put(key, shape);
         JsonSchema object = JsonSchema.ofType("object");
         object.setRequired(Arrays.asList(key));
+        object.setProperties(properties);
+        return object;
+    }
+
+    private static JsonSchema dependencies() {
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("importName", described(JsonSchema.ofType("string"), "The name this plugin imports the dependency by."));
+        JsonSchema id = described(JsonSchema.ofType("string"), "The repository identity of the dependency, which survives a rename.");
+        id.setPattern(Identity.ID_PATTERN);
+        id.setFix("write the dependency id as a repository id, for example \"github:123\" or \"gitea@git.example.com:12/runtime\"");
+        properties.put("id", id);
+        properties.put("name", dependencyName());
+        properties.put("commit", described(JsonSchema.ofType("string"), "The commit the dependency is pinned to."));
+        properties.put("sha256", described(JsonSchema.ofType("string"), "The SHA-256 digest the dependency's artifact must match."));
+        JsonSchema dependency = described(JsonSchema.ofType("object"), "One plugin this plugin needs, named by exactly one of id or name.");
+        dependency.setProperties(properties);
+        dependency.setRequired(Arrays.asList("importName"));
+        dependency.setIf(requiring("id", JsonSchema.ofType("string")));
+        dependency.setThen(forbidding("name"));
+        dependency.setElse(requiring("name", JsonSchema.ofType("string")));
+        JsonSchema dependencies = described(JsonSchema.ofType("array"),
+                "The plugins this plugin needs installed beside it, each named by the import name it is imported by and located by a repository id or an owner/name.");
+        dependencies.setItems(dependency);
+        dependencies.setFix("list each dependency as an object carrying \"importName\" and exactly one of \"id\" or \"name\"");
+        return dependencies;
+    }
+
+    private static JsonSchema dependencyName() {
+        JsonSchema name = described(JsonSchema.ofType("string"),
+                "The owner and name of the dependency's repository, for a repository whose id is not known. A name can be taken by someone else, so the host warns about it.");
+        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+(?![\\s\\S])");
+        name.setFix("write the dependency name as owner/name, for example \"spisor/runtime\"; a dependency carries an id or a name, never both");
+        return name;
+    }
+
+    private static JsonSchema forbidding(String key) {
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put(key, JsonSchema.never());
+        JsonSchema object = JsonSchema.ofType("object");
         object.setProperties(properties);
         return object;
     }
@@ -179,7 +220,7 @@ public final class ManifestSchema {
         properties.put("id", described(JsonSchema.ofType("string"), "The service id this plugin asks for."));
         JsonSchema provider = described(JsonSchema.ofType("string"),
                 "The repository identity of the plugin this plugin takes the service from. Absent means any provider of the service id.");
-        provider.setPattern("^(local:[^/\\s]+|[a-z][a-z0-9-]*(@[a-z0-9.-]+)?:[0-9]+)(/[a-z0-9._-]+)*(?![\\s\\S])");
+        provider.setPattern(Identity.ID_PATTERN);
         provider.setFix("write the provider as a repository id, for example \"github:123\" or \"gitea@git.example.com:12/runtime\"");
         properties.put("provider", provider);
         properties.put("optional", described(JsonSchema.ofType("boolean"),

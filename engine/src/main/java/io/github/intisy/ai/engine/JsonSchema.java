@@ -34,6 +34,8 @@ public final class JsonSchema {
     private Boolean uniqueItems;
     private JsonSchema ifSchema;
     private JsonSchema thenSchema;
+    private JsonSchema elseSchema;
+    private boolean never;
     private List<String> enumValues;
     private Object constValue;
     private String fix;
@@ -67,6 +69,23 @@ public final class JsonSchema {
         JsonSchema schema = new JsonSchema(null);
         schema.anyOf = alternatives;
         return schema;
+    }
+
+    /**
+     * A schema no value matches, which is how a property is forbidden: it fails wherever the
+     * property is present, and is reported at the property's own path.
+     *
+     * @return a new schema that every present value fails
+     */
+    public static JsonSchema never() {
+        JsonSchema schema = new JsonSchema(null);
+        schema.never = true;
+        return schema;
+    }
+
+    /** @return true when no value matches this schema */
+    public boolean isNever() {
+        return never;
     }
 
     /** @return the JSON Schema type keyword this schema checks against */
@@ -234,6 +253,16 @@ public final class JsonSchema {
         this.thenSchema = value;
     }
 
+    /** @return the schema a value must also match when {@link #getIf} does not match, or null for none */
+    public JsonSchema getElse() {
+        return elseSchema;
+    }
+
+    /** @param value the schema a value must also match when the {@code if} schema does not match */
+    public void setElse(JsonSchema value) {
+        this.elseSchema = value;
+    }
+
     /**
      * Named enumValues because enum is a Java keyword.
      *
@@ -318,6 +347,9 @@ public final class JsonSchema {
         put(out, "title", title);
         put(out, "description", description);
         put(out, "type", type);
+        if (never) {
+            out.put("not", new LinkedHashMap<String, Object>());
+        }
         if (anyOf != null) {
             List<Object> alternatives = new ArrayList<Object>();
             for (JsonSchema alternative : anyOf) {
@@ -356,6 +388,9 @@ public final class JsonSchema {
         }
         if (thenSchema != null) {
             out.put("then", thenSchema.toTree());
+        }
+        if (elseSchema != null) {
+            out.put("else", elseSchema.toTree());
         }
         return out;
     }

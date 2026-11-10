@@ -189,6 +189,14 @@ public interface PluginManifest {
     ManifestData data();
 
     /**
+     * The plugins this plugin needs installed beside it, each carrying exactly one of {@code id} or {@code name}.
+     *
+     * @return the dependencies, or absent when this plugin needs none
+     */
+    @TsOptional
+    List<ManifestDependency> dependencies();
+
+    /**
      * Declared permissions, surfaced at install and in dashboards. Not sandbox-enforced.
      *
      * @return the declared permission ids, or absent when this plugin declares none

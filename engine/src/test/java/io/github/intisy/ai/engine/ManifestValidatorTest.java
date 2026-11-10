@@ -29,6 +29,49 @@ class ManifestValidatorTest {
         assertTrue(ManifestValidator.validate(valid(), WELL_KNOWN).isEmpty());
     }
 
+    private static Map<String, Object> withDependency(Map<String, Object> dependency) {
+        Map<String, Object> manifest = valid();
+        manifest.put("dependencies", Arrays.asList((Object) dependency));
+        return manifest;
+    }
+
+    private static Map<String, Object> dependency(String... keysAndValues) {
+        Map<String, Object> dependency = new HashMap<String, Object>();
+        dependency.put("importName", "runtime");
+        for (int index = 0; index < keysAndValues.length; index += 2) {
+            dependency.put(keysAndValues[index], keysAndValues[index + 1]);
+        }
+        return dependency;
+    }
+
+    @Test
+    void acceptsADependencyNamedByAnIdOrByAName() {
+        assertTrue(ManifestValidator.validate(withDependency(dependency("id", "github:12/runtime")), WELL_KNOWN).isEmpty());
+        assertTrue(ManifestValidator.validate(
+                withDependency(dependency("name", "spisor/runtime", "commit", "abc", "sha256", "def")), WELL_KNOWN).isEmpty());
+    }
+
+    @Test
+    void refusesADependencyCarryingBothAnIdAndAName() {
+        List<SchemaIssue> issues = ManifestValidator.validate(
+                withDependency(dependency("id", "github:12/runtime", "name", "spisor/runtime")), WELL_KNOWN);
+        assertEquals(Arrays.asList("dependencies[0].name"), pathsOf(issues));
+    }
+
+    @Test
+    void refusesADependencyCarryingNeitherAnIdNorAName() {
+        List<SchemaIssue> issues = ManifestValidator.validate(withDependency(dependency()), WELL_KNOWN);
+        assertEquals(Arrays.asList("dependencies[0].name"), pathsOf(issues));
+    }
+
+    private static List<String> pathsOf(List<SchemaIssue> issues) {
+        List<String> paths = new ArrayList<String>();
+        for (SchemaIssue issue : issues) {
+            paths.add(issue.getPath());
+        }
+        return paths;
+    }
+
     @Test
     void refusesAnImportNameEndingInANewline() {
         Map<String, Object> manifest = valid();
