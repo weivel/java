@@ -95,11 +95,11 @@ public final class LibraryServices {
      */
     public synchronized void provide(LibraryBridge bridge, LibraryDeclaration declaration,
                                      Map<String, Class<?>> interfacesByServiceId) {
-        register(bridge, declaration, interfacesByServiceId, "library " + declaration.id() + " " + declaration.version());
+        register(bridge, declaration, interfacesByServiceId, "library " + declaration.importName() + " " + declaration.version());
     }
 
     private static String providerOf(LibraryDeclaration declaration, LibraryPin pin) {
-        return "library " + declaration.id() + " (" + pin.label() + ")";
+        return "library " + declaration.importName() + " (" + pin.label() + ")";
     }
 
     /**
@@ -127,7 +127,7 @@ public final class LibraryServices {
             return;
         }
         String existing = librariesByServiceId.containsKey(serviceId) ? librariesByServiceId.get(serviceId) : EMBEDDING_HOST;
-        throw new PluginException(declaration.id(),
+        throw new PluginException(declaration.importName(),
                 "service \"" + serviceId + "\" is offered by both " + existing + " and " + provider
                         + ", so the library is refused with every service it offers",
                 "rename the service in one library's library.json, or stop " + existing + " offering \"" + serviceId + "\"");
@@ -137,7 +137,7 @@ public final class LibraryServices {
                                          Map<String, Class<?>> interfacesByServiceId) {
         Class<?> serviceInterface = interfacesByServiceId.get(service.id());
         if (serviceInterface == null || !serviceInterface.isInterface()) {
-            throw new PluginException(declaration.id(),
+            throw new PluginException(declaration.importName(),
                     "no interface was given for service \"" + service.id() + "\", so it cannot be offered",
                     "pass the service's generated interface under \"" + service.id() + "\"");
         }
@@ -152,7 +152,7 @@ public final class LibraryServices {
         }
         refuseUndeclaredMethods(declaration, service, serviceInterface, symbolsByName);
         return Proxy.newProxyInstance(serviceInterface.getClassLoader(), new Class<?>[] {serviceInterface},
-                new ServiceHandler(bridge, declaration.id(), service.id(), symbolsByName));
+                new ServiceHandler(bridge, declaration.importName(), service.id(), symbolsByName));
     }
 
     /**
@@ -170,7 +170,7 @@ public final class LibraryServices {
         }
         if (!undeclared.isEmpty()) {
             Collections.sort(undeclared);
-            throw new PluginException(declaration.id(),
+            throw new PluginException(declaration.importName(),
                     serviceInterface.getName() + " asks service \"" + service.id() + "\" for " + undeclared
                             + ", which library.json does not declare as functions of one argument, or which are default methods a proxy cannot run",
                     "regenerate the interface from this release's library.json, or pin the release it was generated from");

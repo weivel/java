@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class LibraryDeclarationTest {
 
     private static final String ECHO_DECLARATION = "{\"$schema\":\"https://weivel.github.io/model/library.schema.json\","
-            + "\"id\":\"echo\",\"version\":\"0.1.1\",\"binary\":\"echo\",\"release\":\"echo_release\","
+            + "\"importName\":\"echo\",\"version\":\"0.1.1\",\"release\":\"echo_release\","
             + "\"services\":[{\"id\":\"echo\",\"functions\":["
             + "{\"name\":\"echo\",\"symbol\":\"echo_echo\",\"kind\":\"json\",\"argument\":{},\"result\":{}},"
             + "{\"name\":\"repeat\",\"symbol\":\"echo_repeat\",\"kind\":\"json\",\"argument\":{\"type\":\"object\"},\"result\":true}]}]}";
@@ -27,9 +27,8 @@ class LibraryDeclarationTest {
     void readsTheEchoFixturesDeclaration() {
         LibraryDeclaration declaration = LibraryDeclaration.parse(ECHO_DECLARATION);
 
-        assertEquals("echo", declaration.id());
+        assertEquals("echo", declaration.importName());
         assertEquals("0.1.1", declaration.version());
-        assertEquals("echo", declaration.binary());
         assertEquals("echo_release", declaration.release());
         assertEquals("echo", declaration.services().get(0).id());
         assertEquals("echo_repeat", declaration.services().get(0).functions().get(1).symbol());
@@ -38,9 +37,9 @@ class LibraryDeclarationTest {
 
     @Test
     void namesEachSchemaViolationInTheRefusalsDetail() {
-        PluginException refusal = refusalOf("{\"id\":\"Echo\",\"version\":\"\",\"binary\":\"echo\",\"release\":\"echo_release\",\"services\":[]}");
+        PluginException refusal = refusalOf("{\"importName\":\"Echo\",\"version\":\"\",\"release\":\"echo_release\",\"services\":[]}");
 
-        assertTrue(refusal.getDetail().contains("id"), refusal.getDetail());
+        assertTrue(refusal.getDetail().contains("importName"), refusal.getDetail());
         assertTrue(refusal.getDetail().contains("version"), refusal.getDetail());
         assertTrue(refusal.getDetail().contains("services"), refusal.getDetail());
         assertEquals("Echo", refusal.getPluginId());
@@ -78,7 +77,7 @@ class LibraryDeclarationTest {
     @Test
     void refusesAnUnknownKeyAtEveryLevel() {
         String text = ECHO_DECLARATION
-                .replace("\"binary\":\"echo\"", "\"binary\":\"echo\",\"extra\":1")
+                .replace("\"release\":\"echo_release\"", "\"release\":\"echo_release\",\"extra\":1")
                 .replace("{\"id\":\"echo\",\"functions\"", "{\"id\":\"echo\",\"extra\":1,\"functions\"")
                 .replace("\"result\":true}", "\"result\":true,\"extra\":1}");
 
@@ -103,7 +102,7 @@ class LibraryDeclarationTest {
 
     @Test
     void refusesAServiceWithNoFunctions() {
-        String text = "{\"id\":\"echo\",\"version\":\"1\",\"binary\":\"echo\",\"release\":\"echo_release\",\"services\":[{\"id\":\"echo\",\"functions\":[]}]}";
+        String text = "{\"importName\":\"echo\",\"version\":\"1\",\"release\":\"echo_release\",\"services\":[{\"id\":\"echo\",\"functions\":[]}]}";
         String detail = refusalOf(text).getDetail();
         assertTrue(detail.contains("/services/0/functions"), detail);
     }
@@ -139,5 +138,29 @@ class LibraryDeclarationTest {
             PluginException refusal = refusalOf(echoWithContext(context));
             assertTrue(refusal.getDetail().contains("/services/0/functions/0/context"), context + ": " + refusal.getDetail());
         }
+    }
+
+    @Test
+    void acceptsADotInAnImportName() {
+        assertEquals("echo.http", LibraryDeclaration.parse(ECHO_DECLARATION.replace("\"importName\":\"echo\"", "\"importName\":\"echo.http\"")).importName());
+    }
+
+    @Test
+    void refusesAnImportNameEndingInANewline() {
+        PluginException refusal = refusalOf(ECHO_DECLARATION.replace("\"importName\":\"echo\"", "\"importName\":\"echo\\n\""));
+        assertTrue(refusal.getDetail().contains("importName"), refusal.getDetail());
+    }
+
+    @Test
+    void refusesABinaryTheDeclarationNoLongerNames() {
+        String detail = refusalOf(ECHO_DECLARATION.replace("\"release\"", "\"binary\":\"echo\",\"release\"")).getDetail();
+        assertTrue(detail.contains("/binary"), detail);
+    }
+
+    @Test
+    void turnsHyphensAndDotsInAnImportNameIntoUnderscoresForTheBinaryName() {
+        assertEquals("forebay_library", LibraryDeclaration.libraryBinaryName("forebay-library"));
+        assertEquals("forebay_library_x", LibraryDeclaration.libraryBinaryName("forebay.library-x"));
+        assertEquals("echo", LibraryDeclaration.libraryBinaryName("echo"));
     }
 }

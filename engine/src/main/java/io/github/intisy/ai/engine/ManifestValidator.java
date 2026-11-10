@@ -34,8 +34,8 @@ public final class ManifestValidator {
      * one.
      */
     public static List<SchemaIssue> validate(Object value, List<String> wellKnownServices) {
-        String declaredId = stringAt(value, "id");
-        String source = declaredId != null && !declaredId.isEmpty() ? declaredId : "the manifest";
+        String declaredName = stringAt(value, "importName");
+        String source = declaredName != null && !declaredName.isEmpty() ? declaredName : "the manifest";
         List<SchemaIssue> structural = SchemaValidator.validate(value, ManifestSchema.get(), "(root)", source);
         if (!structural.isEmpty()) {
             return firstPerPath(structural);
@@ -77,38 +77,39 @@ public final class ManifestValidator {
         if (issues.isEmpty()) {
             return value;
         }
-        String declaredId = stringAt(value, "id");
-        String pluginId = declaredId != null && !declaredId.isEmpty() ? declaredId : "(unknown plugin)";
+        String declaredName = stringAt(value, "importName");
+        String pluginId = declaredName != null && !declaredName.isEmpty() ? declaredName : "(unknown plugin)";
         SchemaIssue first = issues.get(0);
         throw new PluginException(pluginId, "plugin.json " + first.getPath() + ": " + first.getMessage(), first.getFix());
     }
 
     private static List<SchemaIssue> providedServiceIssues(Object value, List<String> wellKnownServices) {
         List<SchemaIssue> issues = new ArrayList<SchemaIssue>();
-        String pluginId = stringAt(value, "id");
+        String importName = stringAt(value, "importName");
         List<Object> provides = listAt(mapAt(value, "services"), "provides");
         if (provides == null || wellKnownServices == null) {
             return issues;
         }
         for (int index = 0; index < provides.size(); index++) {
             String serviceId = ServiceRequirement.idOf(provides.get(index));
-            if (mayRegister(pluginId, serviceId, wellKnownServices)) {
+            if (mayRegister(importName, serviceId, wellKnownServices)) {
                 continue;
             }
             String tail = serviceId.contains(":") ? serviceId.substring(serviceId.lastIndexOf(':') + 1) : serviceId;
             issues.add(new SchemaIssue("services.provides[" + index + "]",
                     "\"" + serviceId + "\" is neither namespaced by this plugin nor a well-known service id",
-                    "rename it to \"" + pluginId + ":" + tail + "\", or use one of: " + join(wellKnownServices)));
+                    "rename it to \"" + importName + ":" + tail + "\", or use one of: " + join(wellKnownServices)));
         }
         return issues;
     }
 
     /**
      * @implNote A bare id is legal only when some loaded vocabulary declares it as a contract any
-     * plugin may implement. A namespaced id must carry the registering plugin's own id, which is what
-     * makes squatting structurally impossible rather than socially discouraged.
+     * plugin may implement. A namespaced id must carry the registering plugin's own import name. That
+     * no longer stops another plugin claiming the namespace, since an import name is the plugin's own
+     * choice; which one a consumer reaches is decided by {@code provider} on its requirement.
      */
-    private static boolean mayRegister(String pluginId, String serviceId, List<String> wellKnownServices) {
+    private static boolean mayRegister(String importName, String serviceId, List<String> wellKnownServices) {
         if (wellKnownServices.contains(serviceId)) {
             return true;
         }
@@ -116,7 +117,7 @@ public final class ManifestValidator {
         if (separator <= 0 || separator == serviceId.length() - 1) {
             return false;
         }
-        return serviceId.substring(0, separator).equals(pluginId);
+        return serviceId.substring(0, separator).equals(importName);
     }
 
     /** @implNote The two forms name the same service, so a list mixing them is deduplicated by id. */

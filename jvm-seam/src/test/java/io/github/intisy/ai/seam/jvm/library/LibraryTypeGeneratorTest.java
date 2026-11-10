@@ -125,7 +125,7 @@ class LibraryTypeGeneratorTest {
     }
 
     private static JsonObject fixtureDeclaration(String serviceId, String argument, String result) {
-        return JsonParser.parseString("{\"id\":\"fixture\",\"version\":\"1.0.0\",\"binary\":\"fixture\",\"release\":\"fixture_release\","
+        return JsonParser.parseString("{\"importName\":\"fixture\",\"version\":\"1.0.0\",\"release\":\"fixture_release\","
                 + "\"services\":[{\"id\":\"" + serviceId + "\",\"functions\":[{\"name\":\"get\",\"symbol\":\"fixture_get\",\"kind\":\"json\","
                 + "\"argument\":" + argument + ",\"result\":" + result + "}]}]}").getAsJsonObject();
     }

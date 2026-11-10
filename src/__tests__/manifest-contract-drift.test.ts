@@ -77,8 +77,12 @@ const NESTED: Array<{ field: string; iface: string }> = [
   { field: "app.modelCatalog", iface: "AppModelCatalog" },
 ];
 
+// `id` and `name` are the repository identity, supplied by whoever loads a manifest and never read
+// from plugin.json, so the contract carries them and the schema deliberately does not.
+const IDENTITY_FIELDS = new Set(["id", "name"]);
+
 it("describes the same manifest in the contract and in the validator", () => {
-  expect(declaredFields("PluginManifest")).toEqual(schemaFields(ROOT));
+  expect(declaredFields("PluginManifest").filter((field) => !IDENTITY_FIELDS.has(field))).toEqual(schemaFields(ROOT));
 });
 
 // Top-level parity alone let `publish` gain three fields and `repo` two in the contract while the

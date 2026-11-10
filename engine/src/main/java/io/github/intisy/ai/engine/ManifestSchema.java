@@ -37,10 +37,11 @@ public final class ManifestSchema {
         properties.put("$schema", described(JsonSchema.ofType("string"),
                 "Pointer at the published manifest schema, for an editor's completion and validation."));
 
-        JsonSchema id = described(JsonSchema.ofType("string"), "The plugin's permanent identity, matching its repository name.");
-        id.setPattern("^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?![\\s\\S]))[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])");
-        id.setFix("use lowercase words joined by single hyphens, for example \"config-ledger\", and not a Windows reserved name (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)");
-        properties.put("id", id);
+        JsonSchema importName = described(JsonSchema.ofType("string"),
+                "The name other plugins import this plugin by. It is fixed by the plugin, and its identity as a repository is supplied from outside the manifest.");
+        importName.setPattern("^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?![\\s\\S]))[a-z0-9]+([-.][a-z0-9]+)*(?![\\s\\S])");
+        importName.setFix("use lowercase words joined by single hyphens or dots, for example \"config-ledger\" or \"api.http\", and not a Windows reserved name (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)");
+        properties.put("importName", importName);
 
         JsonSchema api = described(JsonSchema.ofType("integer"), "The lowest API major version this plugin needs. A floor, not a build tag.");
         api.setMinimum(Integer.valueOf(1));
@@ -101,7 +102,7 @@ public final class ManifestSchema {
         root.setSchemaDraft(DRAFT);
         root.setSchemaId(SCHEMA_ID);
         root.setTitle("weivel plugin manifest");
-        root.setRequired(Arrays.asList("id", "api"));
+        root.setRequired(Arrays.asList("importName", "api"));
         root.setProperties(properties);
         root.setIf(capabilitiesDeclared());
         root.setThen(entryNamed());
@@ -176,6 +177,11 @@ public final class ManifestSchema {
     private static JsonSchema required() {
         Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
         properties.put("id", described(JsonSchema.ofType("string"), "The service id this plugin asks for."));
+        JsonSchema provider = described(JsonSchema.ofType("string"),
+                "The repository identity of the plugin this plugin takes the service from. Absent means any provider of the service id.");
+        provider.setPattern("^(local:[^/\\s]+|[a-z][a-z0-9-]*(@[a-z0-9.-]+)?:[0-9]+)(/[a-z0-9._-]+)*$");
+        provider.setFix("write the provider as a repository id, for example \"github:123\" or \"gitea@git.example.com:12/runtime\"");
+        properties.put("provider", provider);
         properties.put("optional", described(JsonSchema.ofType("boolean"),
                 "Whether this plugin still starts when nothing provides the service."
                         + " Absent means true, which is what a bare string means."));

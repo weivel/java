@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * The host side of the plugin system: it opens sessions, collects what plugins provide, and keeps
@@ -29,6 +30,7 @@ public final class PluginHost {
     private final Map<String, List<CapabilityRecord>> capabilities = new LinkedHashMap<String, List<CapabilityRecord>>();
     private final Map<String, List<Scheduler.Cancellable>> disposers = new LinkedHashMap<String, List<Scheduler.Cancellable>>();
     private final Set<String> revoked = new HashSet<String>();
+    private final Map<String, String> importNames = new LinkedHashMap<String, String>();
     private List<String> known = new ArrayList<String>();
 
     /**
@@ -89,7 +91,24 @@ public final class PluginHost {
         this.applications = applicationsOf(app, applications);
         this.api = api;
         this.surfaces = surfaces == null ? new ArrayList<String>() : new ArrayList<String>(surfaces);
-        this.hub = new ServiceHub(scheduler, new ServiceHub.Recorder() {
+        this.hub = new ServiceHub(scheduler, recorder());
+        this.hub.namespaceOf(new Function<String, String>() {
+            @Override
+            public String apply(String pluginId) {
+                String importName = importNames.get(pluginId);
+                return importName == null ? pluginId : importName;
+            }
+        });
+        this.hub.mismatch(new ServiceHub.Mismatch() {
+            @Override
+            public void withheld(String consumerId, String serviceId, String provider, String owner) {
+                refuseWrongProvider(consumerId, serviceId, provider, owner);
+            }
+        });
+    }
+
+    private ServiceHub.Recorder recorder() {
+        return new ServiceHub.Recorder() {
             @Override
             public void provided(String pluginId, String serviceId) {
                 ledger.recordServiceProvided(pluginId, serviceId);
@@ -99,7 +118,7 @@ public final class PluginHost {
             public void consumed(String pluginId, String serviceId) {
                 ledger.recordServiceConsumed(pluginId, serviceId);
             }
-        });
+        };
     }
 
     private static List<String> applicationsOf(String app, List<String> declared) {
@@ -206,8 +225,16 @@ public final class PluginHost {
     public PluginSession sessionFor(ManifestFacts facts, EventBus bus) {
         String pluginId = facts.getId();
         revoked.remove(pluginId);
+        importNames.put(pluginId, facts.getImportName());
         ledger.recordDeclared(pluginId, facts.getCapabilities(), facts.getPermissions());
-        return new PluginSession(this, facts, fenced(pluginId, declaredServices(facts), hub.forPlugin(pluginId)),
+        final Map<String, String> bound = facts.getBoundProviders();
+        ServiceHub.Registry registry = hub.forPlugin(pluginId, new Function<String, String>() {
+            @Override
+            public String apply(String serviceId) {
+                return bound.get(serviceId);
+            }
+        });
+        return new PluginSession(this, facts, fenced(pluginId, declaredServices(facts), bound, registry),
                 recording(pluginId, bus));
     }
 
@@ -350,7 +377,8 @@ public final class PluginHost {
      * by the declaration without refusing or reporting, because listing is not an attempt, and it
      * ignores lateness the same way a late get does.
      */
-    private ServiceHub.Registry fenced(final String pluginId, final Set<String> declared, final ServiceHub.Registry registry) {
+    private ServiceHub.Registry fenced(final String pluginId, final Set<String> declared,
+                                       final Map<String, String> bound, final ServiceHub.Registry registry) {
         return new ServiceHub.Registry() {
             @Override
             public Object get(String id) {
@@ -358,24 +386,24 @@ public final class PluginHost {
                     refuseUndeclared(pluginId, id);
                     return null;
                 }
-                return registry.get(id);
+                return refuseOwnedElsewhere(pluginId, id, bound.get(id)) != null ? null : registry.get(id);
             }
 
             @Override
             public Pending<Object> want(String id) {
-                PluginException refusal = refusal(pluginId, declared, "want", id);
+                PluginException refusal = refusal(pluginId, declared, bound, "want", id);
                 return refusal != null ? rejected(refusal) : registry.want(id);
             }
 
             @Override
             public Pending<Object> want(String id, long timeoutMillis) {
-                PluginException refusal = refusal(pluginId, declared, "want", id);
+                PluginException refusal = refusal(pluginId, declared, bound, "want", id);
                 return refusal != null ? rejected(refusal) : registry.want(id, timeoutMillis);
             }
 
             @Override
             public Scheduler.Cancellable watch(String id, ServiceHub.Listener listener) {
-                return refusal(pluginId, declared, "watch", id) != null ? inert() : registry.watch(id, listener);
+                return refusal(pluginId, declared, bound, "watch", id) != null ? inert() : registry.watch(id, listener);
             }
 
             @Override
@@ -392,7 +420,7 @@ public final class PluginHost {
 
             @Override
             public Pending<Object> want(ServiceRequirement requirement, Budget budget) {
-                PluginException refusal = refusal(pluginId, declared, "want", requirement.getId());
+                PluginException refusal = refusal(pluginId, declared, bound, "want", requirement.getId());
                 return refusal != null ? rejected(refusal) : registry.want(requirement, budget);
             }
 
@@ -410,11 +438,42 @@ public final class PluginHost {
     }
 
     /** Why a want or a watch is refused, having reported it, or null to let it through. */
-    private PluginException refusal(String pluginId, Set<String> declared, String attempt, String id) {
+    private PluginException refusal(String pluginId, Set<String> declared, Map<String, String> bound, String attempt, String id) {
         if (!declared.contains(id)) {
             return refuseUndeclared(pluginId, id);
         }
+        PluginException mismatch = refuseOwnedElsewhere(pluginId, id, bound.get(id));
+        if (mismatch != null) {
+            return mismatch;
+        }
         return refuseLate(pluginId, "a late " + attempt + " of service", id) ? ServiceHub.stoppedWaiting(pluginId, id) : null;
+    }
+
+    /**
+     * Refuses a service owned by someone other than the provider the consumer is bound to.
+     *
+     * @implNote A bound service nobody provides is absence, never a mismatch, exactly as for an
+     * unbound consumer.
+     */
+    private PluginException refuseOwnedElsewhere(String pluginId, String serviceId, String provider) {
+        String owner = hub.ownerOf(serviceId);
+        if (provider == null || owner == null || owner.equals(provider)) {
+            return null;
+        }
+        return refuseWrongProvider(pluginId, serviceId, provider, owner);
+    }
+
+    /** Reports it once per plugin and id, the way an undeclared reach is. */
+    private PluginException refuseWrongProvider(String pluginId, String serviceId, String provider, String owner) {
+        PluginException refusal = new PluginException(pluginId,
+                "reached for service \"" + serviceId + "\", which it binds to " + provider + " but " + owner + " provides",
+                "install " + provider + ", or remove \"provider\" from \"" + serviceId
+                        + "\" in services.consumes of its plugin.json");
+        if (ledger.recordServiceRefused(pluginId, serviceId)) {
+            Diagnostics.report("refused service \"" + serviceId + "\" to " + pluginId + ", which binds it to " + provider
+                    + " while " + owner + " provides it: " + refusal.getFix());
+        }
+        return refusal;
     }
 
     /**

@@ -219,7 +219,7 @@ public final class LibraryAcquirer {
         if (extension == null) {
             throw refusal(pin, "no shared-library format is known for platform " + platformKey, "run the host on Windows, Linux or macOS");
         }
-        return declaration.binary() + "-" + platformKey + "." + extension;
+        return LibraryDeclaration.libraryBinaryName(declaration.importName()) + "-" + platformKey + "." + extension;
     }
 
     private static final class Asset {

@@ -2,6 +2,7 @@ package io.github.intisy.ai.engine;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +23,8 @@ public final class ManifestFacts {
     private final List<String> targets;
     private final List<String> servicesConsumed;
     private final List<String> servicesProvided;
+    private final Map<String, String> boundProviders;
+    private final String importName;
     private final Object payload;
 
     /**
@@ -48,11 +51,12 @@ public final class ManifestFacts {
     public ManifestFacts(String id, int api, List<String> capabilities, List<String> permissions,
                          List<String> targets, Object payload) {
         this(id, api, copy(capabilities), copy(permissions), copy(targets),
-                new ArrayList<String>(), new ArrayList<String>(), payload);
+                new ArrayList<String>(), new ArrayList<String>(), new LinkedHashMap<String, String>(), id, payload);
     }
 
     private ManifestFacts(String id, int api, List<String> capabilities, List<String> permissions, List<String> targets,
-                          List<String> servicesConsumed, List<String> servicesProvided, Object payload) {
+                          List<String> servicesConsumed, List<String> servicesProvided,
+                          Map<String, String> boundProviders, String importName, Object payload) {
         this.id = id;
         this.api = api;
         this.capabilities = capabilities;
@@ -60,6 +64,8 @@ public final class ManifestFacts {
         this.targets = targets;
         this.servicesConsumed = servicesConsumed;
         this.servicesProvided = servicesProvided;
+        this.boundProviders = boundProviders;
+        this.importName = importName;
         this.payload = payload;
     }
 
@@ -74,7 +80,18 @@ public final class ManifestFacts {
      */
     public ManifestFacts withServices(List<?> consumes, List<?> provides) {
         return new ManifestFacts(id, api, capabilities, permissions, targets,
-                serviceIds(consumes), serviceIds(provides), payload);
+                serviceIds(consumes), serviceIds(provides), providersOf(consumes), importName, payload);
+    }
+
+    /**
+     * These facts with the name the plugin namespaces its own services by.
+     *
+     * @param importName the plugin's import name; null or empty keeps the id, which is what a plugin that states none is namespaced by
+     * @return a copy of these facts carrying the import name
+     */
+    public ManifestFacts withImportName(String importName) {
+        return new ManifestFacts(id, api, capabilities, permissions, targets, servicesConsumed, servicesProvided,
+                boundProviders, importName == null || importName.isEmpty() ? id : importName, payload);
     }
 
     /** @return the plugin's id */
@@ -112,6 +129,16 @@ public final class ManifestFacts {
         return Collections.unmodifiableList(servicesProvided);
     }
 
+    /** @return the name the plugin namespaces its own services by, which is its id when it states none */
+    public String getImportName() {
+        return importName;
+    }
+
+    /** @return the provider each bound consumed service is pinned to, keyed by service id; empty when none is bound */
+    public Map<String, String> getBoundProviders() {
+        return Collections.unmodifiableMap(boundProviders);
+    }
+
     /** @return the manifest object this instance was built from, handed back by identity */
     public Object getPayload() {
         return payload;
@@ -129,6 +156,24 @@ public final class ManifestFacts {
             }
         }
         return ids;
+    }
+
+    /** @implNote Read like {@link #serviceIds}: an entry with no id binds nothing, so a malformed one reaches nothing. */
+    private static Map<String, String> providersOf(List<?> consumes) {
+        Map<String, String> bound = new LinkedHashMap<String, String>();
+        if (consumes == null) {
+            return bound;
+        }
+        for (Object declaration : consumes) {
+            if (!(declaration instanceof Map) || !(((Map<?, ?>) declaration).get("id") instanceof String)) {
+                continue;
+            }
+            ServiceRequirement requirement = ServiceRequirement.of(declaration);
+            if (requirement.getProvider() != null) {
+                bound.put(requirement.getId(), requirement.getProvider());
+            }
+        }
+        return bound;
     }
 
     private static List<String> copy(List<String> values) {

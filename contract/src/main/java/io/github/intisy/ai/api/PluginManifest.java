@@ -6,7 +6,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The contents of a repo's plugin.json.
+ * The contents of a repo's plugin.json once the repository's identity is applied.
+ *
+ * @implNote {@code id} and {@code name} come from outside the repository, never from its plugin.json,
+ * so a manifest cannot claim another plugin's identity. The TypeScript contract splits this into a
+ * source manifest and an extension of it; the emitter does not follow inheritance, so the two are one
+ * interface here.
  *
  * @implNote No index signature and no additionalProperties: an author gets excess-property checking
  * while writing one, and the runtime validator still ignores fields it does not know, so a manifest
@@ -26,11 +31,25 @@ public interface PluginManifest {
     String $schema();
 
     /**
-     * The plugin's permanent identity, matching its repository name.
+     * The name other plugins import this plugin by, fixed by the plugin itself.
+     *
+     * @return the import name
+     */
+    String importName();
+
+    /**
+     * The repository identity, for example {@code github:123}, supplied by whoever loaded the manifest.
      *
      * @return the plugin id
      */
     String id();
+
+    /**
+     * The repository's name, supplied with the identity.
+     *
+     * @return the repository name
+     */
+    String name();
 
     /**
      * The lowest API major version this plugin needs. A floor, not a build tag.

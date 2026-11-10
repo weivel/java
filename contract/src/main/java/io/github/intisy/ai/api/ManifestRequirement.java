@@ -33,6 +33,14 @@ public interface ManifestRequirement {
     Boolean degradable();
 
     /**
+     * The repository identity of the plugin this one takes the service from. Absent means any provider.
+     *
+     * @return the identity of the providing plugin, or absent when any provider serves it
+     */
+    @TsOptional
+    String provider();
+
+    /**
      * What this plugin needs of the service, keyed by constraint name, compared against what the
      * service advertises.
      *

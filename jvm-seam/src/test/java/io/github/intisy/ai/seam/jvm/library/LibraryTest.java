@@ -255,14 +255,6 @@ class LibraryTest {
     }
 
     @Test
-    void pinsTheModelsEchoDeclarationAsTheReleaseCarriesIt() throws IOException {
-        byte[] workingCopy = Files.readAllBytes(Paths.get(System.getProperty("model.directory"), "test", "fixtures", "echo.library.json"));
-        byte[] asCommitted = new String(workingCopy, StandardCharsets.UTF_8).replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8);
-
-        assertEquals(ECHO_PIN.sha256().get("library.json"), sha256Of(asCommitted));
-    }
-
-    @Test
     void acceptsACachedFileAnotherHostRenamedIntoPlaceFirstWhenItMatchesThePin() throws IOException {
         Path cache = freshCache();
         LibraryAcquirer racing = new LibraryAcquirer(LibraryAcquirer.currentPlatformKey(), LibraryAcquirer.overHttps(), (from, to) -> {

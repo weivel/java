@@ -57,7 +57,7 @@ public final class LibraryTypeGenerator {
         Set<String> contractTypes = new TreeSet<String>();
         List<LibraryDeclaration.ServiceDeclaration> services = declaration.services();
         for (int index = 0; index < services.size(); index++) {
-            SchemaTypes types = new SchemaTypes(declaration.id(), interfaceName(services.get(index)));
+            SchemaTypes types = new SchemaTypes(declaration.importName(), interfaceName(services.get(index)));
             String source = ServiceSource.of(declaration, services.get(index), index, javaPackage, types);
             sources.put(interfaceName(services.get(index)) + ".java", source);
             contractTypes.addAll(types.contractTypes());
@@ -126,10 +126,10 @@ public final class LibraryTypeGenerator {
         }
     }
 
-    /** The header interpolates the id and version, and a line break in either would end its comment. */
+    /** The header interpolates the import name and version, and a line break in either would end its comment. */
     private static void refuseHeaderBreakout(LibraryDeclaration declaration) {
-        refuseHeaderBreakout(declaration.id(), "id", declaration.id());
-        refuseHeaderBreakout(declaration.id(), "version", declaration.version());
+        refuseHeaderBreakout(declaration.importName(), "importName", declaration.importName());
+        refuseHeaderBreakout(declaration.importName(), "version", declaration.version());
     }
 
     private static void refuseHeaderBreakout(String libraryId, String field, String value) {
@@ -156,7 +156,7 @@ public final class LibraryTypeGenerator {
             String name = JavaNames.pascalCase(services.get(index).id());
             for (String declared : new String[] {name, name + "Service"}) {
                 if (!taken.add(declared)) {
-                    throw new PluginException(declaration.id(), "cannot generate types: services[" + index + "].id generates the name "
+                    throw new PluginException(declaration.importName(), "cannot generate types: services[" + index + "].id generates the name "
                             + declared + ", which is already taken in the generated module", "give the service an id that does not collide");
                 }
             }
@@ -171,7 +171,7 @@ public final class LibraryTypeGenerator {
             String file = interfaceName(services.get(index)) + ".java";
             String earlier = idsByFoldedFile.put(file.toLowerCase(Locale.ROOT), id);
             if (earlier != null) {
-                throw new PluginException(declaration.id(), "cannot generate types: services[" + index + "].id \"" + id + "\" generates "
+                throw new PluginException(declaration.importName(), "cannot generate types: services[" + index + "].id \"" + id + "\" generates "
                         + file + ", which differs only in case from the file service \"" + earlier
                         + "\" generates, and a case-insensitive file system holds the two as one",
                         "give one of the two services an id that does not collide");

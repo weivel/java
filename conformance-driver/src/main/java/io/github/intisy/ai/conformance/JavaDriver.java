@@ -12,6 +12,7 @@ import io.github.intisy.ai.engine.ActivationPlan;
 import io.github.intisy.ai.engine.ActivationUnit;
 import io.github.intisy.ai.engine.DeclarationKind;
 import io.github.intisy.ai.engine.EventBus;
+import io.github.intisy.ai.engine.Identity;
 import io.github.intisy.ai.engine.ManifestFacts;
 import io.github.intisy.ai.engine.ManifestValidator;
 import io.github.intisy.ai.engine.Pending;
@@ -139,7 +140,26 @@ public final class JavaDriver {
         if ("answer".equals(op)) {
             return answerOf(given);
         }
+        if ("identity".equals(op)) {
+            return identity(given);
+        }
+        if ("unbound".equals(op)) {
+            return unbound(given);
+        }
         throw new IllegalArgumentException("unknown op '" + op + "'");
+    }
+
+    private static Map<String, Object> identity(Map<String, Object> given) {
+        Object value = given.get("value");
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("valid", Boolean.valueOf(value instanceof String && Identity.isValidId((String) value)));
+        return result;
+    }
+
+    private static Map<String, Object> unbound(Map<String, Object> given) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("services", Identity.unboundServices(given.get("manifest")));
+        return result;
     }
 
     /**

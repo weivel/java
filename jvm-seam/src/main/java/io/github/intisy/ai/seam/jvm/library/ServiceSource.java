@@ -64,7 +64,7 @@ final class ServiceSource {
     private static String fileSource(LibraryDeclaration declaration, LibraryDeclaration.ServiceDeclaration service, String javaPackage,
                                      String interfaceName, List<String> methods, SchemaTypes types) {
         List<String> lines = new ArrayList<String>();
-        lines.add("// Generated from the library.json of " + JavaNames.asciiText(declaration.id() + " " + declaration.version())
+        lines.add("// Generated from the library.json of " + JavaNames.asciiText(declaration.importName() + " " + declaration.version())
                 + "; regenerate it from the declaration rather than editing it.");
         lines.add("package " + javaPackage + ";");
         lines.add("");

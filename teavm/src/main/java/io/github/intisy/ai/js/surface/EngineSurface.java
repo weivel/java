@@ -93,6 +93,15 @@ public interface EngineSurface {
     PluginErrorShape pluginError(String pluginId, String detail, String fix);
 
     /**
+     * Whether a string is a repository identity: {@code local:<name>}, or a forge with an optional
+     * host and a numeric repository id, then any path segments.
+     *
+     * @param value the candidate identity
+     * @return true when the whole string matches the grammar
+     */
+    boolean isIdentityId(String value);
+
+    /**
      * Whether a caught value is a plugin error, recognised by its marker rather than its class.
      *
      * @param value the caught value to inspect

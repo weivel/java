@@ -107,6 +107,14 @@ export declare function assertManifest(manifest: unknown, wellKnownServices: str
  */
 export declare function createPluginHost(options: PluginHostOptionsShape): HostSurface;
 /**
+ * Whether a string is a repository identity: `local:<name>`, or a forge with an optional
+ * host and a numeric repository id, then any path segments.
+ *
+ * @param value - the candidate identity
+ * @returns true when the whole string matches the grammar
+ */
+export declare function isIdentityId(value: string): boolean;
+/**
  * Whether a caught value is a plugin error, recognised by its marker rather than its class.
  *
  * @param value - the caught value to inspect

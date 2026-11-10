@@ -3,6 +3,7 @@ package io.github.intisy.ai.js;
 import io.github.intisy.ai.engine.Activation;
 import io.github.intisy.ai.engine.ActivationPlan;
 import io.github.intisy.ai.engine.Diagnostics;
+import io.github.intisy.ai.engine.Identity;
 import io.github.intisy.ai.engine.ManifestSchema;
 import io.github.intisy.ai.engine.ManifestValidator;
 import io.github.intisy.ai.engine.PluginException;
@@ -143,6 +144,18 @@ public final class EngineJs {
     @JSExport
     public static JSObject pluginError(String pluginId, String detail, String fix) {
         return JsErrors.mint(pluginId, detail, fix);
+    }
+
+    /**
+     * Whether a string is a repository identity: {@code local:<name>}, or a forge with an optional
+     * host and a numeric repository id, then any path segments.
+     *
+     * @param value the candidate identity
+     * @return true when the whole string matches the grammar
+     */
+    @JSExport
+    public static boolean isIdentityId(String value) {
+        return Identity.isValidId(value);
     }
 
     /**

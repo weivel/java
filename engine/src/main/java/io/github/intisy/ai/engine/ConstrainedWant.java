@@ -18,17 +18,19 @@ final class ConstrainedWant {
     private final String consumerId;
     private final ServiceRequirement requirement;
     private final Budget budget;
+    private final String provider;
     private final Pending<Object> settled = new Pending<Object>();
     private Map<String, Double> seen = Collections.emptyMap();
     private Scheduler.Cancellable nextPoll;
     private long elapsed;
     private boolean stopped;
 
-    ConstrainedWant(ServiceHub hub, String consumerId, ServiceRequirement requirement, Budget budget) {
+    ConstrainedWant(ServiceHub hub, String consumerId, ServiceRequirement requirement, Budget budget, String provider) {
         this.hub = hub;
         this.consumerId = consumerId;
         this.requirement = requirement;
         this.budget = budget;
+        this.provider = provider;
     }
 
     Pending<Object> start() {
@@ -69,6 +71,9 @@ final class ConstrainedWant {
             return;
         }
         ServiceHub.Entry entry = hub.entryOf(requirement.getId());
+        if (entry != null && !hub.accepts(consumerId, requirement.getId(), provider, entry)) {
+            entry = null;
+        }
         if (entry != null) {
             try {
                 seen = overlay(entry.getAdvertised(), entry.getProvider().attributes());

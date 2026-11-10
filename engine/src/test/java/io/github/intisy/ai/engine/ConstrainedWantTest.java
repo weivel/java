@@ -283,4 +283,49 @@ class ConstrainedWantTest {
             Diagnostics.setSink(null);
         }
     }
+
+    @Test
+    void aConstrainedWantBoundToAProviderSkipsAnotherAndTakesTheNamedOne() {
+        ManualScheduler scheduler = new ManualScheduler();
+        ServiceHub hub = hub(scheduler);
+        final List<String> mismatches = new ArrayList<String>();
+        hub.mismatch(new ServiceHub.Mismatch() {
+            @Override
+            public void withheld(String consumerId, String serviceId, String provider, String owner) {
+                mismatches.add(consumerId + " " + serviceId + " " + provider + " " + owner);
+            }
+        });
+        hub.namespaceOf(new java.util.function.Function<String, String>() {
+            @Override
+            public String apply(String pluginId) {
+                return "storage";
+            }
+        });
+        hub.wellKnown(Arrays.asList("storage.object"));
+        Settled settled = new Settled();
+        hub.forPlugin("consumer", boundTo("github:1")).want(constrained(false), Budget.of(30000, 1000)).then(settled);
+        hub.forPlugin("github:2").register("storage.object",
+                new ScriptedProvider(Arrays.asList(numbers("maxReplicas", 9)), false), numbers("maxReplicas", 9));
+        for (int tick = 0; tick < 3; tick++) {
+            scheduler.fireAll();
+        }
+        assertNull(settled.value, "a registration by another provider was delivered");
+        assertEquals("consumer storage.object github:1 github:2", mismatches.get(0));
+        hub.releasePlugin("github:2");
+        hub.forPlugin("github:1").register("storage.object",
+                new ScriptedProvider(Arrays.asList(numbers("maxReplicas", 9)), false), numbers("maxReplicas", 9));
+        for (int tick = 0; tick < 3; tick++) {
+            scheduler.fireAll();
+        }
+        assertEquals("the service", settled.value);
+    }
+
+    private static java.util.function.Function<String, String> boundTo(final String provider) {
+        return new java.util.function.Function<String, String>() {
+            @Override
+            public String apply(String serviceId) {
+                return provider;
+            }
+        };
+    }
 }

@@ -228,4 +228,41 @@ class ServiceHubTest {
 
         assertEquals("the clock", hub.get("host:clock"));
     }
+
+    private static java.util.function.Function<String, String> importNames(final String pluginId, final String importName) {
+        return new java.util.function.Function<String, String>() {
+            @Override
+            public String apply(String candidate) {
+                return pluginId.equals(candidate) ? importName : candidate;
+            }
+        };
+    }
+
+    @Test
+    void registersUnderThePluginsImportName() {
+        ServiceHub hub = hub(new ManualScheduler());
+        hub.namespaceOf(importNames("github:2", "calendar"));
+        hub.forPlugin("github:2").register("calendar:events", "the service");
+        assertEquals(Arrays.asList("calendar:events"), hub.ids());
+    }
+
+    @Test
+    void refusesAnotherImportNameAndSaysWhichToUse() {
+        final ServiceHub hub = hub(new ManualScheduler());
+        hub.namespaceOf(importNames("github:2", "calendar"));
+        PluginException failure = assertThrows(PluginException.class, new Executable() {
+            @Override
+            public void execute() {
+                hub.forPlugin("github:2").register("github:2:events", "nope");
+            }
+        });
+        assertTrue(failure.getFix().contains("\"calendar:events\""), failure.getFix());
+    }
+
+    @Test
+    void defaultsTheNamespaceToThePluginId() {
+        ServiceHub hub = hub(new ManualScheduler());
+        hub.forPlugin("calendar").register("calendar:events", "the service");
+        assertEquals(Arrays.asList("calendar:events"), hub.ids());
+    }
 }

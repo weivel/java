@@ -21,8 +21,8 @@ function collect(): { io: { out(line: string): void; err(line: string): void }; 
 
 it("reads a checkout's manifest", () => {
   const dir = tempDir();
-  write(dir, "plugin.json", { id: "wakatime-sync", api: 1 });
-  expect(readCheckout(dir).value).toEqual({ id: "wakatime-sync", api: 1 });
+  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1 });
+  expect(readCheckout(dir).value).toEqual({ importName: "wakatime-sync", api: 1 });
 });
 
 it("explains a missing manifest instead of throwing a stack trace at the user", () => {
@@ -43,7 +43,7 @@ it("explains unparsable JSON", () => {
 
 it("validates a good manifest and exits 0", () => {
   const dir = tempDir();
-  write(dir, "plugin.json", { id: "wakatime-sync", api: 1 });
+  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1 });
   const { io, out } = collect();
   expect(run(["validate", "--dir", dir], io)).toBe(0);
   expect(out[0]).toBe("ok  wakatime-sync (api 1)");
@@ -51,7 +51,7 @@ it("validates a good manifest and exits 0", () => {
 
 it("reports each problem with its fix and exits 1", () => {
   const dir = tempDir();
-  write(dir, "plugin.json", { id: "wakatime-sync", api: 1, capabilities: ["settings"] });
+  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1, capabilities: ["settings"] });
   const { io, err } = collect();
   expect(run(["validate", "--dir", dir], io)).toBe(1);
   expect(err).toEqual([
@@ -83,7 +83,7 @@ it("prints usage and exits 0 when asked for help", () => {
 
 it("writes an ignored-field diagnostic to the problem channel and still exits 0", () => {
   const dir = tempDir();
-  write(dir, "plugin.json", { id: "wakatime-sync", api: 1, futureField: 1 });
+  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1, futureField: 1 });
   const { io, out, err } = collect();
   expect(run(["validate", "--dir", dir], io)).toBe(0);
   expect(err).toEqual(['ignored unknown field "futureField" from wakatime-sync']);

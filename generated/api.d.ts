@@ -501,7 +501,13 @@ export interface AppModelCatalog {
 }
 
 /**
- * The contents of a repo's plugin.json.
+ * The contents of a repo's plugin.json once the repository's identity is applied.
+ *
+ * @remarks
+ * `id` and `name` come from outside the repository, never from its plugin.json,
+ * so a manifest cannot claim another plugin's identity. The TypeScript contract splits this into a
+ * source manifest and an extension of it; the emitter does not follow inheritance, so the two are one
+ * interface here.
  *
  * @remarks
  * No index signature and no additionalProperties: an author gets excess-property checking
@@ -553,8 +559,10 @@ export interface PluginManifest {
    * learning what any of the ids name.
    */
   icons?: Record<string, string>;
-  /** The plugin's permanent identity, matching its repository name. */
+  /** The repository identity, for example `github:123`, supplied by whoever loaded the manifest. */
   id: string;
+  /** The name other plugins import this plugin by, fixed by the plugin itself. */
+  importName: string;
   /** The install method this listing is a provider for, for example `npm`. */
   installMethod?: string;
   /** What this manifest describes. Absent means a plugin; a loader is a host. */
@@ -565,6 +573,8 @@ export interface PluginManifest {
   marketplace?: ManifestMarketplace;
   /** The install methods this listing supports, by method id. */
   methods?: string[];
+  /** The repository's name, supplied with the identity. */
+  name: string;
   /**
    * The package this item is under each install method, keyed by method id.
    *
@@ -1006,6 +1016,8 @@ export interface ManifestRequirement {
    * is what writing the bare id means.
    */
   optional?: boolean;
+  /** The repository identity of the plugin this one takes the service from. Absent means any provider. */
+  provider?: string;
 }
 
 /** One service a plugin registers, with what it claims before it is running to answer for itself. */

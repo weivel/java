@@ -14,14 +14,23 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** The neutral fixture library as released by {@code weivel/bindings}, and the host scaffolding its tests share. */
+/**
+ * The neutral fixture library as released by {@code weivel/bindings}, and the host scaffolding its tests share.
+ *
+ * @implNote The v0.1.1 release still carries a declaration in the old shape, which no host now
+ * accepts, so the declaration is pinned from the model's fixture and staged by {@link #freshCache}.
+ * Only the binaries are downloaded from the release; pin the next release's own library.json here.
+ */
 final class EchoFixture {
+
+    private static final byte[] ECHO_DECLARATION = echoDeclaration();
 
     static final LibraryPin ECHO_PIN = new LibraryPin("weivel/bindings", "v0.1.1", digests());
 
@@ -30,14 +39,27 @@ final class EchoFixture {
 
     private static Map<String, String> digests() {
         Map<String, String> sha256 = new LinkedHashMap<String, String>();
-        sha256.put("library.json", "60c5c20c4fee91b1a6b220d792f6aecab8c9ddea8582ecabd9acec8172d2a2c7");
+        sha256.put("library.json", sha256Of(ECHO_DECLARATION));
         sha256.put("linux-x64", "98cfd1f23800a3335a71cbf93f720baf8507e6ae1b257ef5654d7296852c41b9");
         sha256.put("win32-x64", "ced2da158d9b52486ad5112c2f5d8a286f21a807f612309b7dcb2c12b1d273e3");
         return sha256;
     }
 
+    private static byte[] echoDeclaration() {
+        try {
+            return Files.readAllBytes(Paths.get(System.getProperty("model.directory"), "test", "fixtures", "echo.library.json"));
+        } catch (IOException unreadable) {
+            throw new IllegalStateException("the model's echo declaration cannot be read: " + unreadable.getMessage(), unreadable);
+        }
+    }
+
+    /** A fresh cache already holding the echo declaration {@link #ECHO_PIN} names, so acquiring it downloads only the binary. */
     static Path freshCache() throws IOException {
-        return Files.createTempDirectory("weivel-library-");
+        Path cache = Files.createTempDirectory("weivel-library-");
+        Path directory = cache.resolve(ECHO_PIN.repository()).resolve(ECHO_PIN.tag());
+        Files.createDirectories(directory);
+        Files.write(directory.resolve("library.json"), ECHO_DECLARATION);
+        return cache;
     }
 
     static PluginHost freshHost() {

@@ -19,29 +19,32 @@ public final class ServiceRequirement {
     private final boolean optional;
     private final boolean degradable;
     private final Map<String, Double> constraints;
+    private final String provider;
 
-    private ServiceRequirement(String id, boolean optional, boolean degradable, Map<String, Double> constraints) {
+    private ServiceRequirement(String id, boolean optional, boolean degradable, Map<String, Double> constraints, String provider) {
         this.id = id;
         this.optional = optional;
         this.degradable = degradable;
         this.constraints = constraints;
+        this.provider = provider;
     }
 
     /**
      * @param declaration one entry of {@code services.consumes}, either the bare service id or the
-     * object form carrying {@code id}, {@code optional}, {@code degradable} and {@code constraints}
+     * object form carrying {@code id}, {@code optional}, {@code degradable}, {@code constraints} and {@code provider}
      * @return what the entry asks for
      */
     public static ServiceRequirement of(Object declaration) {
         if (!(declaration instanceof Map)) {
             return new ServiceRequirement(String.valueOf(declaration), true, false,
-                    Collections.<String, Double>emptyMap());
+                    Collections.<String, Double>emptyMap(), null);
         }
         Map<?, ?> entry = (Map<?, ?>) declaration;
         return new ServiceRequirement(String.valueOf(entry.get("id")),
                 flag(entry.get("optional"), true),
                 flag(entry.get("degradable"), false),
-                numbers(entry.get("constraints")));
+                numbers(entry.get("constraints")),
+                entry.get("provider") instanceof String ? (String) entry.get("provider") : null);
     }
 
     /** @return the service id this entry asks for */
@@ -62,6 +65,11 @@ public final class ServiceRequirement {
     /** @return what the plugin needs of the service, keyed by constraint name, or empty when it declares none */
     public Map<String, Double> getConstraints() {
         return constraints;
+    }
+
+    /** @return the identity of the plugin that must own the service, or null when any provider serves it */
+    public String getProvider() {
+        return provider;
     }
 
     static boolean flag(Object value, boolean absent) {

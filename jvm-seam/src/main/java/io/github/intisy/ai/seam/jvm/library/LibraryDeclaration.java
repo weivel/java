@@ -101,13 +101,15 @@ public final class LibraryDeclaration {
 
     private static final String FILE = "library.json";
     private static final Pattern KEBAB_ID = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
+    private static final Pattern IMPORT_NAME = Pattern.compile("^[a-z0-9]+([-.][a-z0-9]+)*$");
     private static final Pattern C_IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final Pattern FUNCTION_NAME = Pattern.compile("^[a-z][A-Za-z0-9]*$");
     private static final String ID_FIX = "use lowercase words joined by single hyphens, for example \"echo\"";
+    private static final String IMPORT_NAME_FIX = "use lowercase words joined by single hyphens or dots, for example \"echo\"";
 
-    static final Set<String> DECLARATION_KEYS = keys("$schema", "id", "version", "binary", "release", "services");
-    static final Set<String> DECLARATION_REQUIRED = keys("id", "version", "binary", "release", "services");
-    static final Map<String, Pattern> DECLARATION_PATTERNS = patterns("id", KEBAB_ID, "binary", C_IDENTIFIER, "release", C_IDENTIFIER);
+    static final Set<String> DECLARATION_KEYS = keys("$schema", "importName", "version", "release", "services");
+    static final Set<String> DECLARATION_REQUIRED = keys("importName", "version", "release", "services");
+    static final Map<String, Pattern> DECLARATION_PATTERNS = patterns("importName", IMPORT_NAME, "release", C_IDENTIFIER);
     static final int MIN_VERSION_LENGTH = 1;
     static final int MIN_SERVICES = 1;
 
@@ -125,23 +127,21 @@ public final class LibraryDeclaration {
     static final int MIN_CONTEXT_FACTS = 1;
     private static final String CONTEXT_FIX = "list the facts the function reads, each once, from \"environment\", \"home\" and \"arguments\", or remove \"context\"";
 
-    private final String id;
+    private final String importName;
     private final String version;
-    private final String binary;
     private final String release;
     private final List<ServiceDeclaration> services;
 
-    private LibraryDeclaration(String id, String version, String binary, String release, List<ServiceDeclaration> services) {
-        this.id = id;
+    private LibraryDeclaration(String importName, String version, String release, List<ServiceDeclaration> services) {
+        this.importName = importName;
         this.version = version;
-        this.binary = binary;
         this.release = release;
         this.services = Collections.unmodifiableList(new ArrayList<ServiceDeclaration>(services));
     }
 
-    /** @return the library's permanent identity, matching its repository name */
-    public String id() {
-        return id;
+    /** @return the name plugins import this library by; its identity as a repository is supplied from outside the declaration */
+    public String importName() {
+        return importName;
     }
 
     /** @return the library's own version */
@@ -149,9 +149,13 @@ public final class LibraryDeclaration {
         return version;
     }
 
-    /** @return the shared library's base name, without a platform suffix or extension */
-    public String binary() {
-        return binary;
+    /**
+     * @param importName a library's import name
+     * @return the base name of its shared library, without a platform suffix or extension
+     * @implNote A C symbol and a file stem cannot carry a hyphen or a dot, so both become underscores.
+     */
+    public static String libraryBinaryName(String importName) {
+        return importName.replace('-', '_').replace('.', '_');
     }
 
     /** @return the exported symbol that frees a buffer the library returned */
@@ -169,14 +173,14 @@ public final class LibraryDeclaration {
      *
      * @param text the content of {@code library.json}
      * @return the declaration it describes
-     * @throws PluginException naming the library, or {@code library} when it declares no usable id
+     * @throws PluginException naming the library, or {@code library} when it declares no usable import name
      */
     public static LibraryDeclaration parse(String text) {
         JsonElement candidate = parsedJson(text);
         List<Violation> violations = new ArrayList<Violation>();
         checkDeclaration(candidate, violations);
         if (!violations.isEmpty()) {
-            throw refusal(declaredId(candidate), violations);
+            throw refusal(declaredImportName(candidate), violations);
         }
         return declarationOf(candidate.getAsJsonObject());
     }
@@ -189,9 +193,9 @@ public final class LibraryDeclaration {
         }
     }
 
-    private static String declaredId(JsonElement candidate) {
+    private static String declaredImportName(JsonElement candidate) {
         if (candidate.isJsonObject()) {
-            JsonElement declared = candidate.getAsJsonObject().get("id");
+            JsonElement declared = candidate.getAsJsonObject().get("importName");
             if (isString(declared) && !declared.getAsString().isEmpty()) {
                 return declared.getAsString();
             }
@@ -219,9 +223,8 @@ public final class LibraryDeclaration {
             violations.add(new Violation("/$schema must be a string", "point \"$schema\" at the published library.schema.json"));
         }
         Level level = new Level(declaration, "", DECLARATION_REQUIRED, DECLARATION_PATTERNS, violations);
-        level.checkPattern("id", ID_FIX);
+        level.checkPattern("importName", IMPORT_NAME_FIX);
         checkVersion(level);
-        level.checkPattern("binary", "use a C identifier for the binary's base name, for example \"echo\"");
         level.checkPattern("release", "name the exported release function as a C identifier, for example \"echo_release\"");
         JsonArray services = level.arrayOfAtLeast("services", MIN_SERVICES, "declare at least one service under \"services\"");
         for (int index = 0; services != null && index < services.size(); index++) {
@@ -328,9 +331,8 @@ public final class LibraryDeclaration {
             services.add(serviceOf(service.getAsJsonObject()));
         }
         return new LibraryDeclaration(
-                declaration.get("id").getAsString(),
+                declaration.get("importName").getAsString(),
                 declaration.get("version").getAsString(),
-                declaration.get("binary").getAsString(),
                 declaration.get("release").getAsString(),
                 services);
     }

@@ -110,10 +110,10 @@ public final class LibraryBridge implements AutoCloseable {
 
     private static LibraryBridge open(Path binary, LibraryDeclaration declaration, ReleaseObserver releaseObserver,
                                       Supplier<LibraryContext> contextSupplier) {
-        NativeLibrary nativeLibrary = load(binary, declaration.id());
+        NativeLibrary nativeLibrary = load(binary, declaration.importName());
         try {
-            Function release = bindSymbol(nativeLibrary, declaration.id(), declaration.release());
-            return new LibraryBridge(declaration.id(), nativeLibrary, release, bindDeclared(nativeLibrary, declaration),
+            Function release = bindSymbol(nativeLibrary, declaration.importName(), declaration.release());
+            return new LibraryBridge(declaration.importName(), nativeLibrary, release, bindDeclared(nativeLibrary, declaration),
                     releaseObserver, contextSupplier);
         } catch (RuntimeException refused) {
             SharedNativeLibraries.letGo(nativeLibrary);
@@ -144,7 +144,7 @@ public final class LibraryBridge implements AutoCloseable {
         Map<String, BoundFunction> bound = new LinkedHashMap<String, BoundFunction>();
         for (LibraryDeclaration.ServiceDeclaration service : declaration.services()) {
             for (LibraryDeclaration.FunctionDeclaration function : service.functions()) {
-                Function nativeFunction = bindSymbol(nativeLibrary, declaration.id(), function.symbol());
+                Function nativeFunction = bindSymbol(nativeLibrary, declaration.importName(), function.symbol());
                 bound.put(function.symbol(), new BoundFunction(service.id() + "." + function.name(), nativeFunction, function.context()));
             }
         }

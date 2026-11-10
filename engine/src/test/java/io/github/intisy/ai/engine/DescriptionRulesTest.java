@@ -14,7 +14,7 @@ class DescriptionRulesTest {
     private static final String CALL = "{\"service\": \"demo:screens\", \"method\": \"refresh\"}";
 
     private static Object manifestWith(String members) {
-        return new TestJson("{\"id\": \"demo\", \"api\": 2, \"services\": {\"provides\": [\"demo:screens\"]}"
+        return new TestJson("{\"importName\": \"demo\", \"api\": 2, \"services\": {\"provides\": [\"demo:screens\"]}"
                 + (members.isEmpty() ? "" : ", " + members) + "}").read();
     }
 
@@ -103,7 +103,7 @@ class DescriptionRulesTest {
 
     @Test
     void refusesABindingToAServiceThePluginDoesNotProvideInAnActionAndANode() {
-        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"services\": {\"consumes\": [\"demo:other\"]}, "
+        Object manifest = new TestJson("{\"importName\": \"demo\", \"api\": 2, \"services\": {\"consumes\": [\"demo:other\"]}, "
                 + "\"actions\": {\"refresh\": {\"label\": \"Refresh\", \"call\": {\"service\": \"demo:other\", \"method\": \"refresh\"}}}, "
                 + viewOf("{\"id\": \"a\", \"component\": \"list\", \"bind\": {\"service\": \"demo:other\", \"method\": \"read\"}}") + "}").read();
         List<SchemaIssue> issues = DescriptionRules.issues(manifest);
@@ -113,14 +113,14 @@ class DescriptionRulesTest {
 
     @Test
     void refusesEveryBindingWhenNoServicesAreDeclared() {
-        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, "
+        Object manifest = new TestJson("{\"importName\": \"demo\", \"api\": 2, "
                 + "\"actions\": {\"refresh\": {\"label\": \"Refresh\", \"call\": " + CALL + "}}}").read();
         assertEquals(Arrays.asList("actions.refresh.call.service"), pathsOf(DescriptionRules.issues(manifest)));
     }
 
     @Test
     void countsAProvidedServiceWrittenInItsObjectForm() {
-        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"services\": {\"provides\": [{\"id\": \"demo:screens\"}]}, "
+        Object manifest = new TestJson("{\"importName\": \"demo\", \"api\": 2, \"services\": {\"provides\": [{\"id\": \"demo:screens\"}]}, "
                 + "\"actions\": {\"refresh\": {\"label\": \"Refresh\", \"call\": " + CALL + "}}}").read();
         assertEquals(Collections.emptyList(), DescriptionRules.issues(manifest));
     }

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   activationOrder,
   assertManifest,
@@ -40,19 +40,19 @@ it("reports a cycle rather than an order", () => {
 });
 
 it("returns a valid manifest and throws a marked error for an invalid one", () => {
-  const manifest = { id: "config-ledger", api: 1, entry: "dist/index.js" };
+  const manifest = { importName: "config-ledger", api: 1, entry: "dist/index.js" };
   expect(assertManifest(manifest)).toEqual(manifest);
   try {
     assertManifest({ api: 1 });
-    throw new Error("assertManifest accepted a manifest with no id");
+    throw new Error("assertManifest accepted a manifest with no import name");
   } catch (error) {
     expect(isPluginError(error)).toBe(true);
-    expect((error as { detail: string }).detail).toContain("id");
+    expect((error as { detail: string }).detail).toContain("importName");
   }
 });
 
 it("validates a bare well-known provide only when the caller names the vocabulary", () => {
-  const manifest = { id: "core-auth", api: 1, entry: "dist/index.js", services: { provides: ["accounts"] } };
+  const manifest = { importName: "core-auth", api: 1, entry: "dist/index.js", services: { provides: ["accounts"] } };
   expect(assertManifest(manifest, ["accounts"])).toEqual(manifest);
   try {
     assertManifest(manifest);
@@ -454,15 +454,15 @@ it("answers homes with an empty list for a host that supplies no registry", () =
 });
 
 it("reports every issue in a manifest rather than throwing on the first", () => {
-  expect(validateManifest({ id: "demo", api: 2 })).toEqual([]);
+  expect(validateManifest({ importName: "demo", api: 2 })).toEqual([]);
   const issues = validateManifest({ api: 2 });
   expect(issues.length).toBeGreaterThan(0);
-  expect(issues.map((issue) => issue.path)).toContain("id");
+  expect(issues.map((issue) => issue.path)).toContain("importName");
   expect(issues[0].fix.length).toBeGreaterThan(0);
 });
 
 it("leaves a bare service id alone when no vocabulary is named and refuses it when one is", () => {
-  const manifest = { id: "demo", api: 2, services: { provides: ["accounts"] } };
+  const manifest = { importName: "demo", api: 2, services: { provides: ["accounts"] } };
   expect(validateManifest(manifest)).toEqual([]);
   const issues = validateManifest(manifest, ["routing"]);
   expect(issues.length).toBe(1);
@@ -478,7 +478,7 @@ it("serves the published manifest schema the generator writes", () => {
   };
   expect(schema.$id).toBe("https://weivel.github.io/model/plugin.schema.json");
   expect(schema.$schema).toBe("http://json-schema.org/draft-07/schema#");
-  expect(schema.required).toEqual(["id", "api"]);
+  expect(schema.required).toEqual(["importName", "api"]);
   expect(Object.keys(schema.properties)).toContain("capabilities");
 });
 
@@ -516,4 +516,26 @@ it("builds an events handle whose subscribe hands back a plain unsubscribe funct
   stop();
   context.events.publish("plugin.installed", { id: "second" });
   expect(heard).toHaveLength(1);
+});
+
+describe("a plugin whose identity is not its import name", () => {
+  const PROVIDER = { id: "github:2", name: "calendar-repo", importName: "calendar", api: 1, services: { provides: ["calendar:events"] } };
+  const bound = (provider: string) => ({ id: "agenda", name: "agenda", importName: "agenda", api: 1, services: { consumes: [{ id: "calendar:events", provider }] } });
+
+  it("registers under its import name", () => {
+    const host = createPluginHost({ app: "claude", api: 1 });
+    const provider = host.contextFor(PROVIDER, runtime());
+    provider.services.register("calendar:events", { name: "events" });
+    expect(host.service("calendar:events")).toEqual({ name: "events" });
+  });
+
+  it("serves a consumer bound to it, and refuses one bound to another provider", () => {
+    const host = createPluginHost({ app: "claude", api: 1 });
+    const provider = host.contextFor(PROVIDER, runtime());
+    provider.services.register("calendar:events", { name: "events" });
+    const named = host.contextFor(bound("github:2"), runtime());
+    expect(named.services.get("calendar:events")).toEqual({ name: "events" });
+    const other = host.contextFor({ ...bound("github:1"), id: "agenda-two", importName: "agenda-two" }, runtime());
+    expect(other.services.get("calendar:events")).toBeUndefined();
+  });
 });

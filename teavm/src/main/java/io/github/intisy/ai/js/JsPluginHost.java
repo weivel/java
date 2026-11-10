@@ -250,6 +250,7 @@ final class JsPluginHost implements JSObject {
         List<String> targets = strings(member(tree, "targets"));
         Object services = member(tree, "services");
         return new ManifestFacts(id, api, capabilities, permissions, targets, manifestObj)
+                .withImportName(text(tree, "importName"))
                 .withServices(entries(member(services, "consumes")), entries(member(services, "provides")));
     }
 

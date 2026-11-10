@@ -19,7 +19,7 @@ class ManifestValidatorTest {
 
     private static Map<String, Object> valid() {
         Map<String, Object> manifest = new HashMap<String, Object>();
-        manifest.put("id", "config-ledger");
+        manifest.put("importName", "config-ledger");
         manifest.put("api", Integer.valueOf(2));
         return manifest;
     }
@@ -30,9 +30,9 @@ class ManifestValidatorTest {
     }
 
     @Test
-    void refusesAnIdEndingInANewline() {
+    void refusesAnImportNameEndingInANewline() {
         Map<String, Object> manifest = valid();
-        manifest.put("id", "config-ledger\n");
+        manifest.put("importName", "config-ledger\n");
         assertRefusedByItsPattern(manifest);
     }
 
@@ -177,14 +177,14 @@ class ManifestValidatorTest {
     @Test
     void reportsAStructuralIssueAloneWithoutCrossFieldNoise() {
         Map<String, Object> manifest = new HashMap<String, Object>();
-        manifest.put("id", Integer.valueOf(7));
+        manifest.put("importName", Integer.valueOf(7));
         manifest.put("api", Integer.valueOf(2));
         Map<String, Object> services = new HashMap<String, Object>();
         services.put("provides", Arrays.asList("someone-else:thing"));
         manifest.put("services", services);
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
         assertEquals(1, issues.size());
-        assertEquals("id", issues.get(0).getPath());
+        assertEquals("importName", issues.get(0).getPath());
     }
 
     @Test
@@ -298,24 +298,24 @@ class ManifestValidatorTest {
     }
 
     @Test
-    void refusesAWindowsReservedIdButNotAWordThatStartsWithOne() {
+    void refusesAWindowsReservedImportNameButNotAWordThatStartsWithOne() {
         for (String reserved : Arrays.asList("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9")) {
             Map<String, Object> manifest = valid();
-            manifest.put("id", reserved);
+            manifest.put("importName", reserved);
             List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
             assertEquals(1, issues.size(), reserved + ": " + issues);
-            assertEquals("id", issues.get(0).getPath());
+            assertEquals("importName", issues.get(0).getPath());
         }
         for (String allowed : Arrays.asList("con-tools", "console", "com10")) {
             Map<String, Object> manifest = valid();
-            manifest.put("id", allowed);
+            manifest.put("importName", allowed);
             assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty(), allowed);
         }
     }
 
     @Test
     void refusesARawColourWhereAToneGoes() {
-        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"services\": {\"provides\": [\"demo:screens\"]}, "
+        Object manifest = new TestJson("{\"importName\": \"demo\", \"api\": 2, \"services\": {\"provides\": [\"demo:screens\"]}, "
                 + "\"views\": {\"main\": {\"title\": \"Main\", \"nodes\": [{\"id\": \"root\", \"component\": \"stack\", \"tone\": \"#ff0000\"}]}}}").read();
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
         assertEquals(1, issues.size(), issues.toString());
@@ -325,12 +325,67 @@ class ManifestValidatorTest {
 
     @Test
     void reportsTwoBadSettingKeysOnceWithTheKeyFix() {
-        Object manifest = new TestJson("{\"id\": \"demo\", \"api\": 2, \"settings\": {"
+        Object manifest = new TestJson("{\"importName\": \"demo\", \"api\": 2, \"settings\": {"
                 + "\"Bad-Key\": {\"type\": \"text\", \"label\": \"Bad\"}, \"9lives\": {\"type\": \"text\", \"label\": \"Lives\"}}}").read();
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
         assertEquals(1, issues.size(), issues.toString());
         assertEquals("settings", issues.get(0).getPath());
         assertEquals("start a setting key with a lowercase letter, then letters and digits only, for example \"retryLimit\"",
                 issues.get(0).getFix());
+    }
+
+    @Test
+    void acceptsADotInAnImportName() {
+        Map<String, Object> manifest = valid();
+        manifest.put("importName", "api.http");
+        assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty());
+    }
+
+    @Test
+    void refusesAManifestThatStatesNoImportName() {
+        Map<String, Object> manifest = valid();
+        manifest.remove("importName");
+        List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertEquals(1, issues.size(), issues.toString());
+        assertEquals("importName", issues.get(0).getPath());
+    }
+
+    @Test
+    void ignoresAnIdAManifestStatesAnyway() {
+        Map<String, Object> manifest = valid();
+        manifest.put("id", "somebody-else");
+        assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty());
+    }
+
+    @Test
+    void namespacesAProvidedServiceByTheImportNameNotByAnId() {
+        Map<String, Object> manifest = servicesOf(Arrays.asList("config-ledger:entries"), null);
+        manifest.put("id", "github:2");
+        assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty());
+        Map<String, Object> squatting = servicesOf(Arrays.asList("github:2:entries"), null);
+        squatting.put("id", "github:2");
+        List<SchemaIssue> issues = ManifestValidator.validate(squatting, WELL_KNOWN);
+        assertEquals(1, issues.size(), issues.toString());
+        assertTrue(issues.get(0).getFix().contains("\"config-ledger:entries\""), issues.get(0).getFix());
+    }
+
+    @Test
+    void acceptsAProviderThatIsARepositoryId() {
+        Map<String, Object> bound = requirement("mail:send", null);
+        bound.put("provider", "gitea@git.example.com:12/runtime");
+        List<SchemaIssue> issues = ManifestValidator.validate(servicesOf(null, Arrays.asList(bound)), WELL_KNOWN);
+        assertTrue(issues.isEmpty(), issues.toString());
+    }
+
+    @Test
+    void refusesAProviderThatIsNotARepositoryIdWithAFix() {
+        for (String provider : Arrays.asList("calendar", "GitHub:1", "github:")) {
+            Map<String, Object> bound = requirement("mail:send", null);
+            bound.put("provider", provider);
+            List<SchemaIssue> issues = ManifestValidator.validate(servicesOf(null, Arrays.asList(bound)), WELL_KNOWN);
+            assertEquals(1, issues.size(), provider + ": " + issues);
+            assertEquals("services.consumes[0].provider", issues.get(0).getPath());
+            assertTrue(issues.get(0).getFix().contains("github:123"), issues.get(0).getFix());
+        }
     }
 }

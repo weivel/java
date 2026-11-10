@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * The live service registry a host shares between every plugin it loads.
@@ -31,6 +32,17 @@ public final class ServiceHub {
          * @param serviceId the service id it consumed
          */
         void consumed(String pluginId, String serviceId);
+    }
+
+    /** Told when a registration is withheld from a consumer bound to another provider. */
+    public interface Mismatch {
+        /**
+         * @param consumerId the plugin that is bound
+         * @param serviceId the service whose registration was withheld
+         * @param provider the identity of the plugin the consumer is bound to
+         * @param owner who actually registered the service, or "the host"
+         */
+        void withheld(String consumerId, String serviceId, String provider, String owner);
     }
 
     /** Called when a watched service arrives or goes away. */
@@ -206,25 +218,59 @@ public final class ServiceHub {
 
     private static final class Waiter {
         private final String pluginId;
+        private final String provider;
         private final Pending<Object> settled;
         private Scheduler.Cancellable timer;
 
-        Waiter(String pluginId, Pending<Object> settled) {
+        Waiter(String pluginId, String provider, Pending<Object> settled) {
             this.pluginId = pluginId;
+            this.provider = provider;
             this.settled = settled;
         }
     }
+
+    private static final class Watcher {
+        private final String provider;
+        private final Listener listener;
+
+        Watcher(String provider, Listener listener) {
+            this.provider = provider;
+            this.listener = listener;
+        }
+    }
+
+    private static final Function<String, String> NO_BINDING = new Function<String, String>() {
+        @Override
+        public String apply(String serviceId) {
+            return null;
+        }
+    };
+
+    private static final Function<String, String> OWN_ID = new Function<String, String>() {
+        @Override
+        public String apply(String pluginId) {
+            return pluginId;
+        }
+    };
+
+    private static final Mismatch UNREPORTED = new Mismatch() {
+        @Override
+        public void withheld(String consumerId, String serviceId, String provider, String owner) {
+        }
+    };
 
     private final Scheduler scheduler;
     private final Recorder recorder;
     private final Map<String, Entry> entries = new LinkedHashMap<String, Entry>();
     private final Map<String, Set<Waiter>> waiters = new LinkedHashMap<String, Set<Waiter>>();
-    private final Map<String, Set<Listener>> watchers = new LinkedHashMap<String, Set<Listener>>();
+    private final Map<String, Set<Watcher>> watchers = new LinkedHashMap<String, Set<Watcher>>();
     private final Map<String, List<Scheduler.Cancellable>> watching = new LinkedHashMap<String, List<Scheduler.Cancellable>>();
     private final Map<String, List<ConstrainedWant>> constrainedWants = new LinkedHashMap<String, List<ConstrainedWant>>();
     private List<String> wellKnown = new ArrayList<String>();
     private ConstraintVocabulary vocabulary = ConstraintVocabulary.EMPTY;
     private Handles handles = Handles.UNWRAPPED;
+    private Function<String, String> namespace = OWN_ID;
+    private Mismatch mismatch = UNREPORTED;
 
     /**
      * @param scheduler the timer source used to expire an unmet {@code want}; null falls back to {@link Scheduler#NEVER}
@@ -256,6 +302,33 @@ public final class ServiceHub {
      */
     public void constraintVocabulary(ConstraintVocabulary declared) {
         this.vocabulary = declared == null ? ConstraintVocabulary.EMPTY : declared;
+    }
+
+    /**
+     * The namespace a plugin's own service ids carry, which is its import name.
+     *
+     * @param namespaceOf maps a plugin id to its namespace; null means the id itself
+     */
+    public void namespaceOf(Function<String, String> namespaceOf) {
+        this.namespace = namespaceOf == null ? OWN_ID : namespaceOf;
+    }
+
+    /**
+     * Who is told when a registration is withheld from a consumer bound to another provider.
+     *
+     * @param listener the host, which reports it once per consumer and service; null reports nowhere
+     */
+    public void mismatch(Mismatch listener) {
+        this.mismatch = listener == null ? UNREPORTED : listener;
+    }
+
+    /**
+     * @param id the service id to look up
+     * @return the plugin id that registered it, "the host" for a host service, or null when nothing has
+     */
+    public String ownerOf(String id) {
+        Entry entry = entries.get(id);
+        return entry == null ? null : entry.ownerName();
     }
 
     ConstraintVocabulary constraintVocabulary() {
@@ -291,6 +364,16 @@ public final class ServiceHub {
      * @return a registry that attributes this plugin's own registrations, reads and consumptions to it
      */
     public Registry forPlugin(final String pluginId) {
+        return forPlugin(pluginId, NO_BINDING);
+    }
+
+    /**
+     * @param pluginId the plugin the returned registry is scoped to
+     * @param providerOf the provider a service id is bound to for this plugin, or null for any provider
+     * @return a registry that attributes this plugin's own registrations, reads and consumptions to it, and
+     *         delivers a bound service only when its named provider registered it
+     */
+    public Registry forPlugin(final String pluginId, final Function<String, String> providerOf) {
         return new Registry() {
             @Override
             public Object get(String id) {
@@ -301,17 +384,17 @@ public final class ServiceHub {
 
             @Override
             public Pending<Object> want(String id) {
-                return awaitService(pluginId, id, null);
+                return awaitService(pluginId, id, null, providerOf.apply(id));
             }
 
             @Override
             public Pending<Object> want(String id, long timeoutMillis) {
-                return awaitService(pluginId, id, Long.valueOf(timeoutMillis));
+                return awaitService(pluginId, id, Long.valueOf(timeoutMillis), providerOf.apply(id));
             }
 
             @Override
             public Scheduler.Cancellable watch(String id, Listener listener) {
-                return addWatcher(pluginId, id, listener);
+                return addWatcher(pluginId, id, listener, providerOf.apply(id));
             }
 
             @Override
@@ -327,7 +410,7 @@ public final class ServiceHub {
             @Override
             public Pending<Object> want(ServiceRequirement requirement, Budget budget) {
                 consumed(pluginId, requirement.getId());
-                return awaitUnderConstraints(pluginId, requirement, budget);
+                return awaitUnderConstraints(pluginId, requirement, budget, providerOf.apply(requirement.getId()));
             }
 
             @Override
@@ -427,7 +510,7 @@ public final class ServiceHub {
             String name = id.contains(":") ? id.substring(id.lastIndexOf(':') + 1) : id;
             throw new PluginException(pluginId,
                     "cannot register service \"" + id + "\", which belongs to another plugin",
-                    "namespace it as \"" + pluginId + ":" + name + "\", or register one of the well-known ids: " + join(wellKnown));
+                    "namespace it as \"" + namespace.apply(pluginId) + ":" + name + "\", or register one of the well-known ids: " + join(wellKnown));
         }
         Entry existing = entries.get(id);
         if (existing != null) {
@@ -463,20 +546,52 @@ public final class ServiceHub {
     private void announceArrival(String id) {
         boolean watched = watchers.get(id) != null && !watchers.get(id).isEmpty();
         boolean awaited = waiters.get(id) != null && !waiters.get(id).isEmpty();
-        Object service = watched || awaited ? entries.get(id).unconstrained(handles) : null;
+        Entry arrived = entries.get(id);
+        Object service = watched || awaited ? arrived.unconstrained(handles) : null;
         if (service == null) {
             return;
         }
         Set<Waiter> pending = waiters.remove(id);
         if (pending != null) {
-            for (Waiter waiter : pending) {
-                if (waiter.timer != null) {
-                    waiter.timer.cancel();
-                }
-                waiter.settled.resolve(service);
-            }
+            deliver(id, service, arrived, pending);
         }
-        notifyWatchers(id, service, true);
+        notifyWatchers(id, service, true, arrived);
+    }
+
+    /** @implNote A waiter bound to another provider is kept waiting, so a later arrival from its own provider still reaches it. */
+    private void deliver(String id, Object service, Entry arrived, Set<Waiter> pending) {
+        Set<Waiter> stillWaiting = new LinkedHashSet<Waiter>();
+        for (Waiter waiter : pending) {
+            if (!accepts(waiter.pluginId, id, waiter.provider, arrived)) {
+                stillWaiting.add(waiter);
+                continue;
+            }
+            if (waiter.timer != null) {
+                waiter.timer.cancel();
+            }
+            waiter.settled.resolve(service);
+        }
+        Set<Waiter> askedMeanwhile = waiters.get(id);
+        if (askedMeanwhile != null) {
+            stillWaiting.addAll(askedMeanwhile);
+        }
+        if (!stillWaiting.isEmpty()) {
+            waiters.put(id, stillWaiting);
+        }
+    }
+
+    /**
+     * Whether a registration by this entry's owner may reach a consumer bound to {@code provider}.
+     *
+     * @implNote A mismatch is handed to the host, which keeps the once-per-consumer-and-service
+     * ledger, so a consumer waiting through many wrong registrations is reported once.
+     */
+    boolean accepts(String consumerId, String serviceId, String provider, Entry entry) {
+        if (provider == null || entry.ownedBy(provider)) {
+            return true;
+        }
+        mismatch.withheld(consumerId, serviceId, provider, entry.ownerName());
+        return false;
     }
 
     /** @implNote Removes this registration only, so a stale handle cannot take a later one of the same id. */
@@ -486,22 +601,22 @@ public final class ServiceHub {
         }
         entries.remove(entry.serviceId);
         entry.revokeAll();
-        notifyWatchers(entry.serviceId, null, false);
+        notifyWatchers(entry.serviceId, null, false, entry);
     }
 
     /**
      * @implNote A Pending nobody watched is inert, so a want whose caller dropped it needs no guard.
      * The JavaScript boundary is where that stops being true, and it attaches the catch there.
      */
-    private Pending<Object> awaitService(final String pluginId, final String id, Long timeoutMillis) {
+    private Pending<Object> awaitService(final String pluginId, final String id, Long timeoutMillis, String provider) {
         consumed(pluginId, id);
         Entry entry = entries.get(id);
-        Object now = entry == null ? null : entry.unconstrained(handles);
+        Object now = entry == null || !accepts(pluginId, id, provider, entry) ? null : entry.unconstrained(handles);
         if (now != null) {
             return Pending.of(now);
         }
         Pending<Object> settled = new Pending<Object>();
-        final Waiter waiter = new Waiter(pluginId, settled);
+        final Waiter waiter = new Waiter(pluginId, provider, settled);
         if (timeoutMillis != null) {
             final long millis = timeoutMillis.longValue();
             waiter.timer = scheduler.schedule(new Runnable() {
@@ -531,8 +646,9 @@ public final class ServiceHub {
      * its budget in scheduled ticks that call into providers, so one left running on behalf of a
      * stopped plugin keeps asking for minutes and can resolve into a plugin that no longer exists.
      */
-    private Pending<Object> awaitUnderConstraints(String pluginId, ServiceRequirement requirement, Budget budget) {
-        ConstrainedWant want = new ConstrainedWant(this, pluginId, requirement, budget);
+    private Pending<Object> awaitUnderConstraints(String pluginId, ServiceRequirement requirement, Budget budget,
+                                                  String provider) {
+        ConstrainedWant want = new ConstrainedWant(this, pluginId, requirement, budget, provider);
         List<ConstrainedWant> running = constrainedWants.get(pluginId);
         if (running == null) {
             running = new ArrayList<ConstrainedWant>();
@@ -542,19 +658,20 @@ public final class ServiceHub {
         return want.start();
     }
 
-    private Scheduler.Cancellable addWatcher(String pluginId, String id, final Listener listener) {
+    private Scheduler.Cancellable addWatcher(String pluginId, String id, Listener listener, String provider) {
         consumed(pluginId, id);
-        Set<Listener> listeners = watchers.get(id);
+        Set<Watcher> listeners = watchers.get(id);
         if (listeners == null) {
-            listeners = new LinkedHashSet<Listener>();
+            listeners = new LinkedHashSet<Watcher>();
             watchers.put(id, listeners);
         }
-        final Set<Listener> installed = listeners;
-        installed.add(listener);
+        final Set<Watcher> installed = listeners;
+        final Watcher watcher = new Watcher(provider, listener);
+        installed.add(watcher);
         return tracked(pluginId, new Scheduler.Cancellable() {
             @Override
             public void cancel() {
-                installed.remove(listener);
+                installed.remove(watcher);
             }
         });
     }
@@ -593,18 +710,23 @@ public final class ServiceHub {
      * @implNote A watcher that throws is reported and iteration continues, because one bad consumer
      * must not stop the others from hearing about a registration. A watcher removed during the
      * iteration is skipped rather than called.
+     * @implNote A watcher bound to another provider is skipped without a report: watching is passive,
+     * and a report would turn a watch that is merely still waiting into a refused one.
      */
-    private void notifyWatchers(String id, Object service, boolean registered) {
-        Set<Listener> listeners = watchers.get(id);
+    private void notifyWatchers(String id, Object service, boolean registered, Entry owner) {
+        Set<Watcher> listeners = watchers.get(id);
         if (listeners == null) {
             return;
         }
-        for (Listener listener : new ArrayList<Listener>(listeners)) {
-            if (!listeners.contains(listener)) {
+        for (Watcher watcher : new ArrayList<Watcher>(listeners)) {
+            if (!listeners.contains(watcher)) {
+                continue;
+            }
+            if (watcher.provider != null && !owner.ownedBy(watcher.provider)) {
                 continue;
             }
             try {
-                listener.changed(service, registered);
+                watcher.listener.changed(service, registered);
             } catch (RuntimeException failure) {
                 Diagnostics.report("a watcher of \"" + id + "\" threw while handling "
                         + (registered ? "register" : "unregister") + ": " + failure);
@@ -620,7 +742,7 @@ public final class ServiceHub {
         if (separator <= 0 || separator == serviceId.length() - 1) {
             return false;
         }
-        return serviceId.substring(0, separator).equals(pluginId);
+        return serviceId.substring(0, separator).equals(namespace.apply(pluginId));
     }
 
     static PluginException stoppedWaiting(String pluginId, String id) {
