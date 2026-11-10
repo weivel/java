@@ -159,7 +159,7 @@ public final class ManifestSchema {
     private static JsonSchema dependencyName() {
         JsonSchema name = described(JsonSchema.ofType("string"),
                 "The owner and name of the dependency's repository, for a repository whose id is not known. A name can be taken by someone else, so the host warns about it.");
-        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+(?![\\s\\S])");
+        name.setPattern("^[A-Za-z0-9][A-Za-z0-9._-]*/(?!\\.{1,2}(?![\\s\\S]))[A-Za-z0-9._-]+(?![\\s\\S])");
         name.setFix("write the dependency name as owner/name, for example \"spisor/runtime\"; a dependency carries an id or a name, never both");
         return name;
     }
