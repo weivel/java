@@ -18526,13 +18526,13 @@ igiae_ManifestSchema_required = () => {
     $properties = ju_LinkedHashMap__init_();
     $properties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(533)));
     $provider = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(534));
-    igiae_JsonSchema_setPattern($provider, $rt_s(535));
-    igiae_JsonSchema_setFix($provider, $rt_s(536));
+    igiae_JsonSchema_setPattern($provider, $rt_s(306));
+    igiae_JsonSchema_setFix($provider, $rt_s(535));
     $properties.$put($rt_s(364), $provider);
-    $properties.$put($rt_s(361), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(537)));
-    $properties.$put($rt_s(362), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(538)));
-    $properties.$put($rt_s(363), igiae_ManifestSchema_keyedNumbers($rt_s(539), $rt_s(540)));
-    $required = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(541));
+    $properties.$put($rt_s(361), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(536)));
+    $properties.$put($rt_s(362), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(537)));
+    $properties.$put($rt_s(363), igiae_ManifestSchema_keyedNumbers($rt_s(538), $rt_s(539)));
+    $required = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(540));
     igiae_JsonSchema_setProperties($required, $properties);
     var$4 = $rt_createArray(jl_String, 1);
     var$4.data[0] = $rt_s(18);
@@ -18547,100 +18547,100 @@ igiae_ManifestSchema_keyedNumbers = ($description, $valueDescription) => {
 },
 igiae_ManifestSchema_kind = () => {
     let $kind;
-    $kind = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(542));
-    igiae_JsonSchema_setEnumValues($kind, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(543), $rt_s(68)])));
-    igiae_JsonSchema_setFix($kind, $rt_s(544));
+    $kind = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(541));
+    igiae_JsonSchema_setEnumValues($kind, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(542), $rt_s(68)])));
+    igiae_JsonSchema_setFix($kind, $rt_s(543));
     return $kind;
 },
 igiae_ManifestSchema_installMethod = () => {
     let $installMethod;
-    $installMethod = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(545));
+    $installMethod = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(544));
     igiae_JsonSchema_setMinLength($installMethod, jl_Integer_valueOf(1));
-    igiae_JsonSchema_setFix($installMethod, $rt_s(546));
+    igiae_JsonSchema_setFix($installMethod, $rt_s(545));
     return $installMethod;
 },
 igiae_ManifestSchema_packages = () => {
     let $properties, $withOptions, var$3, var$4, $entry, $packages;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(547), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(548)));
-    $properties.$put($rt_s(549), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(550)));
-    $withOptions = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(551));
+    $properties.$put($rt_s(546), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(547)));
+    $properties.$put($rt_s(548), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(549)));
+    $withOptions = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(550));
     var$3 = $rt_createArray(jl_String, 1);
-    var$3.data[0] = $rt_s(547);
+    var$3.data[0] = $rt_s(546);
     igiae_JsonSchema_setRequired($withOptions, ju_Arrays_asList(var$3));
     igiae_JsonSchema_setProperties($withOptions, $properties);
     var$3 = $rt_createArray(igiae_JsonSchema, 2);
     var$4 = var$3.data;
     var$4[0] = igiae_JsonSchema_ofType($rt_s(307));
     var$4[1] = $withOptions;
-    $entry = igiae_ManifestSchema_described(igiae_JsonSchema_anyOf(ju_Arrays_asList(var$3)), $rt_s(552));
-    igiae_JsonSchema_setFix($entry, $rt_s(553));
-    $packages = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(554));
+    $entry = igiae_ManifestSchema_described(igiae_JsonSchema_anyOf(ju_Arrays_asList(var$3)), $rt_s(551));
+    igiae_JsonSchema_setFix($entry, $rt_s(552));
+    $packages = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(553));
     igiae_JsonSchema_setAdditionalProperties($packages, $entry);
-    igiae_JsonSchema_setFix($packages, $rt_s(555));
+    igiae_JsonSchema_setFix($packages, $rt_s(554));
     return $packages;
 },
 igiae_ManifestSchema_commandName = () => {
     let $name;
     $name = igiae_JsonSchema_ofType($rt_s(307));
-    igiae_JsonSchema_setPattern($name, $rt_s(556));
-    igiae_JsonSchema_setFix($name, $rt_s(557));
+    igiae_JsonSchema_setPattern($name, $rt_s(555));
+    igiae_JsonSchema_setFix($name, $rt_s(556));
     return $name;
 },
 igiae_ManifestSchema_pathCommands = () => {
     let $requested, $minimum, $properties, $pathCommands, var$5;
-    $requested = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(558));
+    $requested = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(557));
     igiae_JsonSchema_setItems($requested, igiae_ManifestSchema_commandName());
     jl_Boolean_$callClinit();
     igiae_JsonSchema_setUniqueItems($requested, jl_Boolean_TRUE);
-    $minimum = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(559));
+    $minimum = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(558));
     igiae_JsonSchema_setMinimum($minimum, jl_Integer_valueOf(0));
     igiae_JsonSchema_setMaximum($minimum, jl_Integer_valueOf(1));
-    igiae_JsonSchema_setFix($minimum, $rt_s(560));
+    igiae_JsonSchema_setFix($minimum, $rt_s(559));
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(561), $requested);
+    $properties.$put($rt_s(560), $requested);
     $properties.$put($rt_s(334), $minimum);
-    $pathCommands = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(562));
+    $pathCommands = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(561));
     var$5 = $rt_createArray(jl_String, 1);
-    var$5.data[0] = $rt_s(561);
+    var$5.data[0] = $rt_s(560);
     igiae_JsonSchema_setRequired($pathCommands, ju_Arrays_asList(var$5));
     igiae_JsonSchema_setProperties($pathCommands, $properties);
-    igiae_JsonSchema_setFix($pathCommands, $rt_s(563));
+    igiae_JsonSchema_setFix($pathCommands, $rt_s(562));
     return $pathCommands;
 },
 igiae_ManifestSchema_methods = () => {
     let $methods;
-    $methods = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(564));
+    $methods = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(563));
     igiae_JsonSchema_setItems($methods, igiae_JsonSchema_ofType($rt_s(307)));
     jl_Boolean_$callClinit();
     igiae_JsonSchema_setUniqueItems($methods, jl_Boolean_TRUE);
-    igiae_JsonSchema_setFix($methods, $rt_s(565));
+    igiae_JsonSchema_setFix($methods, $rt_s(564));
     return $methods;
 },
 igiae_ManifestSchema_commands = () => {
     let $properties, $command, $commands;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(547), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(566)));
-    $properties.$put($rt_s(325), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(567)));
-    $properties.$put($rt_s(568), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(569)));
-    $properties.$put($rt_s(570), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(571)));
-    $properties.$put($rt_s(572), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(573)));
-    $command = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(574));
-    igiae_JsonSchema_setRequired($command, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(547), $rt_s(325)])));
+    $properties.$put($rt_s(546), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(565)));
+    $properties.$put($rt_s(325), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(566)));
+    $properties.$put($rt_s(567), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(568)));
+    $properties.$put($rt_s(569), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(570)));
+    $properties.$put($rt_s(571), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(572)));
+    $command = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(573));
+    igiae_JsonSchema_setRequired($command, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(546), $rt_s(325)])));
     igiae_JsonSchema_setProperties($command, $properties);
-    $commands = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(575));
+    $commands = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(574));
     igiae_JsonSchema_setItems($commands, $command);
     return $commands;
 },
 igiae_ManifestSchema_data = () => {
     let $paths, $properties, $data, var$4;
-    $paths = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(576));
+    $paths = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(575));
     igiae_JsonSchema_setItems($paths, igiae_JsonSchema_ofType($rt_s(307)));
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(577), $paths);
-    $data = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(578));
+    $properties.$put($rt_s(576), $paths);
+    $data = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(577));
     var$4 = $rt_createArray(jl_String, 1);
-    var$4.data[0] = $rt_s(577);
+    var$4.data[0] = $rt_s(576);
     igiae_JsonSchema_setRequired($data, ju_Arrays_asList(var$4));
     igiae_JsonSchema_setProperties($data, $properties);
     return $data;
@@ -18648,11 +18648,11 @@ igiae_ManifestSchema_data = () => {
 igiae_ManifestSchema_config = () => {
     let $properties, $config, var$3;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(547), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(579)));
-    $properties.$put($rt_s(580), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(581)));
-    $config = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(582));
+    $properties.$put($rt_s(546), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(578)));
+    $properties.$put($rt_s(579), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(580)));
+    $config = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(581));
     var$3 = $rt_createArray(jl_String, 1);
-    var$3.data[0] = $rt_s(580);
+    var$3.data[0] = $rt_s(579);
     igiae_JsonSchema_setRequired($config, ju_Arrays_asList(var$3));
     igiae_JsonSchema_setProperties($config, $properties);
     return $config;
@@ -18660,67 +18660,67 @@ igiae_ManifestSchema_config = () => {
 igiae_ManifestSchema_lifecycle = () => {
     let $properties, $lifecycle;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(583), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(584)));
-    $properties.$put($rt_s(585), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(586)));
-    $lifecycle = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(587));
+    $properties.$put($rt_s(582), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(583)));
+    $properties.$put($rt_s(584), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(585)));
+    $lifecycle = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(586));
     igiae_JsonSchema_setProperties($lifecycle, $properties);
     return $lifecycle;
 },
 igiae_ManifestSchema_publish = () => {
     let $properties, $jarModule, $publish;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(588), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(589)));
-    $jarModule = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(590));
+    $properties.$put($rt_s(587), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(588)));
+    $jarModule = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(589));
     igiae_JsonSchema_setItems($jarModule, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(591), $jarModule);
-    $properties.$put($rt_s(592), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(593)));
-    $properties.$put($rt_s(594), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(595)));
-    $publish = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(596));
+    $properties.$put($rt_s(590), $jarModule);
+    $properties.$put($rt_s(591), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(592)));
+    $properties.$put($rt_s(593), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(309)), $rt_s(594)));
+    $publish = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(595));
     igiae_JsonSchema_setProperties($publish, $properties);
     return $publish;
 },
 igiae_ManifestSchema_repo = () => {
     let $properties, $domains, $tech, $topics, $repo;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(597), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(598)));
-    $properties.$put($rt_s(599), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(600)));
-    $domains = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(601));
+    $properties.$put($rt_s(596), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(597)));
+    $properties.$put($rt_s(598), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(599)));
+    $domains = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(600));
     igiae_JsonSchema_setItems($domains, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(602), $domains);
-    $tech = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(603));
+    $properties.$put($rt_s(601), $domains);
+    $tech = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(602));
     igiae_JsonSchema_setItems($tech, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(604), $tech);
-    $topics = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(605));
+    $properties.$put($rt_s(603), $tech);
+    $topics = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(604));
     igiae_JsonSchema_setItems($topics, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(606), $topics);
-    $repo = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(607));
-    igiae_JsonSchema_setRequired($repo, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(597), $rt_s(599), $rt_s(604)])));
+    $properties.$put($rt_s(605), $topics);
+    $repo = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(606));
+    igiae_JsonSchema_setRequired($repo, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(596), $rt_s(598), $rt_s(603)])));
     igiae_JsonSchema_setProperties($repo, $properties);
     return $repo;
 },
 igiae_ManifestSchema_marketplace = () => {
     let $matchProperties, $topics, $match, $categoryProperties, $category, $categories, $properties, $marketplace, var$9;
     $matchProperties = ju_LinkedHashMap__init_();
-    $topics = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(608));
+    $topics = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(607));
     igiae_JsonSchema_setItems($topics, igiae_JsonSchema_ofType($rt_s(307)));
-    $matchProperties.$put($rt_s(606), $topics);
-    $matchProperties.$put($rt_s(503), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(609)));
-    $match = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(610));
+    $matchProperties.$put($rt_s(605), $topics);
+    $matchProperties.$put($rt_s(503), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(608)));
+    $match = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(609));
     igiae_JsonSchema_setProperties($match, $matchProperties);
     $categoryProperties = ju_LinkedHashMap__init_();
-    $categoryProperties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(611)));
-    $categoryProperties.$put($rt_s(612), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(613)));
-    $categoryProperties.$put($rt_s(614), $match);
-    $category = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(615));
-    igiae_JsonSchema_setRequired($category, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(614)])));
+    $categoryProperties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(610)));
+    $categoryProperties.$put($rt_s(611), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(612)));
+    $categoryProperties.$put($rt_s(613), $match);
+    $category = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(614));
+    igiae_JsonSchema_setRequired($category, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(613)])));
     igiae_JsonSchema_setProperties($category, $categoryProperties);
-    $categories = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(616));
+    $categories = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(615));
     igiae_JsonSchema_setItems($categories, $category);
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(617), $categories);
-    $marketplace = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(618));
+    $properties.$put($rt_s(616), $categories);
+    $marketplace = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(617));
     var$9 = $rt_createArray(jl_String, 1);
-    var$9.data[0] = $rt_s(617);
+    var$9.data[0] = $rt_s(616);
     igiae_JsonSchema_setRequired($marketplace, ju_Arrays_asList(var$9));
     igiae_JsonSchema_setProperties($marketplace, $properties);
     return $marketplace;
@@ -18728,45 +18728,45 @@ igiae_ManifestSchema_marketplace = () => {
 igiae_ManifestSchema_app = () => {
     let $properties, $integration, $app;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(619)));
-    $properties.$put($rt_s(612), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(494)));
-    $properties.$put($rt_s(495), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(620)));
-    $properties.$put($rt_s(621), igiae_ManifestSchema_appHome());
-    $properties.$put($rt_s(622), igiae_ManifestSchema_appDetect());
-    $properties.$put($rt_s(623), igiae_ManifestSchema_appLoader());
-    $properties.$put($rt_s(624), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(625)));
-    $properties.$put($rt_s(577), igiae_ManifestSchema_appPathNames());
-    $properties.$put($rt_s(626), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(627)));
-    $integration = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(628));
-    igiae_JsonSchema_setEnumValues($integration, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(629), $rt_s(630)])));
-    igiae_JsonSchema_setFix($integration, $rt_s(631));
-    $properties.$put($rt_s(632), $integration);
-    $properties.$put($rt_s(633), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(634)));
-    $properties.$put($rt_s(635), igiae_ManifestSchema_appUsage());
-    $properties.$put($rt_s(636), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(637)));
-    $properties.$put($rt_s(638), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(639)));
-    $properties.$put($rt_s(640), igiae_ManifestSchema_appNpmPlugins());
-    $properties.$put($rt_s(641), igiae_ManifestSchema_appStartupHook());
-    $properties.$put($rt_s(642), igiae_ManifestSchema_appDiscovery());
-    $properties.$put($rt_s(643), igiae_ManifestSchema_appProjects());
-    $properties.$put($rt_s(644), igiae_ManifestSchema_appModelCatalog());
-    $app = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(645));
-    igiae_JsonSchema_setRequired($app, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(612), $rt_s(621)])));
+    $properties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(618)));
+    $properties.$put($rt_s(611), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(494)));
+    $properties.$put($rt_s(495), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(619)));
+    $properties.$put($rt_s(620), igiae_ManifestSchema_appHome());
+    $properties.$put($rt_s(621), igiae_ManifestSchema_appDetect());
+    $properties.$put($rt_s(622), igiae_ManifestSchema_appLoader());
+    $properties.$put($rt_s(623), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(624)));
+    $properties.$put($rt_s(576), igiae_ManifestSchema_appPathNames());
+    $properties.$put($rt_s(625), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(626)));
+    $integration = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(627));
+    igiae_JsonSchema_setEnumValues($integration, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(628), $rt_s(629)])));
+    igiae_JsonSchema_setFix($integration, $rt_s(630));
+    $properties.$put($rt_s(631), $integration);
+    $properties.$put($rt_s(632), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(633)));
+    $properties.$put($rt_s(634), igiae_ManifestSchema_appUsage());
+    $properties.$put($rt_s(635), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(636)));
+    $properties.$put($rt_s(637), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(638)));
+    $properties.$put($rt_s(639), igiae_ManifestSchema_appNpmPlugins());
+    $properties.$put($rt_s(640), igiae_ManifestSchema_appStartupHook());
+    $properties.$put($rt_s(641), igiae_ManifestSchema_appDiscovery());
+    $properties.$put($rt_s(642), igiae_ManifestSchema_appProjects());
+    $properties.$put($rt_s(643), igiae_ManifestSchema_appModelCatalog());
+    $app = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(644));
+    igiae_JsonSchema_setRequired($app, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(611), $rt_s(620)])));
     igiae_JsonSchema_setProperties($app, $properties);
     return $app;
 },
 igiae_ManifestSchema_appHome = () => {
     let $properties, $candidates, $home, var$4;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(646), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(647)));
-    $properties.$put($rt_s(648), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(649)));
-    $properties.$put($rt_s(650), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(651)));
-    $candidates = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(652));
+    $properties.$put($rt_s(645), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(646)));
+    $properties.$put($rt_s(647), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(648)));
+    $properties.$put($rt_s(649), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(650)));
+    $candidates = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(651));
     igiae_JsonSchema_setItems($candidates, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(653), $candidates);
-    $home = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(654));
+    $properties.$put($rt_s(652), $candidates);
+    $home = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(653));
     var$4 = $rt_createArray(jl_String, 1);
-    var$4.data[0] = $rt_s(653);
+    var$4.data[0] = $rt_s(652);
     igiae_JsonSchema_setRequired($home, ju_Arrays_asList(var$4));
     igiae_JsonSchema_setProperties($home, $properties);
     return $home;
@@ -18774,42 +18774,42 @@ igiae_ManifestSchema_appHome = () => {
 igiae_ManifestSchema_appDetect = () => {
     let $properties, $detect;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(655), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(656)));
-    $properties.$put($rt_s(657), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(658)));
-    $detect = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(659));
+    $properties.$put($rt_s(654), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(655)));
+    $properties.$put($rt_s(656), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(657)));
+    $detect = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(658));
     igiae_JsonSchema_setProperties($detect, $properties);
     return $detect;
 },
 igiae_ManifestSchema_appLoader = () => {
     let $properties, $loader;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(660)));
-    $properties.$put($rt_s(661), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(662)));
-    $loader = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(663));
-    igiae_JsonSchema_setRequired($loader, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(661)])));
+    $properties.$put($rt_s(18), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(659)));
+    $properties.$put($rt_s(660), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(661)));
+    $loader = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(662));
+    igiae_JsonSchema_setRequired($loader, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(660)])));
     igiae_JsonSchema_setProperties($loader, $properties);
     return $loader;
 },
 igiae_ManifestSchema_appPathNames = () => {
     let $properties, $paths;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(664), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(665)));
-    $properties.$put($rt_s(543), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(666)));
-    $properties.$put($rt_s(667), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(668)));
-    $properties.$put($rt_s(509), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(669)));
-    $paths = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(670));
+    $properties.$put($rt_s(663), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(664)));
+    $properties.$put($rt_s(542), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(665)));
+    $properties.$put($rt_s(666), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(667)));
+    $properties.$put($rt_s(509), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(668)));
+    $paths = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(669));
     igiae_JsonSchema_setProperties($paths, $properties);
     return $paths;
 },
 igiae_ManifestSchema_appUsage = () => {
     let $properties, $formats, $usage, var$4;
     $properties = ju_LinkedHashMap__init_();
-    $formats = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(671));
+    $formats = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(670));
     igiae_JsonSchema_setItems($formats, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(672), $formats);
-    $usage = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(673));
+    $properties.$put($rt_s(671), $formats);
+    $usage = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(672));
     var$4 = $rt_createArray(jl_String, 1);
-    var$4.data[0] = $rt_s(672);
+    var$4.data[0] = $rt_s(671);
     igiae_JsonSchema_setRequired($usage, ju_Arrays_asList(var$4));
     igiae_JsonSchema_setProperties($usage, $properties);
     return $usage;
@@ -18817,70 +18817,70 @@ igiae_ManifestSchema_appUsage = () => {
 igiae_ManifestSchema_appNpmPlugins = () => {
     let $properties, $configFiles, $npmPlugins;
     $properties = ju_LinkedHashMap__init_();
-    $configFiles = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(674));
+    $configFiles = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(673));
     igiae_JsonSchema_setItems($configFiles, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(675), $configFiles);
-    $properties.$put($rt_s(676), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(677)));
-    $properties.$put($rt_s(678), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(679)));
-    $properties.$put($rt_s(680), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(681)));
-    $npmPlugins = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(682));
-    igiae_JsonSchema_setRequired($npmPlugins, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(675), $rt_s(676)])));
+    $properties.$put($rt_s(674), $configFiles);
+    $properties.$put($rt_s(675), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(676)));
+    $properties.$put($rt_s(677), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(678)));
+    $properties.$put($rt_s(679), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(680)));
+    $npmPlugins = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(681));
+    igiae_JsonSchema_setRequired($npmPlugins, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(674), $rt_s(675)])));
     igiae_JsonSchema_setProperties($npmPlugins, $properties);
     return $npmPlugins;
 },
 igiae_ManifestSchema_appStartupHook = () => {
     let $properties, $path, $startupHook;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(683), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(684)));
-    $path = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(685));
+    $properties.$put($rt_s(682), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(683)));
+    $path = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(684));
     igiae_JsonSchema_setItems($path, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(686), $path);
-    $properties.$put($rt_s(492), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(687)));
-    $startupHook = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(688));
-    igiae_JsonSchema_setRequired($startupHook, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(683), $rt_s(686), $rt_s(492)])));
+    $properties.$put($rt_s(685), $path);
+    $properties.$put($rt_s(492), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(686)));
+    $startupHook = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(687));
+    igiae_JsonSchema_setRequired($startupHook, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(682), $rt_s(685), $rt_s(492)])));
     igiae_JsonSchema_setProperties($startupHook, $properties);
     return $startupHook;
 },
 igiae_ManifestSchema_appDiscovery = () => {
     let $properties, $discovery;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(689), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(690)));
-    $properties.$put($rt_s(691), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(692)));
-    $properties.$put($rt_s(693), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(694)));
-    $discovery = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(695));
+    $properties.$put($rt_s(688), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(689)));
+    $properties.$put($rt_s(690), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(691)));
+    $properties.$put($rt_s(692), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(693)));
+    $discovery = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(694));
     igiae_JsonSchema_setProperties($discovery, $properties);
     return $discovery;
 },
 igiae_ManifestSchema_appProjects = () => {
     let $properties, $sessionDb, $projects;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(696), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(697)));
-    $sessionDb = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(698));
+    $properties.$put($rt_s(695), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(696)));
+    $sessionDb = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(697));
     igiae_JsonSchema_setItems($sessionDb, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(699), $sessionDb);
-    $properties.$put($rt_s(700), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(701)));
-    $projects = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(702));
+    $properties.$put($rt_s(698), $sessionDb);
+    $properties.$put($rt_s(699), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(700)));
+    $projects = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(701));
     igiae_JsonSchema_setProperties($projects, $properties);
     return $projects;
 },
 igiae_ManifestSchema_appModelCatalog = () => {
     let $properties, $files, $modelCatalog;
     $properties = ju_LinkedHashMap__init_();
-    $files = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(703));
+    $files = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(702));
     igiae_JsonSchema_setItems($files, igiae_JsonSchema_ofType($rt_s(307)));
-    $properties.$put($rt_s(704), $files);
-    $properties.$put($rt_s(646), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(705)));
-    $properties.$put($rt_s(680), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(681)));
-    $properties.$put($rt_s(706), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(707)));
-    $modelCatalog = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(708));
-    igiae_JsonSchema_setRequired($modelCatalog, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(704), $rt_s(706)])));
+    $properties.$put($rt_s(703), $files);
+    $properties.$put($rt_s(645), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(704)));
+    $properties.$put($rt_s(679), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(680)));
+    $properties.$put($rt_s(705), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(706)));
+    $modelCatalog = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(707));
+    igiae_JsonSchema_setRequired($modelCatalog, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(703), $rt_s(705)])));
     igiae_JsonSchema_setProperties($modelCatalog, $properties);
     return $modelCatalog;
 },
 igiae_ManifestSchema_keyedBy = ($record, $fix) => {
     let $names;
     $names = igiae_JsonSchema_ofType(null);
-    igiae_JsonSchema_setPattern($names, $rt_s(709));
+    igiae_JsonSchema_setPattern($names, $rt_s(708));
     igiae_JsonSchema_setFix($names, $fix);
     igiae_JsonSchema_setPropertyNames($record, $names);
     return $record;
@@ -18897,139 +18897,139 @@ igiae_ManifestSchema_enumerated = ($description, $fix, $values) => {
     return $schema;
 },
 igiae_ManifestSchema_uiTone = () => {
-    return igiae_ManifestSchema_enumerated($rt_s(710), $rt_s(711), $rt_wrapArray(jl_String, [$rt_s(712), $rt_s(636), $rt_s(713), $rt_s(714), $rt_s(715)]));
+    return igiae_ManifestSchema_enumerated($rt_s(709), $rt_s(710), $rt_wrapArray(jl_String, [$rt_s(711), $rt_s(635), $rt_s(712), $rt_s(713), $rt_s(714)]));
 },
 igiae_ManifestSchema_uiBinding = () => {
     let $method, $properties, $binding;
-    $method = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(716));
-    igiae_JsonSchema_setPattern($method, $rt_s(709));
-    igiae_JsonSchema_setFix($method, $rt_s(717));
+    $method = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(715));
+    igiae_JsonSchema_setPattern($method, $rt_s(708));
+    igiae_JsonSchema_setFix($method, $rt_s(716));
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(10), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(718)));
-    $properties.$put($rt_s(719), $method);
-    $properties.$put($rt_s(720), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(721)));
-    $binding = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(722));
+    $properties.$put($rt_s(10), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(717)));
+    $properties.$put($rt_s(718), $method);
+    $properties.$put($rt_s(719), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(720)));
+    $binding = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(721));
     igiae_JsonSchema_setProperties($binding, $properties);
-    igiae_JsonSchema_setRequired($binding, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(10), $rt_s(719)])));
-    igiae_JsonSchema_setFix($binding, $rt_s(723));
+    igiae_JsonSchema_setRequired($binding, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(10), $rt_s(718)])));
+    igiae_JsonSchema_setFix($binding, $rt_s(722));
     return $binding;
 },
 igiae_ManifestSchema_uiSettings = () => {
     let $settings;
-    $settings = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(724));
-    igiae_ManifestSchema_keyedBy($settings, $rt_s(725));
+    $settings = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(723));
+    igiae_ManifestSchema_keyedBy($settings, $rt_s(724));
     igiae_JsonSchema_setAdditionalProperties($settings, igiae_ManifestSchema_setting());
-    igiae_JsonSchema_setFix($settings, $rt_s(726));
+    igiae_JsonSchema_setFix($settings, $rt_s(725));
     return $settings;
 },
 igiae_ManifestSchema_setting = () => {
     let $choices, $properties, $setting;
-    $choices = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(727));
+    $choices = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(726));
     igiae_JsonSchema_setItems($choices, igiae_JsonSchema_ofType($rt_s(307)));
-    igiae_JsonSchema_setFix($choices, $rt_s(728));
+    igiae_JsonSchema_setFix($choices, $rt_s(727));
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(326), igiae_ManifestSchema_enumerated($rt_s(729), $rt_s(730), $rt_wrapArray(jl_String, [$rt_s(731), $rt_s(732), $rt_s(308), $rt_s(733), $rt_s(734), $rt_s(735), $rt_s(686), $rt_s(736), $rt_s(737)])));
-    $properties.$put($rt_s(612), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(738)));
-    $properties.$put($rt_s(739), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(740)));
-    $properties.$put($rt_s(741), igiae_ManifestSchema_described(igiae_JsonSchema_ofType(null), $rt_s(742)));
-    $properties.$put($rt_s(743), igiae_ManifestSchema_enumerated($rt_s(744), $rt_s(745), $rt_wrapArray(jl_String, [$rt_s(312), $rt_s(746)])));
-    $properties.$put($rt_s(747), $choices);
-    $properties.$put($rt_s(334), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(748)));
-    $properties.$put($rt_s(335), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(749)));
-    $properties.$put($rt_s(333), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(750)));
-    $setting = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(751));
+    $properties.$put($rt_s(326), igiae_ManifestSchema_enumerated($rt_s(728), $rt_s(729), $rt_wrapArray(jl_String, [$rt_s(730), $rt_s(731), $rt_s(308), $rt_s(732), $rt_s(733), $rt_s(734), $rt_s(685), $rt_s(735), $rt_s(736)])));
+    $properties.$put($rt_s(611), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(737)));
+    $properties.$put($rt_s(738), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(739)));
+    $properties.$put($rt_s(740), igiae_ManifestSchema_described(igiae_JsonSchema_ofType(null), $rt_s(741)));
+    $properties.$put($rt_s(742), igiae_ManifestSchema_enumerated($rt_s(743), $rt_s(744), $rt_wrapArray(jl_String, [$rt_s(312), $rt_s(745)])));
+    $properties.$put($rt_s(746), $choices);
+    $properties.$put($rt_s(334), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(747)));
+    $properties.$put($rt_s(335), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(748)));
+    $properties.$put($rt_s(333), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(749)));
+    $setting = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(750));
     igiae_JsonSchema_setProperties($setting, $properties);
-    igiae_JsonSchema_setRequired($setting, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(326), $rt_s(612)])));
+    igiae_JsonSchema_setRequired($setting, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(326), $rt_s(611)])));
     igiae_JsonSchema_setIf($setting, igiae_ManifestSchema_choiceTyped());
     igiae_JsonSchema_setThen($setting, igiae_ManifestSchema_choicesListed());
-    igiae_JsonSchema_setFix($setting, $rt_s(752));
+    igiae_JsonSchema_setFix($setting, $rt_s(751));
     return $setting;
 },
 igiae_ManifestSchema_choiceTyped = () => {
     let $choiceType;
     $choiceType = igiae_JsonSchema_ofType(null);
-    igiae_JsonSchema_setEnumValues($choiceType, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(734), $rt_s(735)])));
+    igiae_JsonSchema_setEnumValues($choiceType, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(733), $rt_s(734)])));
     return igiae_ManifestSchema_requiring($rt_s(326), $choiceType);
 },
 igiae_ManifestSchema_choicesListed = () => {
     let $fix, $atLeastOne;
-    $fix = $rt_s(753);
+    $fix = $rt_s(752);
     $atLeastOne = igiae_ManifestSchema_withFix(igiae_JsonSchema_ofType($rt_s(448)), $fix);
     igiae_JsonSchema_setMinItems($atLeastOne, jl_Integer_valueOf(1));
-    return igiae_ManifestSchema_withFix(igiae_ManifestSchema_requiring($rt_s(747), $atLeastOne), $fix);
+    return igiae_ManifestSchema_withFix(igiae_ManifestSchema_requiring($rt_s(746), $atLeastOne), $fix);
 },
 igiae_ManifestSchema_actions = () => {
     let $properties, $action, $actions;
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(612), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(754)));
+    $properties.$put($rt_s(611), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(753)));
     $properties.$put($rt_s(9), igiae_ManifestSchema_uiBinding());
-    $properties.$put($rt_s(755), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(756)));
-    $properties.$put($rt_s(757), igiae_ManifestSchema_uiSettings());
-    $properties.$put($rt_s(758), igiae_ManifestSchema_uiTone());
-    $action = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(759));
+    $properties.$put($rt_s(754), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(755)));
+    $properties.$put($rt_s(756), igiae_ManifestSchema_uiSettings());
+    $properties.$put($rt_s(757), igiae_ManifestSchema_uiTone());
+    $action = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(758));
     igiae_JsonSchema_setProperties($action, $properties);
-    igiae_JsonSchema_setRequired($action, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(612), $rt_s(9)])));
-    igiae_JsonSchema_setFix($action, $rt_s(760));
-    $actions = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(761));
-    igiae_ManifestSchema_keyedBy($actions, $rt_s(762));
+    igiae_JsonSchema_setRequired($action, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(611), $rt_s(9)])));
+    igiae_JsonSchema_setFix($action, $rt_s(759));
+    $actions = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(760));
+    igiae_ManifestSchema_keyedBy($actions, $rt_s(761));
     igiae_JsonSchema_setAdditionalProperties($actions, $action);
-    igiae_JsonSchema_setFix($actions, $rt_s(763));
+    igiae_JsonSchema_setFix($actions, $rt_s(762));
     return $actions;
 },
 igiae_ManifestSchema_views = () => {
     let $nodes, $properties, $view, $views;
-    $nodes = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(764));
+    $nodes = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(448)), $rt_s(763));
     igiae_JsonSchema_setMinItems($nodes, jl_Integer_valueOf(1));
     igiae_JsonSchema_setItems($nodes, igiae_ManifestSchema_uiNode());
-    igiae_JsonSchema_setFix($nodes, $rt_s(765));
+    igiae_JsonSchema_setFix($nodes, $rt_s(764));
     $properties = ju_LinkedHashMap__init_();
-    $properties.$put($rt_s(324), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(766)));
+    $properties.$put($rt_s(324), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(765)));
     $properties.$put($rt_s(14), $nodes);
-    $view = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(767));
+    $view = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(766));
     igiae_JsonSchema_setProperties($view, $properties);
     igiae_JsonSchema_setRequired($view, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(324), $rt_s(14)])));
-    igiae_JsonSchema_setFix($view, $rt_s(768));
-    $views = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(769));
-    igiae_ManifestSchema_keyedBy($views, $rt_s(770));
+    igiae_JsonSchema_setFix($view, $rt_s(767));
+    $views = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(768));
+    igiae_ManifestSchema_keyedBy($views, $rt_s(769));
     igiae_JsonSchema_setAdditionalProperties($views, $view);
-    igiae_JsonSchema_setFix($views, $rt_s(771));
+    igiae_JsonSchema_setFix($views, $rt_s(770));
     return $views;
 },
 igiae_ManifestSchema_uiNode = () => {
     let $id, $icon, $span, $properties, $node;
-    $id = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(772));
-    igiae_JsonSchema_setPattern($id, $rt_s(709));
-    igiae_JsonSchema_setFix($id, $rt_s(773));
-    $icon = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(774));
-    igiae_JsonSchema_setPattern($icon, $rt_s(775));
-    igiae_JsonSchema_setFix($icon, $rt_s(776));
-    $span = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(777));
+    $id = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(771));
+    igiae_JsonSchema_setPattern($id, $rt_s(708));
+    igiae_JsonSchema_setFix($id, $rt_s(772));
+    $icon = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(773));
+    igiae_JsonSchema_setPattern($icon, $rt_s(774));
+    igiae_JsonSchema_setFix($icon, $rt_s(775));
+    $span = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(449)), $rt_s(776));
     igiae_JsonSchema_setMinimum($span, jl_Integer_valueOf(1));
     igiae_JsonSchema_setMaximum($span, jl_Integer_valueOf(12));
-    igiae_JsonSchema_setFix($span, $rt_s(778));
+    igiae_JsonSchema_setFix($span, $rt_s(777));
     $properties = ju_LinkedHashMap__init_();
     $properties.$put($rt_s(18), $id);
-    $properties.$put($rt_s(23), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(779)));
-    $properties.$put($rt_s(780), igiae_ManifestSchema_component());
-    $properties.$put($rt_s(781), igiae_ManifestSchema_enumerated($rt_s(782), $rt_s(783), $rt_wrapArray(jl_String, [$rt_s(784), $rt_s(785), $rt_s(786)])));
-    $properties.$put($rt_s(787), igiae_ManifestSchema_enumerated($rt_s(788), $rt_s(789), $rt_wrapArray(jl_String, [$rt_s(790), $rt_s(791), $rt_s(792)])));
-    $properties.$put($rt_s(758), igiae_ManifestSchema_uiTone());
-    $properties.$put($rt_s(612), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(793)));
-    $properties.$put($rt_s(731), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(794)));
+    $properties.$put($rt_s(23), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(778)));
+    $properties.$put($rt_s(779), igiae_ManifestSchema_component());
+    $properties.$put($rt_s(780), igiae_ManifestSchema_enumerated($rt_s(781), $rt_s(782), $rt_wrapArray(jl_String, [$rt_s(783), $rt_s(784), $rt_s(785)])));
+    $properties.$put($rt_s(786), igiae_ManifestSchema_enumerated($rt_s(787), $rt_s(788), $rt_wrapArray(jl_String, [$rt_s(789), $rt_s(790), $rt_s(791)])));
+    $properties.$put($rt_s(757), igiae_ManifestSchema_uiTone());
+    $properties.$put($rt_s(611), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(792)));
+    $properties.$put($rt_s(730), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(793)));
     $properties.$put($rt_s(495), $icon);
     $properties.$put($rt_s(32), igiae_ManifestSchema_uiBinding());
-    $properties.$put($rt_s(28), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(795)));
-    $properties.$put($rt_s(30), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(796)));
-    $properties.$put($rt_s(797), igiae_ManifestSchema_enumerated($rt_s(798), $rt_s(799), $rt_wrapArray(jl_String, [$rt_s(800), $rt_s(801), $rt_s(802), $rt_s(803)])));
-    $properties.$put($rt_s(804), $span);
-    $node = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(805));
+    $properties.$put($rt_s(28), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(794)));
+    $properties.$put($rt_s(30), igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(307)), $rt_s(795)));
+    $properties.$put($rt_s(796), igiae_ManifestSchema_enumerated($rt_s(797), $rt_s(798), $rt_wrapArray(jl_String, [$rt_s(799), $rt_s(800), $rt_s(801), $rt_s(802)])));
+    $properties.$put($rt_s(803), $span);
+    $node = igiae_ManifestSchema_described(igiae_JsonSchema_ofType($rt_s(379)), $rt_s(804));
     igiae_JsonSchema_setProperties($node, $properties);
-    igiae_JsonSchema_setRequired($node, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(780)])));
-    igiae_JsonSchema_setFix($node, $rt_s(806));
+    igiae_JsonSchema_setRequired($node, ju_Arrays_asList($rt_wrapArray(jl_String, [$rt_s(18), $rt_s(779)])));
+    igiae_JsonSchema_setFix($node, $rt_s(805));
     return $node;
 },
 igiae_ManifestSchema_component = () => {
-    return igiae_ManifestSchema_enumerated($rt_s(807), $rt_s(808), $rt_wrapArray(jl_String, [$rt_s(809), $rt_s(810), $rt_s(811), $rt_s(812), $rt_s(813), $rt_s(814), $rt_s(815), $rt_s(731), $rt_s(736), $rt_s(816), $rt_s(817), $rt_s(54), $rt_s(797), $rt_s(818), $rt_s(819), $rt_s(820), $rt_s(821), $rt_s(495), $rt_s(30), $rt_s(822), $rt_s(823), $rt_s(824), $rt_s(825), $rt_s(826), $rt_s(827), $rt_s(828), $rt_s(829), $rt_s(830), $rt_s(831), $rt_s(832)]));
+    return igiae_ManifestSchema_enumerated($rt_s(806), $rt_s(807), $rt_wrapArray(jl_String, [$rt_s(808), $rt_s(809), $rt_s(810), $rt_s(811), $rt_s(812), $rt_s(813), $rt_s(814), $rt_s(730), $rt_s(735), $rt_s(815), $rt_s(816), $rt_s(54), $rt_s(796), $rt_s(817), $rt_s(818), $rt_s(819), $rt_s(820), $rt_s(495), $rt_s(30), $rt_s(821), $rt_s(822), $rt_s(823), $rt_s(824), $rt_s(825), $rt_s(826), $rt_s(827), $rt_s(828), $rt_s(829), $rt_s(830), $rt_s(831)]));
 },
 igiae_ManifestSchema_described = ($schema, $description) => {
     igiae_JsonSchema_setDescription($schema, $description);
@@ -19852,37 +19852,37 @@ $rt_stringPool(["String is null", "String is empty", "String contains invalid di
 "PreviousMatch", "NonCapFSet", "Either src or dest is null", "timeoutMs", "is built for ", ", and this host hosts ", "install it in ", ", or add \"", "\" to \"targets\" in plugin.json", "needs api ", ", this host has api ", "update the app to a version that implements api ", " or later", "capabilities declared but never provided: ", "call ctx.provide(\"", "\", ...) in activate, or remove it from \"capabilities\" in plugin.json", "capabilities provided but never declared: ", "add \"", "\" to \"capabilities\" in plugin.json",
 "a late provision of capability", "capability", "provided capability \"", "\" twice", "call ctx.provide once per capability in activate", "ignored ", ", which is no longer running", "a late ", " of service", "reached for service \"", "\", which it binds to ", " but ", " provides", "install ", ", or remove \"provider\" from \"", "\" in services.consumes of its plugin.json", "refused service \"", "\" to ", ", which binds it to ", " while ", " provides it: ", "\", which it does not declare", "\" to services.consumes in its plugin.json",
 ", which does not declare it: ", "want", "watch", "a late registration of service", "a late subscription to topic", "DotAll", "decomposed Hangul syllable:", " (fix: ", ")", "WordBoundary", "array", "integer", "expected ", ", got ", "set ", " to ", " or ", "another shape", "a ", "an ", " is not one of ", " to one of ", "required field \"", "\" is missing", "expected at least ", " items, got ", "give ", " at least ", " items", " characters, got ", " characters", "\" does not match ", "make ", " match ", "\" is not one of ",
-"expected a value >= ", " to a value >= ", "expected a value <= ", " to a value <= ", " to a ", "<SOL>", "<Unix MultiLine $>", "Name capturing group should start with letter", "Is", "In", "Pointer at the published manifest schema, for an editor\'s completion and validation.", "The name other plugins import this plugin by. It is fixed by the plugin, and its identity as a repository is supplied from outside the manifest.", "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?![\\s\\S]))[a-z0-9]+([-.][a-z0-9]+)*(?![\\s\\S])",
-"use lowercase words joined by single hyphens or dots, for example \"config-ledger\" or \"api.http\", and not a Windows reserved name (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)", "The lowest API major version this plugin needs. A floor, not a build tag.", "set \"api\" to the lowest API major version this plugin needs, for example 1", "The built module a host imports. Required once capabilities are declared.", "^(?![\\\\/])(?![A-Za-z]:)(?![\\s\\S]*[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029])(?!(?:[\\s\\S]*[\\\\/])?\\.\\.(?:[\\\\/]|(?![\\s\\S])))",
+"expected a value >= ", " to a value >= ", "expected a value <= ", " to a value <= ", " to a ", "<SOL>", "<Unix MultiLine $>", "Name capturing group should start with letter", "Is", "In", "Pointer at the published manifest schema, for an editor\'s completion and validation.", "The name other plugins import this plugin by. It is fixed by the plugin, and its identity as a repository is supplied from outside the manifest.", "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:[\\.]|(?![\\s\\S])))[a-z0-9]+([-.][a-z0-9]+)*(?![\\s\\S])",
+"use lowercase words joined by single hyphens or dots, for example \"config-ledger\" or \"api.http\", and not a Windows reserved name, with or without a dot after it (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)", "The lowest API major version this plugin needs. A floor, not a build tag.", "set \"api\" to the lowest API major version this plugin needs, for example 1", "The built module a host imports. Required once capabilities are declared.", "^(?![\\\\/])(?![A-Za-z]:)(?![\\s\\S]*[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029])(?!(?:[\\s\\S]*[\\\\/])?\\.\\.(?:[\\\\/]|(?![\\s\\S])))",
 "point \"entry\" at the built module a host imports, inside the repo, for example \"dist/index.js\", with no leading slash, drive letter, control character or ..", "entry", "displayName", "The name a surface shows instead of the id.", "icon", "Path to a square-viewBox SVG mark, relative to the repo root.", "Further marks this repo ships, each keyed by the id of the thing it belongs to.", "icons", "Host-facing abilities this plugin provides at activation.", "list capability ids as strings, for example [\"provider\", \"screens\"]",
 "The spisor applications this artifact is for. Absent means every application.", "list the application ids this is built for, for example [\"forebay\"], or remove \"targets\" to mean every application", "kind", "installMethod", "packages", "pathCommands", "methods", "commands", "config", "data", "Declared permissions, surfaced at install and in dashboards.", "lifecycle", "publish", "repo", "marketplace", "The single machine-readable description of a plugin, whichever application it targets.", "http://json-schema.org/draft-07/schema#",
 "https://weivel.github.io/model/plugin.schema.json", "weivel plugin manifest", "capabilities are declared, so add \"entry\" naming the module that provides them, for example \"dist/index.js\"", "Service ids this plugin registers, each namespaced by its own id or a well-known bare id.", "write the service id as a string, for example \"identity:accounts\", or an object carrying \"id\" and \"attributes\"", "list service ids as strings, for example [\"identity:accounts\"], or objects carrying \"id\" and \"attributes\"",
 "Service ids this plugin asks for. A bare string asks for it optionally, which is what every manifest written before this object form meant.", "write the service id as a string, for example \"accounts\", or an object carrying \"id\" and what its absence costs", "list service ids as strings, for example [\"accounts\"], or objects carrying \"id\" and what its absence costs", "The inter-plugin contract: what this plugin offers other plugins, and what it asks of them.", "The service id this plugin registers.", "attributes",
-"What this service claims, keyed by attribute name, until the live service reports its own.", "One advertised value, in the units its attribute name names.", "One service this plugin registers, with what it advertises.", "The service id this plugin asks for.", "The repository identity of the plugin this plugin takes the service from. Absent means any provider of the service id.", "^(local:[^/\\s]+|[a-z][a-z0-9-]*(@[a-z0-9.-]+)?:[0-9]+)(/[a-z0-9._-]+)*$", "write the provider as a repository id, for example \"github:123\" or \"gitea@git.example.com:12/runtime\"",
-"Whether this plugin still starts when nothing provides the service. Absent means true, which is what a bare string means.", "Whether this plugin accepts a service that never satisfies its constraints once the budget is spent. Absent means false, and it never excuses an absence.", "What this plugin needs of the service, keyed by constraint name, compared against what the service advertises.", "One required value, in the units its constraint name names.", "One service this plugin asks for, and what its absence or its shortfall costs.",
-"What this manifest describes. Absent means a plugin; a loader is a host.", "plugin", "set \"kind\" to \"plugin\" or \"host\", or remove it to mean a plugin", "The install method this listing is a provider for, for example npm. Absent means it provides none.", "set \"installMethod\" to the id of the package manager this listing provides, for example \"npm\"", "name", "The package name under this method.", "options", "Method-specific options, which only that method\'s provider reads.", "A package name with the options its method takes, for example a registry or a tap.",
-"The package name under one method, or the name with that method\'s options.", "write the package as a name string, for example \"@scope/tool\", or an object carrying \"name\" and optionally \"options\"", "The package this item is under each install method, keyed by method id.", "map each install method id to a package name string, or to an object carrying \"name\" and optionally \"options\", for example {\"npm\": \"@scope/tool\"}", "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?![\\s\\S])", "name each command as one portable file name: a letter or digit, then letters, digits, \".\", \"_\" or \"-\", at most 64 characters",
-"The command names this host asks for, which a name already held may turn into a fallback.", "How many of its commands this host must keep: 1 means it cannot be left with none, 0 means it can. Absent means 0.", "set \"minimum\" to 0 when the host works without a command on PATH, or 1 when it needs one", "requested", "The executables this host puts on the user\'s PATH, not the in-application slash commands, which are \"commands\".", "declare the PATH commands as {\"requested\": [\"name\"], \"minimum\": 0 or 1}; slash commands go in \"commands\" instead",
-"The install methods this listing supports, by method id.", "list install method ids as strings, for example [\"npm\", \"homebrew\"]", "The command\'s name, which is also the file it is written to.", "What a command picker shows beside the name.", "argumentHint", "The argument shape a picker hints at, such as \"list | get <key>\".", "body", "Markdown the model is shown, after any shell output.", "shell", "A shell line run before the body, which may use $ARGUMENTS and {{BUNDLE}}.", "One slash command this plugin contributes.",
-"Slash commands this plugin contributes, which a host deploys without importing it.", "Paths this plugin writes to, relative to the home it runs in.", "paths", "Where this plugin keeps state that is not named after it.", "The file these settings live in, config/<name>.json, when that is not the plugin\'s id.", "defaults", "Every setting this plugin has, and what it is worth until a home changes it.", "This plugin\'s settings as it ships them.", "install", "The entry exports install(ctx), run once after first deploy.",
-"repair", "The entry exports repair(ctx), run on demand from a host.", "Which optional lifecycle hooks the entry module exports.", "scopedOnly", "Publish only as @intisy-ai/<name>, because the unscoped name is unavailable.", "The Gradle modules whose jars ship as release assets, each named by its own classifier.", "jarModule", "generatedReadme", "The README is rendered at build time, so the release promotes it rather than testing it.", "jarPretest", "Run the Gradle build before the tests, because a test needs its jar installed first.",
-"How the repo is published, to npm and as Java release assets.", "role", "The role phrase, capitalized, without the fixed \"for the forebay AI-proxy ecosystem.\" suffix.", "category", "The single category topic, for example core-library or ai-provider.", "Domain topics, for example claude or gemini.", "domains", "The tech topics, for example typescript, java or svelte.", "tech", "Topics this repo needs that no other rule derives, for example github-actions.", "topics", "Repository metadata: the GitHub description and topic set are derived from it.",
-"Repository topics an entry must carry.", "The catalog kind an entry must be, as the reading host names its kinds.", "Which entries this category holds.", "The category\'s id, unique across every plugin declaring one.", "label", "The name a surface shows. Absent means the id is shown.", "match", "One category a plugin adds to a host\'s catalog of installable things.", "Categories this plugin adds.", "categories", "What this plugin contributes to a host\'s catalog of installable things.", "The app\'s permanent id, for example claude or opencode.",
-"Path to a square-viewBox SVG mark for the app, relative to the repo root.", "home", "detect", "loader", "commandsSubdir", "The subdirectory inside the app home holding its slash commands.", "proxyPort", "The port this app\'s proxy listens on, or 0 when it needs none.", "How this app reaches the local API.", "env-baseurl", "native", "set \"integration\" to \"env-baseurl\" when the app is pointed at the proxy by an environment variable, or \"native\" when it loads the plugin itself", "integration", "wireFormat",
-"The wire format this app speaks, for example anthropic.", "usage", "accent", "Accent colour for this app\'s surfaces, as a #rrggbb hex string.", "wrapperCommand", "The command a user types to launch this app through its loader\'s wrapper.", "npmPlugins", "startupHook", "discovery", "projects", "modelCatalog", "The app this repo is the loader for, declared by the app\'s own project.", "envOverride", "Environment variable that overrides every candidate, set by a host driving this app.", "nativeEnv", "The app\'s OWN environment variable for its config directory, which it reads itself.",
-"xdgSubdir", "Subdirectory under the XDG config directory, when the app follows that layout.", "Paths to try in order, each with a leading ~ for the user home.", "candidates", "Where this app keeps its home directory, in the order a resolver tries.", "binary", "The executable a user launches, looked up on the path.", "pkg", "The npm package the app ships as, for a global-install check.", "How to tell whether this app is installed.", "The loader plugin\'s id.", "url", "Where the loader is cloned from, as owner/repo or a full URL.",
-"The plugin this app is reached through. Absent means the app has no loader.", "repos", "Where plugin checkouts live.", "Where deployed plugin bundles and their manifest sidecars live.", "cache", "Where cached downloads live.", "Where configuration files live.", "The names of the storage subdirectories inside this app\'s home.", "Format ids, each of which a consumer maps to a parser of its own.", "formats", "Session-storage formats this app writes, for usage readers.", "Config files to look in, in order, for the plugin list.",
-"configFiles", "pluginsKey", "The key inside those files holding the plugin list.", "packageCache", "Where the app caches the packages it installed.", "schemaUrl", "The app\'s config schema, for an editor\'s completion.", "This app\'s own npm-plugin mechanism. Absent means it has none.", "file", "The file to write, relative to the app home.", "The key path to the array the entry joins.", "path", "A JSON template whose strings have the {plugin} placeholder replaced with the plugin\'s name.", "How this app runs a plugin at startup when it has no npm-plugin list of its own.",
-"topic", "The repository topic a community plugin carries.", "searchQuery", "A free-text search to run where the topic alone under-reports.", "awesomeList", "A curated list to read, as a raw URL.", "Where a marketplace looks for this app\'s community plugins.", "historyFile", "A history file inside the app home.", "Session databases to try in order, absolute or relative to the app home.", "sessionDb", "markerFile", "The file the app writes inside a project\'s git directory to record the project id.", "Where this app records the projects a user has worked in.",
-"Files to try in order, relative to the app home.", "files", "Environment variable naming the config file outright.", "providerKey", "The key inside that file holding the catalog, named after the app\'s own config key.", "The app config file a model catalog is merged into.", "^[a-z][A-Za-z0-9]*(?![\\s\\S])", "A semantic colour role; a host maps it to its own palette.", "set the tone to one of neutral, accent, success, warning or danger; a raw colour is not accepted", "neutral", "success", "warning", "danger",
-"The service method to call.", "start a method name with a lowercase letter, then letters and digits only, for example \"read\"", "The id of a service this plugin provides.", "method", "argument", "The argument sent with the call.", "A call into one of this plugin\'s own services.", "write the binding as {\"service\": \"<id>\", \"method\": \"<name>\"}, optionally with an \"argument\" object", "Settings this plugin lets a user change, keyed by setting key.", "start a setting key with a lowercase letter, then letters and digits only, for example \"retryLimit\"",
-"map each setting key to an object carrying \"type\" and \"label\"", "The values a choice or multi-choice setting offers.", "list the allowed values as strings, for example [\"fast\", \"safe\"]", "How a host edits the value.", "set the type to one of text, secret, number, toggle, choice, multi-choice, path, list or key-value", "text", "secret", "toggle", "choice", "multi-choice", "list", "key-value", "The text a host shows beside the control.", "help", "A sentence a host shows under the control.", "default",
-"The value in force until a user changes it.", "layer", "Whether the value travels with the user (portable) or stays with this installation (application). Absent means portable.", "set the layer to portable or application", "application", "choices", "The lowest value a number setting accepts.", "The highest value a number setting accepts.", "A regular expression a text value must match.", "One setting: its type, its label and the limits a host enforces.", "write the setting as an object carrying \"type\" and \"label\"",
-"a choice or multi-choice setting needs \"choices\", for example [\"fast\", \"safe\"]", "The text a host shows on the control.", "confirm", "A question a host asks before running the action. Absent means it runs at once.", "input", "tone", "One action: what a host labels it and which service method it calls.", "write the action as an object carrying \"label\" and \"call\", for example {\"label\": \"Refresh\", \"call\": {\"service\": \"demo:screens\", \"method\": \"refresh\"}}", "Operations a host offers the user for this plugin, each a call into one of its own services.",
-"start an action id with a lowercase letter, then letters and digits only, for example \"refresh\"", "map each action id to an object carrying \"label\" and \"call\"", "The view\'s nodes as a flat list; a node\'s \"parent\" names the node it sits under, which must come earlier in the list.", "list at least one node, each an object carrying \"id\" and \"component\"", "The name a host shows for the view.", "One view: a title and the nodes that make it up.", "write the view as an object carrying \"title\" and a non-empty \"nodes\" list",
-"Screens a host draws for this plugin, each a flat list of nodes that name their parent.", "start a view id with a lowercase letter, then letters and digits only, for example \"screens\"", "map each view id to an object carrying \"title\" and \"nodes\"", "The node\'s identity within its view.", "start a node id with a lowercase letter, then letters and digits only, for example \"mainTable\"", "The name of a host icon.", "^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])", "name the icon in lowercase words joined by single hyphens, for example \"arrow-right\"",
-"How many of a grid\'s twelve columns the node takes.", "set the span to a whole number from 1 to 12", "The id of the node this one sits under. Absent means the view\'s root.", "component", "size", "The node\'s size as a role.", "set the size to small, medium or large; a pixel value is not accepted", "small", "medium", "large", "emphasis", "How much attention the node asks for.", "set the emphasis to low, normal or high", "low", "normal", "high", "Text a host shows as the node\'s heading or caption.", "The node\'s own text.",
-"The id of one of this plugin\'s actions the node runs.", "The key of one of this plugin\'s settings the node edits.", "chart", "The chart form of a chart node.", "set the chart to line, bar, sparkline or meter", "line", "bar", "sparkline", "meter", "span", "One element of a view. It names what it is and how it looks as roles, never as raw colours or sizes.", "write the node as an object carrying \"id\" and \"component\"", "What the node is.", "set the component to one of stack, grid, split, tabs, section, card, divider, text, list, table, tree, detail, chart, log, code, diff, badge, icon, field, search, form, button, dialog, toast, progress, spinner, empty, loading, error or unavailable",
+"What this service claims, keyed by attribute name, until the live service reports its own.", "One advertised value, in the units its attribute name names.", "One service this plugin registers, with what it advertises.", "The service id this plugin asks for.", "The repository identity of the plugin this plugin takes the service from. Absent means any provider of the service id.", "write the provider as a repository id, for example \"github:123\" or \"gitea@git.example.com:12/runtime\"", "Whether this plugin still starts when nothing provides the service. Absent means true, which is what a bare string means.",
+"Whether this plugin accepts a service that never satisfies its constraints once the budget is spent. Absent means false, and it never excuses an absence.", "What this plugin needs of the service, keyed by constraint name, compared against what the service advertises.", "One required value, in the units its constraint name names.", "One service this plugin asks for, and what its absence or its shortfall costs.", "What this manifest describes. Absent means a plugin; a loader is a host.", "plugin", "set \"kind\" to \"plugin\" or \"host\", or remove it to mean a plugin",
+"The install method this listing is a provider for, for example npm. Absent means it provides none.", "set \"installMethod\" to the id of the package manager this listing provides, for example \"npm\"", "name", "The package name under this method.", "options", "Method-specific options, which only that method\'s provider reads.", "A package name with the options its method takes, for example a registry or a tap.", "The package name under one method, or the name with that method\'s options.", "write the package as a name string, for example \"@scope/tool\", or an object carrying \"name\" and optionally \"options\"",
+"The package this item is under each install method, keyed by method id.", "map each install method id to a package name string, or to an object carrying \"name\" and optionally \"options\", for example {\"npm\": \"@scope/tool\"}", "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?![\\s\\S])", "name each command as one portable file name: a letter or digit, then letters, digits, \".\", \"_\" or \"-\", at most 64 characters", "The command names this host asks for, which a name already held may turn into a fallback.", "How many of its commands this host must keep: 1 means it cannot be left with none, 0 means it can. Absent means 0.",
+"set \"minimum\" to 0 when the host works without a command on PATH, or 1 when it needs one", "requested", "The executables this host puts on the user\'s PATH, not the in-application slash commands, which are \"commands\".", "declare the PATH commands as {\"requested\": [\"name\"], \"minimum\": 0 or 1}; slash commands go in \"commands\" instead", "The install methods this listing supports, by method id.", "list install method ids as strings, for example [\"npm\", \"homebrew\"]", "The command\'s name, which is also the file it is written to.",
+"What a command picker shows beside the name.", "argumentHint", "The argument shape a picker hints at, such as \"list | get <key>\".", "body", "Markdown the model is shown, after any shell output.", "shell", "A shell line run before the body, which may use $ARGUMENTS and {{BUNDLE}}.", "One slash command this plugin contributes.", "Slash commands this plugin contributes, which a host deploys without importing it.", "Paths this plugin writes to, relative to the home it runs in.", "paths", "Where this plugin keeps state that is not named after it.",
+"The file these settings live in, config/<name>.json, when that is not the plugin\'s id.", "defaults", "Every setting this plugin has, and what it is worth until a home changes it.", "This plugin\'s settings as it ships them.", "install", "The entry exports install(ctx), run once after first deploy.", "repair", "The entry exports repair(ctx), run on demand from a host.", "Which optional lifecycle hooks the entry module exports.", "scopedOnly", "Publish only as @intisy-ai/<name>, because the unscoped name is unavailable.",
+"The Gradle modules whose jars ship as release assets, each named by its own classifier.", "jarModule", "generatedReadme", "The README is rendered at build time, so the release promotes it rather than testing it.", "jarPretest", "Run the Gradle build before the tests, because a test needs its jar installed first.", "How the repo is published, to npm and as Java release assets.", "role", "The role phrase, capitalized, without the fixed \"for the forebay AI-proxy ecosystem.\" suffix.", "category", "The single category topic, for example core-library or ai-provider.",
+"Domain topics, for example claude or gemini.", "domains", "The tech topics, for example typescript, java or svelte.", "tech", "Topics this repo needs that no other rule derives, for example github-actions.", "topics", "Repository metadata: the GitHub description and topic set are derived from it.", "Repository topics an entry must carry.", "The catalog kind an entry must be, as the reading host names its kinds.", "Which entries this category holds.", "The category\'s id, unique across every plugin declaring one.",
+"label", "The name a surface shows. Absent means the id is shown.", "match", "One category a plugin adds to a host\'s catalog of installable things.", "Categories this plugin adds.", "categories", "What this plugin contributes to a host\'s catalog of installable things.", "The app\'s permanent id, for example claude or opencode.", "Path to a square-viewBox SVG mark for the app, relative to the repo root.", "home", "detect", "loader", "commandsSubdir", "The subdirectory inside the app home holding its slash commands.",
+"proxyPort", "The port this app\'s proxy listens on, or 0 when it needs none.", "How this app reaches the local API.", "env-baseurl", "native", "set \"integration\" to \"env-baseurl\" when the app is pointed at the proxy by an environment variable, or \"native\" when it loads the plugin itself", "integration", "wireFormat", "The wire format this app speaks, for example anthropic.", "usage", "accent", "Accent colour for this app\'s surfaces, as a #rrggbb hex string.", "wrapperCommand", "The command a user types to launch this app through its loader\'s wrapper.",
+"npmPlugins", "startupHook", "discovery", "projects", "modelCatalog", "The app this repo is the loader for, declared by the app\'s own project.", "envOverride", "Environment variable that overrides every candidate, set by a host driving this app.", "nativeEnv", "The app\'s OWN environment variable for its config directory, which it reads itself.", "xdgSubdir", "Subdirectory under the XDG config directory, when the app follows that layout.", "Paths to try in order, each with a leading ~ for the user home.", "candidates",
+"Where this app keeps its home directory, in the order a resolver tries.", "binary", "The executable a user launches, looked up on the path.", "pkg", "The npm package the app ships as, for a global-install check.", "How to tell whether this app is installed.", "The loader plugin\'s id.", "url", "Where the loader is cloned from, as owner/repo or a full URL.", "The plugin this app is reached through. Absent means the app has no loader.", "repos", "Where plugin checkouts live.", "Where deployed plugin bundles and their manifest sidecars live.",
+"cache", "Where cached downloads live.", "Where configuration files live.", "The names of the storage subdirectories inside this app\'s home.", "Format ids, each of which a consumer maps to a parser of its own.", "formats", "Session-storage formats this app writes, for usage readers.", "Config files to look in, in order, for the plugin list.", "configFiles", "pluginsKey", "The key inside those files holding the plugin list.", "packageCache", "Where the app caches the packages it installed.", "schemaUrl", "The app\'s config schema, for an editor\'s completion.",
+"This app\'s own npm-plugin mechanism. Absent means it has none.", "file", "The file to write, relative to the app home.", "The key path to the array the entry joins.", "path", "A JSON template whose strings have the {plugin} placeholder replaced with the plugin\'s name.", "How this app runs a plugin at startup when it has no npm-plugin list of its own.", "topic", "The repository topic a community plugin carries.", "searchQuery", "A free-text search to run where the topic alone under-reports.", "awesomeList",
+"A curated list to read, as a raw URL.", "Where a marketplace looks for this app\'s community plugins.", "historyFile", "A history file inside the app home.", "Session databases to try in order, absolute or relative to the app home.", "sessionDb", "markerFile", "The file the app writes inside a project\'s git directory to record the project id.", "Where this app records the projects a user has worked in.", "Files to try in order, relative to the app home.", "files", "Environment variable naming the config file outright.",
+"providerKey", "The key inside that file holding the catalog, named after the app\'s own config key.", "The app config file a model catalog is merged into.", "^[a-z][A-Za-z0-9]*(?![\\s\\S])", "A semantic colour role; a host maps it to its own palette.", "set the tone to one of neutral, accent, success, warning or danger; a raw colour is not accepted", "neutral", "success", "warning", "danger", "The service method to call.", "start a method name with a lowercase letter, then letters and digits only, for example \"read\"",
+"The id of a service this plugin provides.", "method", "argument", "The argument sent with the call.", "A call into one of this plugin\'s own services.", "write the binding as {\"service\": \"<id>\", \"method\": \"<name>\"}, optionally with an \"argument\" object", "Settings this plugin lets a user change, keyed by setting key.", "start a setting key with a lowercase letter, then letters and digits only, for example \"retryLimit\"", "map each setting key to an object carrying \"type\" and \"label\"", "The values a choice or multi-choice setting offers.",
+"list the allowed values as strings, for example [\"fast\", \"safe\"]", "How a host edits the value.", "set the type to one of text, secret, number, toggle, choice, multi-choice, path, list or key-value", "text", "secret", "toggle", "choice", "multi-choice", "list", "key-value", "The text a host shows beside the control.", "help", "A sentence a host shows under the control.", "default", "The value in force until a user changes it.", "layer", "Whether the value travels with the user (portable) or stays with this installation (application). Absent means portable.",
+"set the layer to portable or application", "application", "choices", "The lowest value a number setting accepts.", "The highest value a number setting accepts.", "A regular expression a text value must match.", "One setting: its type, its label and the limits a host enforces.", "write the setting as an object carrying \"type\" and \"label\"", "a choice or multi-choice setting needs \"choices\", for example [\"fast\", \"safe\"]", "The text a host shows on the control.", "confirm", "A question a host asks before running the action. Absent means it runs at once.",
+"input", "tone", "One action: what a host labels it and which service method it calls.", "write the action as an object carrying \"label\" and \"call\", for example {\"label\": \"Refresh\", \"call\": {\"service\": \"demo:screens\", \"method\": \"refresh\"}}", "Operations a host offers the user for this plugin, each a call into one of its own services.", "start an action id with a lowercase letter, then letters and digits only, for example \"refresh\"", "map each action id to an object carrying \"label\" and \"call\"",
+"The view\'s nodes as a flat list; a node\'s \"parent\" names the node it sits under, which must come earlier in the list.", "list at least one node, each an object carrying \"id\" and \"component\"", "The name a host shows for the view.", "One view: a title and the nodes that make it up.", "write the view as an object carrying \"title\" and a non-empty \"nodes\" list", "Screens a host draws for this plugin, each a flat list of nodes that name their parent.", "start a view id with a lowercase letter, then letters and digits only, for example \"screens\"",
+"map each view id to an object carrying \"title\" and \"nodes\"", "The node\'s identity within its view.", "start a node id with a lowercase letter, then letters and digits only, for example \"mainTable\"", "The name of a host icon.", "^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])", "name the icon in lowercase words joined by single hyphens, for example \"arrow-right\"", "How many of a grid\'s twelve columns the node takes.", "set the span to a whole number from 1 to 12", "The id of the node this one sits under. Absent means the view\'s root.",
+"component", "size", "The node\'s size as a role.", "set the size to small, medium or large; a pixel value is not accepted", "small", "medium", "large", "emphasis", "How much attention the node asks for.", "set the emphasis to low, normal or high", "low", "normal", "high", "Text a host shows as the node\'s heading or caption.", "The node\'s own text.", "The id of one of this plugin\'s actions the node runs.", "The key of one of this plugin\'s settings the node edits.", "chart", "The chart form of a chart node.",
+"set the chart to line, bar, sparkline or meter", "line", "bar", "sparkline", "meter", "span", "One element of a view. It names what it is and how it looks as roles, never as raw colours or sizes.", "write the node as an object carrying \"id\" and \"component\"", "What the node is.", "set the component to one of stack, grid, split, tabs, section, card, divider, text, list, table, tree, detail, chart, log, code, diff, badge, icon, field, search, form, button, dialog, toast, progress, spinner, empty, loading, error or unavailable",
 "stack", "grid", "split", "tabs", "section", "card", "divider", "table", "tree", "log", "code", "diff", "badge", "search", "form", "button", "dialog", "toast", "progress", "spinner", "empty", "loading", "error", "unavailable"]);
 jl_String.prototype.toString = function() {
     return $rt_ustr(this);

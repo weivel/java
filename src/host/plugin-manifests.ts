@@ -7,8 +7,13 @@ import type { PluginManifest } from "../../generated/api.js";
 /** Deploy writes this beside the bundles so Node parses the whole directory as ESM, which is why the name can never be a plugin id. */
 const ESM_MARKER_FILE = "package.json";
 
-/** Deploy writes who a plugin is beside its sidecar, as `<importName>.identity.json`. */
-const IDENTITY_SUFFIX = ".identity.json";
+/**
+ * Deploy writes who a plugin is beside its sidecar, as `<importName>_identity.json`.
+ *
+ * @implNote An import name never holds an underscore, so no plugin's own sidecar can land on
+ * another plugin's identity path; a dot suffix would let `calendar.identity` do exactly that.
+ */
+const IDENTITY_SUFFIX = "_identity.json";
 
 /** A plugin.json as its repository wrote it, before the repository's identity is applied. */
 type SourceManifest = Omit<PluginManifest, "id" | "name">;
@@ -90,7 +95,15 @@ function identityRefusal(filename: string, identityPath: string, problem: string
   return pluginError(
     filename,
     `${identityPath}: ${problem}`,
-    `redeploy the plugin so ${filename}.identity.json holds { "id": "<forge>:<repository id>", "name": "<repository name>" }`
+    `redeploy the plugin so ${filename}${IDENTITY_SUFFIX} holds { "id": "<forge>:<repository id>", "name": "<repository name>" }`
+  );
+}
+
+function repeatedIdRefusal(item: PendingSidecar, id: string, firstPath: string): PluginErrorShape {
+  return pluginError(
+    item.filename,
+    `${item.manifestPath}: identity id "${id}" is already held by ${firstPath}`,
+    "redeploy one of the two plugins from its own repository so the two identity files hold different ids"
   );
 }
 
@@ -142,7 +155,7 @@ function mismatchRefusal(item: PendingSidecar, pending: readonly PendingSidecar[
  * Deploy writes the manifest beside the bundle, so identity and capability questions are answered
  * from disk without importing anything. One unreadable sidecar becomes one entry in `failed` and
  * never discards the rest of the home, because a host that hides every plugin behind one bad file
- * is a host nobody can diagnose. A plugin's identity comes from `<importName>.identity.json`
+ * is a host nobody can diagnose. A plugin's identity comes from `<importName>_identity.json`
  * beside its sidecar, or is local when there is none; the manifest never supplies its own.
  *
  * @param pluginDir - the home's plugin directory, normally `<home>/plugin`
@@ -182,6 +195,8 @@ export function readDeployedManifests(pluginDir: string, wellKnownServices?: Rea
     }
   }
 
+  pending.sort((left, right) => (left.filename < right.filename ? -1 : left.filename > right.filename ? 1 : 0));
+  const claimedIds = new Map<string, string>();
   for (const item of pending) {
     if (item.source.importName !== item.filename) {
       failed.push(mismatchRefusal(item, pending));
@@ -192,6 +207,13 @@ export function readDeployedManifests(pluginDir: string, wellKnownServices?: Rea
       failed.push(identity as PluginErrorShape);
       continue;
     }
+    const claimedId = (identity as Identity).id;
+    const firstClaimant = claimedIds.get(claimedId);
+    if (firstClaimant !== undefined) {
+      failed.push(repeatedIdRefusal(item, claimedId, firstClaimant));
+      continue;
+    }
+    claimedIds.set(claimedId, item.manifestPath);
     const manifest = resolveManifest(item.source, identity as Identity);
     loaded.push({ manifest, manifestPath: item.manifestPath, entryPath: entryFor(pluginDir, manifest) });
   }

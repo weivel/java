@@ -155,7 +155,7 @@ describe("readDeployedManifests", () => {
   it("loads with the identity file's id", () => {
     const dir = home();
     write(dir, "calendar", { importName: "calendar", api: 1, entry: "dist/index.js", capabilities: [] });
-    writeFileSync(join(dir, "calendar.identity.json"), JSON.stringify({ id: "github:42", name: "calendar-repo" }), "utf-8");
+    writeFileSync(join(dir, "calendar_identity.json"), JSON.stringify({ id: "github:42", name: "calendar-repo" }), "utf-8");
     const scan = readDeployedManifests(dir);
     expect(scan.failed).toEqual([]);
     expect(scan.loaded.map((plugin) => [plugin.manifest.id, plugin.manifest.name, plugin.manifest.importName])).toEqual([["github:42", "calendar-repo", "calendar"]]);
@@ -178,7 +178,7 @@ describe("readDeployedManifests", () => {
   it("refuses a malformed identity file with a fix, and does not load the plugin as local", () => {
     const dir = home();
     write(dir, "calendar", { importName: "calendar", api: 1, entry: "dist/index.js", capabilities: [] });
-    const identityPath = join(dir, "calendar.identity.json");
+    const identityPath = join(dir, "calendar_identity.json");
     writeFileSync(identityPath, "{not json", "utf-8");
     const scan = readDeployedManifests(dir);
     expect(scan.loaded).toEqual([]);
@@ -191,7 +191,7 @@ describe("readDeployedManifests", () => {
   it("refuses an identity file missing its name", () => {
     const dir = home();
     write(dir, "calendar", { importName: "calendar", api: 1, entry: "dist/index.js", capabilities: [] });
-    writeFileSync(join(dir, "calendar.identity.json"), JSON.stringify({ id: "github:1" }), "utf-8");
+    writeFileSync(join(dir, "calendar_identity.json"), JSON.stringify({ id: "github:1" }), "utf-8");
     const scan = readDeployedManifests(dir);
     expect(scan.loaded).toEqual([]);
     expect(scan.failed[0].detail).toContain("name");
@@ -200,7 +200,7 @@ describe("readDeployedManifests", () => {
   it("refuses an identity id outside the grammar", () => {
     const dir = home();
     write(dir, "calendar", { importName: "calendar", api: 1, entry: "dist/index.js", capabilities: [] });
-    writeFileSync(join(dir, "calendar.identity.json"), JSON.stringify({ id: "Calendar", name: "calendar" }), "utf-8");
+    writeFileSync(join(dir, "calendar_identity.json"), JSON.stringify({ id: "Calendar", name: "calendar" }), "utf-8");
     const scan = readDeployedManifests(dir);
     expect(scan.loaded).toEqual([]);
     expect(scan.failed).toHaveLength(1);
@@ -210,7 +210,7 @@ describe("readDeployedManifests", () => {
   it("names the deployed file by import name even when the id has a colon", () => {
     const dir = home();
     write(dir, "calendar", { importName: "calendar", api: 1, entry: "dist/index.js", capabilities: [] });
-    writeFileSync(join(dir, "calendar.identity.json"), JSON.stringify({ id: "github:7/sub", name: "calendar" }), "utf-8");
+    writeFileSync(join(dir, "calendar_identity.json"), JSON.stringify({ id: "github:7/sub", name: "calendar" }), "utf-8");
     const [plugin] = readDeployedManifests(dir).loaded;
     expect(plugin.entryPath).toBe(join(dir, "calendar.js"));
   });
@@ -224,5 +224,34 @@ describe("readDeployedManifests", () => {
     expect(scan.failed).toHaveLength(1);
     expect(scan.failed[0].detail).toContain(join(dir, "calendar.json"));
     expect(scan.failed[0].detail).toContain(join(dir, "calendar-copy.json"));
+  });
+
+  it("loads a plugin named x.identity as itself and keeps x local", () => {
+    const dir = home();
+    write(dir, "x", { importName: "x", api: 1, entry: "dist/index.js", capabilities: [] });
+    write(dir, "x.identity", { importName: "x.identity", id: "github:666", name: "stolen", api: 1, entry: "dist/index.js", capabilities: [] });
+    const scan = readDeployedManifests(dir);
+    expect(scan.failed).toEqual([]);
+    expect(scan.loaded.map((plugin) => [plugin.manifest.importName, plugin.manifest.id])).toEqual([
+      ["x", "local:x"],
+      ["x.identity", "local:x.identity"],
+    ]);
+  });
+
+  it("refuses the later of two plugins with one identity id and still loads the rest", () => {
+    const dir = home();
+    for (const importName of ["alpha", "beta", "gamma"]) {
+      write(dir, importName, { importName, api: 1, entry: "dist/index.js", capabilities: [] });
+    }
+    for (const importName of ["alpha", "beta"]) {
+      writeFileSync(join(dir, `${importName}_identity.json`), JSON.stringify({ id: "github:1", name: importName }), "utf-8");
+    }
+    const scan = readDeployedManifests(dir);
+    expect(scan.loaded.map((plugin) => plugin.manifest.importName)).toEqual(["alpha", "gamma"]);
+    expect(scan.failed).toHaveLength(1);
+    expect(scan.failed[0].pluginId).toBe("beta");
+    expect(scan.failed[0].detail).toContain(join(dir, "alpha.json"));
+    expect(scan.failed[0].detail).toContain(join(dir, "beta.json"));
+    expect(scan.failed[0].fix).not.toBe("");
   });
 });

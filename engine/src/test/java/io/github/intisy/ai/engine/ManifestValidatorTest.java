@@ -299,14 +299,14 @@ class ManifestValidatorTest {
 
     @Test
     void refusesAWindowsReservedImportNameButNotAWordThatStartsWithOne() {
-        for (String reserved : Arrays.asList("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9")) {
+        for (String reserved : Arrays.asList("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9", "nul.x", "con.foo", "com1.a")) {
             Map<String, Object> manifest = valid();
             manifest.put("importName", reserved);
             List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
             assertEquals(1, issues.size(), reserved + ": " + issues);
             assertEquals("importName", issues.get(0).getPath());
         }
-        for (String allowed : Arrays.asList("con-tools", "console", "com10")) {
+        for (String allowed : Arrays.asList("con-tools", "console", "com10", "console.foo", "x.nul")) {
             Map<String, Object> manifest = valid();
             manifest.put("importName", allowed);
             assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty(), allowed);
@@ -379,7 +379,7 @@ class ManifestValidatorTest {
 
     @Test
     void refusesAProviderThatIsNotARepositoryIdWithAFix() {
-        for (String provider : Arrays.asList("calendar", "GitHub:1", "github:")) {
+        for (String provider : Arrays.asList("calendar", "GitHub:1", "github:", "github:1\n")) {
             Map<String, Object> bound = requirement("mail:send", null);
             bound.put("provider", provider);
             List<SchemaIssue> issues = ManifestValidator.validate(servicesOf(null, Arrays.asList(bound)), WELL_KNOWN);
