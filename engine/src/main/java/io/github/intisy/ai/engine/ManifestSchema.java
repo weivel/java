@@ -39,8 +39,8 @@ public final class ManifestSchema {
 
         JsonSchema importName = described(JsonSchema.ofType("string"),
                 "The name other plugins import this plugin by. It is fixed by the plugin, and its identity as a repository is supplied from outside the manifest.");
-        importName.setPattern("^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:[\\.]|(?![\\s\\S])))[a-z0-9]+([-.][a-z0-9]+)*(?![\\s\\S])");
-        importName.setFix("use lowercase words joined by single hyphens or dots, for example \"config-ledger\" or \"api.http\", and not a Windows reserved name, with or without a dot after it (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)");
+        importName.setPattern("^(?!package(?![\\s\\S]))(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:[\\.]|(?![\\s\\S])))[a-z0-9]+([-.][a-z0-9]+)*(?![\\s\\S])");
+        importName.setFix("use lowercase words joined by single hyphens or dots, for example \"config-ledger\" or \"api.http\", and not package, which would replace the module marker a deploy writes, nor a Windows reserved name, with or without a dot after it (con, prn, aux, nul, com1 to com9, lpt1 to lpt9)");
         properties.put("importName", importName);
 
         JsonSchema api = described(JsonSchema.ofType("integer"), "The lowest API major version this plugin needs. A floor, not a build tag.");
