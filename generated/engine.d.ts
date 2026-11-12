@@ -291,13 +291,13 @@ export interface HomeDescriptorShape {
 }
 
 /** One plugin was refused a service or a capability it did not declare. */
-export interface ServiceRefusalShape {
+export interface DeclarationRefusalShape {
+  /** The service or capability it reached for without declaring it. */
+  id: string;
   /** What the refused id names: service or capability. */
   kind: string;
   /** The plugin that reached for the id. */
   pluginId: string;
-  /** The service or capability it reached for without declaring it. */
-  serviceId: string;
 }
 
 /** One plugin's implementation of a capability, with the plugin it came from. */
@@ -448,11 +448,11 @@ export interface LedgerFacadeShape {
    */
   recordDeclared(manifest: unknown): void;
   /**
-   * Every service a plugin reached for without declaring it, once per plugin and id.
+   * Every service or capability a plugin reached for without declaring it, once per plugin, kind and id.
    *
    * @returns the refusals in the order first reported, or empty when there were none
    */
-  refusals(): ServiceRefusalShape[];
+  refusals(): DeclarationRefusalShape[];
 }
 
 /** The shape `JsErrors.mint` actually attaches to a marked JavaScript `Error`. */

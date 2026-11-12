@@ -58,9 +58,9 @@ class PluginHostConsumeTest {
 
     private static List<List<String>> capabilityRefusals(PluginHost host) {
         List<List<String>> pairs = new ArrayList<List<String>>();
-        for (ServiceRefusal refusal : host.getLedger().refusals()) {
+        for (DeclarationRefusal refusal : host.getLedger().refusals()) {
             if (refusal.getKind() == DeclarationKind.CAPABILITY) {
-                pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getServiceId()));
+                pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getId()));
             }
         }
         return pairs;
@@ -220,7 +220,7 @@ class PluginHostConsumeTest {
     }
 
     @Test
-    void keepsACapabilityRefusalApartFromAServiceRefusalOfTheSameId() {
+    void keepsACapabilityRefusalApartFromARefusedServiceOfTheSameId() {
         PluginHost host = host();
         PluginSession others = session(host, "others", none(), none());
 

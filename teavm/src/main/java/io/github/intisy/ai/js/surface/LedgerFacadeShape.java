@@ -31,9 +31,9 @@ public interface LedgerFacadeShape {
     void recordDeclared(Object manifest);
 
     /**
-     * Every service a plugin reached for without declaring it, once per plugin and id.
+     * Every service or capability a plugin reached for without declaring it, once per plugin, kind and id.
      *
      * @return the refusals in the order first reported, or empty when there were none
      */
-    List<ServiceRefusalShape> refusals();
+    List<DeclarationRefusalShape> refusals();
 }

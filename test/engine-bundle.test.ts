@@ -320,7 +320,7 @@ it("answers nothing to an undeclared get and records the refusal on the ledger o
   const undeclared = host.contextFor({ id: "notes", api: 1 }, runtime());
   expect(undeclared.services.get("accounts")).toBeUndefined();
   expect(undeclared.services.get("accounts")).toBeUndefined();
-  expect(host.ledger.refusals()).toEqual([{ kind: "service", pluginId: "notes", serviceId: "accounts" }]);
+  expect(host.ledger.refusals()).toEqual([{ kind: "service", pluginId: "notes", id: "accounts" }]);
 });
 
 it("lists every service id currently registered that the plugin may reach", () => {
@@ -420,7 +420,7 @@ it("answers an undeclared capability with nothing and records the refusal by kin
   const host = createPluginHost({ app: "claude", api: 1 });
   const notes = host.contextFor({ id: "notes", api: 1 }, runtime());
   expect(notes.capabilities.all("screens")).toEqual([]);
-  expect(host.ledger.refusals()).toEqual([{ kind: "capability", pluginId: "notes", serviceId: "screens" }]);
+  expect(host.ledger.refusals()).toEqual([{ kind: "capability", pluginId: "notes", id: "screens" }]);
 });
 
 // How a plugin reaches behaviour belonging to a library it may not link: the host links it once and

@@ -15,7 +15,7 @@ import java.util.Map;
 public final class PluginLedger {
 
     private final Map<String, LedgerEntry> entries = new LinkedHashMap<String, LedgerEntry>();
-    private final List<ServiceRefusal> refused = new ArrayList<ServiceRefusal>();
+    private final List<DeclarationRefusal> refused = new ArrayList<DeclarationRefusal>();
 
     /**
      * Every entry, as copies a caller may keep.
@@ -125,12 +125,12 @@ public final class PluginLedger {
     }
 
     private boolean recordRefused(DeclarationKind kind, String pluginId, String id) {
-        for (ServiceRefusal refusal : refused) {
+        for (DeclarationRefusal refusal : refused) {
             if (refusal.concerns(kind, pluginId, id)) {
                 return false;
             }
         }
-        refused.add(new ServiceRefusal(kind, pluginId, id));
+        refused.add(new DeclarationRefusal(kind, pluginId, id));
         return true;
     }
 
@@ -139,8 +139,8 @@ public final class PluginLedger {
      *
      * @return the refusals in the order first reported, or empty when there were none
      */
-    public List<ServiceRefusal> refusals() {
-        return new ArrayList<ServiceRefusal>(refused);
+    public List<DeclarationRefusal> refusals() {
+        return new ArrayList<DeclarationRefusal>(refused);
     }
 
     /**

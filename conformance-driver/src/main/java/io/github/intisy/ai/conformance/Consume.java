@@ -7,7 +7,7 @@ import io.github.intisy.ai.engine.ManifestFacts;
 import io.github.intisy.ai.engine.PluginException;
 import io.github.intisy.ai.engine.PluginHost;
 import io.github.intisy.ai.engine.PluginSession;
-import io.github.intisy.ai.engine.ServiceRefusal;
+import io.github.intisy.ai.engine.DeclarationRefusal;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -154,9 +154,9 @@ final class Consume {
 
     private List<List<String>> reported() {
         List<List<String>> pairs = new ArrayList<List<String>>();
-        for (ServiceRefusal refusal : host.getLedger().refusals()) {
+        for (DeclarationRefusal refusal : host.getLedger().refusals()) {
             if (refusal.getKind() == DeclarationKind.CAPABILITY) {
-                pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getServiceId()));
+                pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getId()));
             }
         }
         return pairs;

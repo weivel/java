@@ -6,7 +6,7 @@ import io.github.intisy.ai.engine.ManifestFacts;
 import io.github.intisy.ai.engine.PluginHost;
 import io.github.intisy.ai.engine.PluginSession;
 import io.github.intisy.ai.engine.ServiceHub;
-import io.github.intisy.ai.engine.ServiceRefusal;
+import io.github.intisy.ai.engine.DeclarationRefusal;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -172,9 +172,9 @@ final class Reach {
     }
 
     private boolean reported(String pluginId, String serviceId) {
-        for (ServiceRefusal refusal : host.getLedger().refusals()) {
+        for (DeclarationRefusal refusal : host.getLedger().refusals()) {
             if (refusal.getKind() == DeclarationKind.SERVICE && refusal.getPluginId().equals(pluginId)
-                && refusal.getServiceId().equals(serviceId)) {
+                && refusal.getId().equals(serviceId)) {
                 return true;
             }
         }
@@ -183,8 +183,8 @@ final class Reach {
 
     private List<List<String>> reported() {
         List<List<String>> pairs = new ArrayList<List<String>>();
-        for (ServiceRefusal refusal : host.getLedger().refusals()) {
-            pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getServiceId()));
+        for (DeclarationRefusal refusal : host.getLedger().refusals()) {
+            pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getId()));
         }
         return pairs;
     }

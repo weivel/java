@@ -6,21 +6,21 @@ package io.github.intisy.ai.engine;
  * @implNote Both kinds share one record so a reader of the refusals sees every reach that was
  * refused in the order reported; the kind keeps a service and a capability that share an id apart.
  */
-public final class ServiceRefusal {
+public final class DeclarationRefusal {
 
     private final DeclarationKind kind;
     private final String pluginId;
-    private final String serviceId;
+    private final String id;
 
     /**
      * @param kind whether the id names a service or a capability
      * @param pluginId the plugin that reached for the id
-     * @param serviceId the service or capability id it reached for without declaring it
+     * @param id the service or capability id it reached for without declaring it
      */
-    public ServiceRefusal(DeclarationKind kind, String pluginId, String serviceId) {
+    public DeclarationRefusal(DeclarationKind kind, String pluginId, String id) {
         this.kind = kind;
         this.pluginId = pluginId;
-        this.serviceId = serviceId;
+        this.id = id;
     }
 
     /** @return whether the refused id names a service or a capability */
@@ -34,11 +34,11 @@ public final class ServiceRefusal {
     }
 
     /** @return the service or capability id it reached for without declaring it */
-    public String getServiceId() {
-        return serviceId;
+    public String getId() {
+        return id;
     }
 
     boolean concerns(DeclarationKind candidateKind, String candidatePlugin, String candidateId) {
-        return kind == candidateKind && pluginId.equals(candidatePlugin) && serviceId.equals(candidateId);
+        return kind == candidateKind && pluginId.equals(candidatePlugin) && id.equals(candidateId);
     }
 }

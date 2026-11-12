@@ -48,8 +48,8 @@ class PluginHostReachTest {
 
     private static List<List<String>> refusals(PluginHost host) {
         List<List<String>> pairs = new ArrayList<List<String>>();
-        for (ServiceRefusal refusal : host.getLedger().refusals()) {
-            pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getServiceId()));
+        for (DeclarationRefusal refusal : host.getLedger().refusals()) {
+            pairs.add(Arrays.asList(refusal.getPluginId(), refusal.getId()));
         }
         return pairs;
     }

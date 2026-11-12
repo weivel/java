@@ -12,7 +12,7 @@ import io.github.intisy.ai.engine.PluginSession;
 import io.github.intisy.ai.engine.PluginStatus;
 import io.github.intisy.ai.engine.Pending;
 import io.github.intisy.ai.engine.Scheduler;
-import io.github.intisy.ai.engine.ServiceRefusal;
+import io.github.intisy.ai.engine.DeclarationRefusal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -196,12 +196,12 @@ final class JsPluginHost implements JSObject {
         EntriesFn refusals = new EntriesFn() {
             @Override
             public JSObject call() {
-                List<ServiceRefusal> refused = host.getLedger().refusals();
+                List<DeclarationRefusal> refused = host.getLedger().refusals();
                 JSArray<JSObject> out = JSArray.create();
                 for (int index = 0; index < refused.size(); index++) {
-                    ServiceRefusal refusal = refused.get(index);
-                    out.set(index, serviceRefusal(refusalKind(refusal.getKind()), refusal.getPluginId(),
-                            refusal.getServiceId()));
+                    DeclarationRefusal refusal = refused.get(index);
+                    out.set(index, declarationRefusal(refusalKind(refusal.getKind()), refusal.getPluginId(),
+                            refusal.getId()));
                 }
                 return out;
             }
@@ -368,9 +368,8 @@ final class JsPluginHost implements JSObject {
     private static native JSObject ledgerObject(EntriesFn entries, IdFn entry, RecordDeclaredFn recordDeclared,
             EntriesFn refusals);
 
-    @JSBody(params = {"kind", "pluginId", "serviceId"}, script =
-            "return { kind: kind, pluginId: pluginId, serviceId: serviceId };")
-    private static native JSObject serviceRefusal(String kind, String pluginId, String serviceId);
+    @JSBody(params = {"kind", "pluginId", "id"}, script = "return { kind: kind, pluginId: pluginId, id: id };")
+    private static native JSObject declarationRefusal(String kind, String pluginId, String id);
 
     @JSBody(params = {"pluginId", "implementation"}, script = "return { pluginId: pluginId, implementation: implementation };")
     private static native JSObject capabilityRecord(String pluginId, JSObject implementation);

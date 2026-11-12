@@ -1871,8 +1871,8 @@ igiaj_JsPluginHost_descriptorObject$js_body$_20 = (var$1, var$2, var$3) => {
 igiaj_JsPluginHost_ledgerObject$js_body$_21 = (var$1, var$2, var$3, var$4) => {
     return { entries : var$1, entry : var$2, recordDeclared : var$3, refusals : var$4 };
 },
-igiaj_JsPluginHost_serviceRefusal$js_body$_22 = (var$1, var$2, var$3) => {
-    return { kind : var$1, pluginId : var$2, serviceId : var$3 };
+igiaj_JsPluginHost_declarationRefusal$js_body$_22 = (var$1, var$2, var$3) => {
+    return { kind : var$1, pluginId : var$2, id : var$3 };
 },
 igiaj_JsPluginHost_capabilityRecord$js_body$_23 = (var$1, var$2) => {
     return { pluginId : var$1, implementation : var$2 };
@@ -6306,6 +6306,35 @@ jur_NegativeLookBehind_hasConsumed = ($this, $matchResult) => {
 },
 jur_NegativeLookBehind_getName = $this => {
     return $rt_s(303);
+};
+function igiae_DeclarationRefusal() {
+    let a = this; jl_Object.call(a);
+    a.$kind0 = null;
+    a.$pluginId1 = null;
+    a.$id0 = null;
+}
+let igiae_DeclarationRefusal__init_ = ($this, $kind, $pluginId, $id) => {
+    jl_Object__init_($this);
+    $this.$kind0 = $kind;
+    $this.$pluginId1 = $pluginId;
+    $this.$id0 = $id;
+},
+igiae_DeclarationRefusal__init_0 = (var_0, var_1, var_2) => {
+    let var_3 = new igiae_DeclarationRefusal();
+    igiae_DeclarationRefusal__init_(var_3, var_0, var_1, var_2);
+    return var_3;
+},
+igiae_DeclarationRefusal_getKind = $this => {
+    return $this.$kind0;
+},
+igiae_DeclarationRefusal_getPluginId = $this => {
+    return $this.$pluginId1;
+},
+igiae_DeclarationRefusal_getId = $this => {
+    return $this.$id0;
+},
+igiae_DeclarationRefusal_concerns = ($this, $candidateKind, $candidatePlugin, $candidateId) => {
+    return $this.$kind0 === $candidateKind && jl_String_equals($this.$pluginId1, $candidatePlugin) && jl_String_equals($this.$id0, $candidateId) ? 1 : 0;
 },
 jur_BackReferenceSet = $rt_classWithoutFields(jur_CIBackReferenceSet),
 jur_BackReferenceSet__init_ = ($this, $groupIndex, $consCounter) => {
@@ -6442,35 +6471,6 @@ jur_DotQuantifierSet_findBackLineTerminator = ($this, $from, $i, $testString) =>
 },
 jur_DotQuantifierSet_getName = $this => {
     return $rt_s(305);
-};
-function igiae_ServiceRefusal() {
-    let a = this; jl_Object.call(a);
-    a.$kind0 = null;
-    a.$pluginId1 = null;
-    a.$serviceId0 = null;
-}
-let igiae_ServiceRefusal__init_ = ($this, $kind, $pluginId, $serviceId) => {
-    jl_Object__init_($this);
-    $this.$kind0 = $kind;
-    $this.$pluginId1 = $pluginId;
-    $this.$serviceId0 = $serviceId;
-},
-igiae_ServiceRefusal__init_0 = (var_0, var_1, var_2) => {
-    let var_3 = new igiae_ServiceRefusal();
-    igiae_ServiceRefusal__init_(var_3, var_0, var_1, var_2);
-    return var_3;
-},
-igiae_ServiceRefusal_getKind = $this => {
-    return $this.$kind0;
-},
-igiae_ServiceRefusal_getPluginId = $this => {
-    return $this.$pluginId1;
-},
-igiae_ServiceRefusal_getServiceId = $this => {
-    return $this.$serviceId0;
-},
-igiae_ServiceRefusal_concerns = ($this, $candidateKind, $candidatePlugin, $candidateId) => {
-    return $this.$kind0 === $candidateKind && jl_String_equals($this.$pluginId1, $candidatePlugin) && jl_String_equals($this.$serviceId0, $candidateId) ? 1 : 0;
 },
 jur_AbstractCharClass$LazyJavaJavaIdentifierPart = $rt_classWithoutFields(jur_AbstractCharClass$LazyCharClass),
 jur_AbstractCharClass$LazyJavaJavaIdentifierPart__init_ = $this => {
@@ -6593,10 +6593,10 @@ igiaj_JsPluginHost$12_call = $this => {
     $index = 0;
     while ($index < $refused.$size()) {
         $refusal = $refused.$get0($index);
-        var$5 = igiaj_JsPluginHost_refusalKind(igiae_ServiceRefusal_getKind($refusal));
-        var$6 = igiae_ServiceRefusal_getPluginId($refusal);
-        var$7 = igiae_ServiceRefusal_getServiceId($refusal);
-        var$6 = igiaj_JsPluginHost_serviceRefusal$js_body$_22($rt_ustr(var$5), $rt_ustr(var$6), $rt_ustr(var$7));
+        var$5 = igiaj_JsPluginHost_refusalKind(igiae_DeclarationRefusal_getKind($refusal));
+        var$6 = igiae_DeclarationRefusal_getPluginId($refusal);
+        var$7 = igiae_DeclarationRefusal_getId($refusal);
+        var$6 = igiaj_JsPluginHost_declarationRefusal$js_body$_22($rt_ustr(var$5), $rt_ustr(var$6), $rt_ustr(var$7));
         $out[$index] = var$6;
         $index = $index + 1 | 0;
     }
@@ -9107,13 +9107,13 @@ jur_AtomicFSet_hasConsumed = ($this, $mr) => {
 };
 function igiae_ActivationUnit() {
     let a = this; jl_Object.call(a);
-    a.$id1 = null;
+    a.$id2 = null;
     a.$provides = null;
     a.$requires = null;
 }
 let igiae_ActivationUnit__init_ = ($this, $id, $provides, $requires) => {
     jl_Object__init_($this);
-    $this.$id1 = $id;
+    $this.$id2 = $id;
     $this.$provides = $provides !== null ? ju_ArrayList__init_0($provides) : ju_ArrayList__init_();
     $this.$requires = $requires !== null ? ju_ArrayList__init_0($requires) : ju_ArrayList__init_();
 },
@@ -9123,7 +9123,7 @@ igiae_ActivationUnit__init_0 = (var_0, var_1, var_2) => {
     return var_3;
 },
 igiae_ActivationUnit_getId = $this => {
-    return $this.$id1;
+    return $this.$id2;
 },
 igiae_ActivationUnit_getProvides = $this => {
     return ju_Collections_unmodifiableList($this.$provides);
@@ -12668,11 +12668,11 @@ igiae_PluginLedger_recordRefused = ($this, $kind, $pluginId, $id) => {
     var$4 = $this.$refused.$iterator();
     while (true) {
         if (!var$4.$hasNext()) {
-            $this.$refused.$add1(igiae_ServiceRefusal__init_0($kind, $pluginId, $id));
+            $this.$refused.$add1(igiae_DeclarationRefusal__init_0($kind, $pluginId, $id));
             return 1;
         }
         $refusal = var$4.$next();
-        if (igiae_ServiceRefusal_concerns($refusal, $kind, $pluginId, $id))
+        if (igiae_DeclarationRefusal_concerns($refusal, $kind, $pluginId, $id))
             break;
     }
     return 0;
@@ -13962,7 +13962,7 @@ jur_Quantifier_toString = $this => {
 };
 function igiae_ServiceRequirement() {
     let a = this; jl_Object.call(a);
-    a.$id3 = null;
+    a.$id4 = null;
     a.$optional0 = 0;
     a.$degradable0 = 0;
     a.$constraints = null;
@@ -13970,7 +13970,7 @@ function igiae_ServiceRequirement() {
 }
 let igiae_ServiceRequirement__init_ = ($this, $id, $optional, $degradable, $constraints, $provider) => {
     jl_Object__init_($this);
-    $this.$id3 = $id;
+    $this.$id4 = $id;
     $this.$optional0 = $optional;
     $this.$degradable0 = $degradable;
     $this.$constraints = $constraints;
@@ -13999,7 +13999,7 @@ igiae_ServiceRequirement_of = $declaration => {
     return var$3;
 },
 igiae_ServiceRequirement_getId = $this => {
-    return $this.$id3;
+    return $this.$id4;
 },
 igiae_ServiceRequirement_getProvider = $this => {
     return $this.$provider2;
@@ -15148,12 +15148,12 @@ jur_PreviousMatch_getName = $this => {
 function igiae_ActivationUnit$Offer() {
     let a = this; jl_Object.call(a);
     a.$kind1 = null;
-    a.$id0 = null;
+    a.$id1 = null;
 }
 let igiae_ActivationUnit$Offer__init_ = ($this, $kind, $id) => {
     jl_Object__init_($this);
     $this.$kind1 = $kind;
-    $this.$id0 = $id;
+    $this.$id1 = $id;
 },
 igiae_ActivationUnit$Offer__init_0 = (var_0, var_1) => {
     let var_2 = new igiae_ActivationUnit$Offer();
@@ -15164,7 +15164,7 @@ igiae_ActivationUnit$Offer_getKind = $this => {
     return $this.$kind1;
 },
 igiae_ActivationUnit$Offer_getId = $this => {
-    return $this.$id0;
+    return $this.$id1;
 },
 otji_JSWrapper$JSTransparentInt = $rt_classWithoutFields(),
 jur_NonCapFSet = $rt_classWithoutFields(jur_FSet),
@@ -17231,14 +17231,14 @@ jur_IntArrHash = $rt_classWithoutFields();
 function igiae_ActivationUnit$Need() {
     let a = this; jl_Object.call(a);
     a.$kind2 = null;
-    a.$id2 = null;
+    a.$id3 = null;
     a.$optional = 0;
     a.$degradable = 0;
 }
 let igiae_ActivationUnit$Need__init_ = ($this, $kind, $id, $optional, $degradable) => {
     jl_Object__init_($this);
     $this.$kind2 = $kind;
-    $this.$id2 = $id;
+    $this.$id3 = $id;
     $this.$optional = $optional;
     $this.$degradable = $degradable;
 },
@@ -17251,7 +17251,7 @@ igiae_ActivationUnit$Need_getKind = $this => {
     return $this.$kind2;
 },
 igiae_ActivationUnit$Need_getId = $this => {
-    return $this.$id2;
+    return $this.$id3;
 },
 igiae_ActivationUnit$Need_isOptional = $this => {
     return $this.$optional;
@@ -19914,9 +19914,9 @@ igiae_ServiceHub$Registry, 0, jl_Object, [], 1537, 0, 0, 0,
 jlr_AnnotatedElement, 0, jl_Object, [], 1537, 0, 0, 0,
 jlr_GenericDeclaration, 0, jl_Object, [jlr_AnnotatedElement], 1537, 0, 0, 0,
 jur_NegativeLookBehind, "NegativeLookBehind", 2, jur_AtomicJointSet, [], 0, 0, 0, ["$_init_33", $rt_wrapFunction2(jur_NegativeLookBehind__init_), "$matches", $rt_wrapFunction3(jur_NegativeLookBehind_matches), "$hasConsumed", $rt_wrapFunction1(jur_NegativeLookBehind_hasConsumed), "$getName", $rt_wrapFunction0(jur_NegativeLookBehind_getName)],
+igiae_DeclarationRefusal, "DeclarationRefusal", 15, jl_Object, [], 17, 0, 0, ["$_init_84", $rt_wrapFunction3(igiae_DeclarationRefusal__init_), "$getKind", $rt_wrapFunction0(igiae_DeclarationRefusal_getKind), "$getPluginId", $rt_wrapFunction0(igiae_DeclarationRefusal_getPluginId), "$getId", $rt_wrapFunction0(igiae_DeclarationRefusal_getId), "$concerns", $rt_wrapFunction3(igiae_DeclarationRefusal_concerns)],
 jur_BackReferenceSet, "BackReferenceSet", 2, jur_CIBackReferenceSet, [], 0, 0, 0, ["$_init_20", $rt_wrapFunction2(jur_BackReferenceSet__init_), "$matches", $rt_wrapFunction3(jur_BackReferenceSet_matches), "$find", $rt_wrapFunction3(jur_BackReferenceSet_find), "$findBack", $rt_wrapFunction4(jur_BackReferenceSet_findBack), "$first", $rt_wrapFunction1(jur_BackReferenceSet_first), "$getName", $rt_wrapFunction0(jur_BackReferenceSet_getName)],
 jur_DotQuantifierSet, "DotQuantifierSet", 2, jur_QuantifierSet, [], 0, 0, 0, ["$_init_67", $rt_wrapFunction4(jur_DotQuantifierSet__init_), "$matches", $rt_wrapFunction3(jur_DotQuantifierSet_matches), "$find", $rt_wrapFunction3(jur_DotQuantifierSet_find), "$getName", $rt_wrapFunction0(jur_DotQuantifierSet_getName)],
-igiae_ServiceRefusal, "ServiceRefusal", 15, jl_Object, [], 17, 0, 0, ["$_init_84", $rt_wrapFunction3(igiae_ServiceRefusal__init_), "$getKind", $rt_wrapFunction0(igiae_ServiceRefusal_getKind), "$getPluginId", $rt_wrapFunction0(igiae_ServiceRefusal_getPluginId), "$getServiceId", $rt_wrapFunction0(igiae_ServiceRefusal_getServiceId), "$concerns", $rt_wrapFunction3(igiae_ServiceRefusal_concerns)],
 jur_AbstractCharClass$LazyJavaJavaIdentifierPart, 0, jur_AbstractCharClass$LazyCharClass, [], 0, 0, 0, ["$_init_", $rt_wrapFunction0(jur_AbstractCharClass$LazyJavaJavaIdentifierPart__init_), "$computeValue", $rt_wrapFunction0(jur_AbstractCharClass$LazyJavaJavaIdentifierPart_computeValue)],
 jl_Enum, 0, jl_Object, [jl_Comparable, ji_Serializable], 1025, 0, 0, ["$_init_44", $rt_wrapFunction2(jl_Enum__init_)],
 igiae_DeclarationKind, 0, jl_Enum, [], 65553, 0, () => igiae_DeclarationKind_$callClinit(), 0,

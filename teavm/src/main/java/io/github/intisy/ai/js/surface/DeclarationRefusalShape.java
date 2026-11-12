@@ -4,7 +4,7 @@ import io.github.intisy.ai.tsemit.TsInterface;
 
 /** One plugin was refused a service or a capability it did not declare. */
 @TsInterface(data = true)
-public interface ServiceRefusalShape {
+public interface DeclarationRefusalShape {
     /**
      * What the refused id names: service or capability.
      *
@@ -24,5 +24,5 @@ public interface ServiceRefusalShape {
      *
      * @return the service or capability id
      */
-    String serviceId();
+    String id();
 }
