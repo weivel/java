@@ -280,4 +280,32 @@ class PluginHostConsumeTest {
         assertNotNull(diagnostics.isEmpty() ? null : diagnostics.get(0));
         assertTrue(diagnostics.get(0).contains("capabilities.consumes"), diagnostics.get(0));
     }
+
+    @Test
+    void aReleasedConsumerStopsHearing() {
+        assertAStoppedConsumerHearsNothing(false);
+    }
+
+    @Test
+    void aQuarantinedConsumerStopsHearing() {
+        assertAStoppedConsumerHearsNothing(true);
+    }
+
+    private static void assertAStoppedConsumerHearsNothing(boolean quarantined) {
+        PluginHost host = host();
+        PluginSession agenda = session(host, "agenda", none(), screens());
+        List<String> heard = new ArrayList<String>();
+        agenda.getCapabilities().watch("screens", recordingInto(heard));
+        if (quarantined) {
+            host.markBroken("agenda", new PluginException("agenda", "failed", "fix it"));
+        } else {
+            host.release("agenda");
+        }
+        PluginSession calendar = session(host, "calendar", screens(), none());
+
+        calendar.provide("screens", "calendar");
+        verify(host, calendar);
+
+        assertEquals(Collections.<String>emptyList(), heard);
+    }
 }
