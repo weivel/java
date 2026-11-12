@@ -101,6 +101,14 @@ public interface ContextSurface {
     ServiceRegistryShape services();
 
     /**
+     * The capabilities this plugin consumes, fenced to the ids its manifest declares.
+     *
+     * @return the consumed capabilities
+     */
+    @TsProperty(readOnly = true)
+    CapabilityRegistryShape capabilities();
+
+    /**
      * Publish and subscribe, attributed to this plugin.
      *
      * @return the event bus

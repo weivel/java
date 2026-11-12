@@ -18,7 +18,8 @@ public final class ManifestFacts {
 
     private final String id;
     private final int api;
-    private final List<String> capabilities;
+    private final List<String> capabilitiesProvided;
+    private final List<String> capabilitiesConsumed;
     private final List<String> permissions;
     private final List<String> targets;
     private final List<String> servicesConsumed;
@@ -30,7 +31,7 @@ public final class ManifestFacts {
     /**
      * @param id the plugin's id
      * @param api the api version the plugin declares it needs
-     * @param capabilities the capability ids the plugin declares, copied so later mutation of the argument has no effect
+     * @param capabilities the capability ids the plugin declares under {@code capabilities.provides}, copied so later mutation of the argument has no effect
      * @param permissions the permission ids the plugin declares, copied so later mutation of the argument has no effect
      * @param payload the manifest object these facts were extracted from, kept by identity for {@link #getPayload}
      * @implNote Declaring no targeting means every application, which is what keeps the fact
@@ -43,23 +44,25 @@ public final class ManifestFacts {
     /**
      * @param id the plugin's id
      * @param api the api version the plugin declares it needs
-     * @param capabilities the capability ids the plugin declares, copied so later mutation of the argument has no effect
+     * @param capabilities the capability ids the plugin declares under {@code capabilities.provides}, copied so later mutation of the argument has no effect
      * @param permissions the permission ids the plugin declares, copied so later mutation of the argument has no effect
      * @param targets the application ids this plugin is for, copied; empty or null means every application
      * @param payload the manifest object these facts were extracted from, kept by identity for {@link #getPayload}
      */
     public ManifestFacts(String id, int api, List<String> capabilities, List<String> permissions,
                          List<String> targets, Object payload) {
-        this(id, api, copy(capabilities), copy(permissions), copy(targets),
+        this(id, api, copy(capabilities), new ArrayList<String>(), copy(permissions), copy(targets),
                 new ArrayList<String>(), new ArrayList<String>(), new LinkedHashMap<String, String>(), id, payload);
     }
 
-    private ManifestFacts(String id, int api, List<String> capabilities, List<String> permissions, List<String> targets,
+    private ManifestFacts(String id, int api, List<String> capabilitiesProvided, List<String> capabilitiesConsumed,
+                          List<String> permissions, List<String> targets,
                           List<String> servicesConsumed, List<String> servicesProvided,
                           Map<String, String> boundProviders, String importName, Object payload) {
         this.id = id;
         this.api = api;
-        this.capabilities = capabilities;
+        this.capabilitiesProvided = capabilitiesProvided;
+        this.capabilitiesConsumed = capabilitiesConsumed;
         this.permissions = permissions;
         this.targets = targets;
         this.servicesConsumed = servicesConsumed;
@@ -79,7 +82,7 @@ public final class ManifestFacts {
      * with no id is skipped, so a malformed declaration reaches nothing rather than failing the host.
      */
     public ManifestFacts withServices(List<?> consumes, List<?> provides) {
-        return new ManifestFacts(id, api, capabilities, permissions, targets,
+        return new ManifestFacts(id, api, capabilitiesProvided, capabilitiesConsumed, permissions, targets,
                 serviceIds(consumes), serviceIds(provides), providersOf(consumes), importName, payload);
     }
 
@@ -90,8 +93,8 @@ public final class ManifestFacts {
      * @return a copy of these facts carrying the import name
      */
     public ManifestFacts withImportName(String importName) {
-        return new ManifestFacts(id, api, capabilities, permissions, targets, servicesConsumed, servicesProvided,
-                boundProviders, importName == null || importName.isEmpty() ? id : importName, payload);
+        return new ManifestFacts(id, api, capabilitiesProvided, capabilitiesConsumed, permissions, targets,
+                servicesConsumed, servicesProvided, boundProviders, importName == null || importName.isEmpty() ? id : importName, payload);
     }
 
     /** @return the plugin's id */
@@ -104,9 +107,25 @@ public final class ManifestFacts {
         return api;
     }
 
-    /** @return the capability ids the plugin declares, or empty when it declares none */
-    public List<String> getCapabilities() {
-        return Collections.unmodifiableList(capabilities);
+    /**
+     * These facts with the capabilities the manifest declares under {@code capabilities.consumes}.
+     *
+     * @param consumes the consumed capability ids; null for none
+     * @return a copy of these facts carrying the consumed capability ids
+     */
+    public ManifestFacts withCapabilitiesConsumed(List<String> consumes) {
+        return new ManifestFacts(id, api, capabilitiesProvided, copy(consumes), permissions, targets,
+                servicesConsumed, servicesProvided, boundProviders, importName, payload);
+    }
+
+    /** @return the capability ids the plugin declares under {@code capabilities.provides}, or empty when it declares none */
+    public List<String> getCapabilitiesProvided() {
+        return Collections.unmodifiableList(capabilitiesProvided);
+    }
+
+    /** @return the capability ids the plugin declares under {@code capabilities.consumes}, or empty when it declares none */
+    public List<String> getCapabilitiesConsumed() {
+        return Collections.unmodifiableList(capabilitiesConsumed);
     }
 
     /** @return the permission ids the plugin declares, or empty when it declares none */

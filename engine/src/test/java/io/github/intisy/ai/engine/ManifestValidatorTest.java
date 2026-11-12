@@ -24,6 +24,30 @@ class ManifestValidatorTest {
         return manifest;
     }
 
+    private static Map<String, Object> capabilities(String list, String... ids) {
+        Map<String, Object> capabilities = new HashMap<String, Object>();
+        capabilities.put(list, Arrays.asList((Object[]) ids));
+        return capabilities;
+    }
+
+    @Test
+    void refusesTheFlatCapabilitiesListWithAFixNamingProvides() {
+        Map<String, Object> manifest = valid();
+        manifest.put("entry", "dist/index.js");
+        manifest.put("capabilities", Arrays.asList("screens"));
+        List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
+        assertEquals(1, issues.size());
+        assertEquals("capabilities", issues.get(0).getPath());
+        assertTrue(issues.get(0).getFix().contains("\"provides\""), issues.get(0).getFix());
+    }
+
+    @Test
+    void needsNoEntryForCapabilitiesThatAreOnlyConsumed() {
+        Map<String, Object> manifest = valid();
+        manifest.put("capabilities", capabilities("consumes", "screens"));
+        assertTrue(ManifestValidator.validate(manifest, WELL_KNOWN).isEmpty());
+    }
+
     @Test
     void acceptsAMinimalManifest() {
         assertTrue(ManifestValidator.validate(valid(), WELL_KNOWN).isEmpty());
@@ -116,7 +140,7 @@ class ManifestValidatorTest {
     @Test
     void requiresAnEntryOnceCapabilitiesAreDeclared() {
         Map<String, Object> manifest = valid();
-        manifest.put("capabilities", Arrays.asList("screens"));
+        manifest.put("capabilities", capabilities("provides", "screens"));
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
         assertEquals(1, issues.size());
         assertEquals("entry", issues.get(0).getPath());
@@ -201,7 +225,7 @@ class ManifestValidatorTest {
     @Test
     void stillReportsEveryOtherRuleWhenTheVocabularyIsUnverifiable() {
         Map<String, Object> manifest = valid();
-        manifest.put("capabilities", Arrays.asList("screens"));
+        manifest.put("capabilities", capabilities("provides", "screens"));
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, null);
         assertEquals(1, issues.size());
         assertEquals("entry", issues.get(0).getPath());
@@ -211,10 +235,10 @@ class ManifestValidatorTest {
     void reportsDuplicatesByIndex() {
         Map<String, Object> manifest = valid();
         manifest.put("entry", "dist/index.js");
-        manifest.put("capabilities", Arrays.asList("screens", "screens"));
+        manifest.put("capabilities", capabilities("provides", "screens", "screens"));
         List<SchemaIssue> issues = ManifestValidator.validate(manifest, WELL_KNOWN);
         assertEquals(1, issues.size());
-        assertEquals("capabilities[1]", issues.get(0).getPath());
+        assertEquals("capabilities.provides[1]", issues.get(0).getPath());
     }
 
     @Test
@@ -233,7 +257,7 @@ class ManifestValidatorTest {
     @Test
     void requireThrowsAttributedToThePlugin() {
         final Map<String, Object> manifest = valid();
-        manifest.put("capabilities", Arrays.asList("screens"));
+        manifest.put("capabilities", capabilities("provides", "screens"));
         PluginException failure = assertThrows(PluginException.class, new Executable() {
             @Override
             public void execute() {

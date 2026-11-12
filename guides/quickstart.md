@@ -16,7 +16,7 @@ A plugin is a `plugin.json` and an entry module. Nothing else is required, and
   "api": 1,
   "entry": "dist/index.js",
   "displayName": "WakaTime",
-  "capabilities": ["settings"],
+  "capabilities": { "provides": ["settings"] },
   "publish": { "scopedOnly": false },
   "repo": {
     "role": "Coding-activity reporter",

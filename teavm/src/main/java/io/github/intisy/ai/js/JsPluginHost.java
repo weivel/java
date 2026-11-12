@@ -2,6 +2,7 @@ package io.github.intisy.ai.js;
 
 import io.github.intisy.ai.api.Api;
 import io.github.intisy.ai.engine.CapabilityRecord;
+import io.github.intisy.ai.engine.DeclarationKind;
 import io.github.intisy.ai.engine.EventBus;
 import io.github.intisy.ai.engine.LedgerEntry;
 import io.github.intisy.ai.engine.ManifestFacts;
@@ -189,7 +190,7 @@ final class JsPluginHost implements JSObject {
             @Override
             public void call(JSObject manifest) {
                 ManifestFacts facts = factsOf(manifest);
-                host.getLedger().recordDeclared(facts.getId(), facts.getCapabilities(), facts.getPermissions());
+                host.getLedger().recordDeclared(facts.getId(), facts.getCapabilitiesProvided(), facts.getPermissions());
             }
         };
         EntriesFn refusals = new EntriesFn() {
@@ -199,7 +200,8 @@ final class JsPluginHost implements JSObject {
                 JSArray<JSObject> out = JSArray.create();
                 for (int index = 0; index < refused.size(); index++) {
                     ServiceRefusal refusal = refused.get(index);
-                    out.set(index, serviceRefusal(refusal.getPluginId(), refusal.getServiceId()));
+                    out.set(index, serviceRefusal(refusalKind(refusal.getKind()), refusal.getPluginId(),
+                            refusal.getServiceId()));
                 }
                 return out;
             }
@@ -245,11 +247,12 @@ final class JsPluginHost implements JSObject {
         Object tree = JsJson.toTree(manifestObj);
         String id = text(tree, "id");
         int api = intOr(tree, "api", 0);
-        List<String> capabilities = strings(member(tree, "capabilities"));
+        Object capabilities = member(tree, "capabilities");
         List<String> permissions = strings(member(tree, "permissions"));
         List<String> targets = strings(member(tree, "targets"));
         Object services = member(tree, "services");
-        return new ManifestFacts(id, api, capabilities, permissions, targets, manifestObj)
+        return new ManifestFacts(id, api, strings(member(capabilities, "provides")), permissions, targets, manifestObj)
+                .withCapabilitiesConsumed(strings(member(capabilities, "consumes")))
                 .withImportName(text(tree, "importName"))
                 .withServices(entries(member(services, "consumes")), entries(member(services, "provides")));
     }
@@ -300,6 +303,15 @@ final class JsPluginHost implements JSObject {
     /** The other named mapping table, beside {@link #lower}: what a service watcher's event string reads. */
     static String serviceEvent(boolean registered) {
         return registered ? "register" : "unregister";
+    }
+
+    /** Beside {@link #serviceEvent}: what a capability watcher's event string reads. */
+    static String capabilityEvent(boolean provided) {
+        return provided ? "provide" : "withdraw";
+    }
+
+    private static String refusalKind(DeclarationKind kind) {
+        return kind == DeclarationKind.CAPABILITY ? "capability" : "service";
     }
 
     /**
@@ -356,8 +368,9 @@ final class JsPluginHost implements JSObject {
     private static native JSObject ledgerObject(EntriesFn entries, IdFn entry, RecordDeclaredFn recordDeclared,
             EntriesFn refusals);
 
-    @JSBody(params = {"pluginId", "serviceId"}, script = "return { pluginId: pluginId, serviceId: serviceId };")
-    private static native JSObject serviceRefusal(String pluginId, String serviceId);
+    @JSBody(params = {"kind", "pluginId", "serviceId"}, script =
+            "return { kind: kind, pluginId: pluginId, serviceId: serviceId };")
+    private static native JSObject serviceRefusal(String kind, String pluginId, String serviceId);
 
     @JSBody(params = {"pluginId", "implementation"}, script = "return { pluginId: pluginId, implementation: implementation };")
     private static native JSObject capabilityRecord(String pluginId, JSObject implementation);

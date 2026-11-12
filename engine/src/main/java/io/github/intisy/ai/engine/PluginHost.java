@@ -28,6 +28,8 @@ public final class PluginHost {
     private final PluginLedger ledger = new PluginLedger();
     private final ServiceHub hub;
     private final Map<String, List<CapabilityRecord>> capabilities = new LinkedHashMap<String, List<CapabilityRecord>>();
+    private final Map<String, List<CapabilityRecord>> verified = new LinkedHashMap<String, List<CapabilityRecord>>();
+    private final Map<String, List<CapabilityWatcher>> capabilityWatchers = new LinkedHashMap<String, List<CapabilityWatcher>>();
     private final Map<String, List<Scheduler.Cancellable>> disposers = new LinkedHashMap<String, List<Scheduler.Cancellable>>();
     private final Set<String> revoked = new HashSet<String>();
     private final Map<String, String> importNames = new LinkedHashMap<String, String>();
@@ -226,7 +228,7 @@ public final class PluginHost {
         String pluginId = facts.getId();
         revoked.remove(pluginId);
         importNames.put(pluginId, facts.getImportName());
-        ledger.recordDeclared(pluginId, facts.getCapabilities(), facts.getPermissions());
+        ledger.recordDeclared(pluginId, facts.getCapabilitiesProvided(), facts.getPermissions());
         final Map<String, String> bound = facts.getBoundProviders();
         ServiceHub.Registry registry = hub.forPlugin(pluginId, new Function<String, String>() {
             @Override
@@ -235,7 +237,7 @@ public final class PluginHost {
             }
         });
         return new PluginSession(this, facts, fenced(pluginId, declaredServices(facts), bound, registry),
-                recording(pluginId, bus));
+                recording(pluginId, bus), consumed(pluginId, declaredCapabilities(facts)));
     }
 
     /**
@@ -244,10 +246,14 @@ public final class PluginHost {
      *
      * @param facts the plugin's manifest facts, whose declared capabilities are checked
      * @return null when every declared capability was provided and nothing extra was, otherwise the mismatch to quarantine the plugin with
+     * @implNote A plugin's implementations reach its consumers here and not at {@code provide}: until
+     * this check passes the host may still quarantine the plugin, and a consumer must never be handed
+     * an implementation about to be withdrawn for a declaration mismatch (invariant 14). They join in
+     * the order activations are verified, which is the order a consumer's answer keeps.
      */
     public PluginException verifyActivation(ManifestFacts facts) {
         String pluginId = facts.getId();
-        List<String> declared = facts.getCapabilities();
+        List<String> declared = facts.getCapabilitiesProvided();
         LedgerEntry entry = ledger.entry(pluginId);
         List<String> provided = entry == null ? new ArrayList<String>() : entry.getCapabilitiesProvided();
 
@@ -255,15 +261,16 @@ public final class PluginHost {
         if (!missing.isEmpty()) {
             return new PluginException(pluginId,
                     "capabilities declared but never provided: " + join(missing),
-                    "call ctx.provide(\"" + missing.get(0) + "\", ...) in activate, or remove it from \"capabilities\" in plugin.json");
+                    "call ctx.provide(\"" + missing.get(0) + "\", ...) in activate, or remove it from capabilities.provides in plugin.json");
         }
         List<String> extra = missingFrom(provided, declared);
         if (!extra.isEmpty()) {
             return new PluginException(pluginId,
                     "capabilities provided but never declared: " + join(extra),
-                    "add \"" + extra.get(0) + "\" to \"capabilities\" in plugin.json");
+                    "add \"" + extra.get(0) + "\" to capabilities.provides in plugin.json");
         }
         ledger.recordStatus(pluginId, PluginStatus.ACTIVE, null, null);
+        admitVerified(pluginId);
         return null;
     }
 
@@ -349,6 +356,7 @@ public final class PluginHost {
 
     private void strip(String pluginId) {
         revoked.add(pluginId);
+        withdrawVerified(pluginId);
         dropCapabilities(pluginId);
         detach(pluginId);
         hub.releasePlugin(pluginId);
@@ -493,6 +501,147 @@ public final class PluginHost {
         return refusal;
     }
 
+    /**
+     * @implNote The declaration is checked before lateness, as for services: an undeclared call is
+     * refused and reported as undeclared whether or not the plugin still runs. A late {@code all} is
+     * let through, since it installs nothing, while a late {@code watch} is inert and goes to the
+     * diagnostics only, the way a late service call does.
+     */
+    private ConsumedCapabilities consumed(final String pluginId, final Set<String> declared) {
+        return new ConsumedCapabilities() {
+            @Override
+            public List<Object> all(String id) {
+                if (!declared.contains(id)) {
+                    refuseUndeclaredCapability(pluginId, id);
+                    return new ArrayList<Object>();
+                }
+                List<Object> implementations = new ArrayList<Object>();
+                List<CapabilityRecord> records = verified.get(id);
+                if (records != null) {
+                    for (CapabilityRecord record : records) {
+                        implementations.add(record.getImplementation());
+                    }
+                }
+                return implementations;
+            }
+
+            @Override
+            public Scheduler.Cancellable watch(String id, ConsumedCapabilities.Listener listener) {
+                if (!declared.contains(id)) {
+                    refuseUndeclaredCapability(pluginId, id);
+                    return inert();
+                }
+                if (refuseLate(pluginId, "a late watch of capability", id)) {
+                    return inert();
+                }
+                return tracked(pluginId, installCapabilityWatcher(id, listener));
+            }
+        };
+    }
+
+    private Scheduler.Cancellable installCapabilityWatcher(final String id, ConsumedCapabilities.Listener listener) {
+        final CapabilityWatcher watcher = new CapabilityWatcher(listener);
+        List<CapabilityWatcher> watchers = capabilityWatchers.get(id);
+        if (watchers == null) {
+            watchers = new ArrayList<CapabilityWatcher>();
+            capabilityWatchers.put(id, watchers);
+        }
+        watchers.add(watcher);
+        return new Scheduler.Cancellable() {
+            @Override
+            public void cancel() {
+                List<CapabilityWatcher> installed = capabilityWatchers.get(id);
+                if (installed == null) {
+                    return;
+                }
+                installed.remove(watcher);
+                if (installed.isEmpty()) {
+                    capabilityWatchers.remove(id);
+                }
+            }
+        };
+    }
+
+    private void admitVerified(String pluginId) {
+        for (Map.Entry<String, List<CapabilityRecord>> provided : capabilities.entrySet()) {
+            for (CapabilityRecord record : provided.getValue()) {
+                if (record.getPluginId().equals(pluginId) && admit(provided.getKey(), record)) {
+                    notifyCapabilityWatchers(provided.getKey(), record.getImplementation(), true);
+                }
+            }
+        }
+    }
+
+    private boolean admit(String id, CapabilityRecord record) {
+        List<CapabilityRecord> records = verified.get(id);
+        if (records == null) {
+            records = new ArrayList<CapabilityRecord>();
+            verified.put(id, records);
+        }
+        if (records.contains(record)) {
+            return false;
+        }
+        records.add(record);
+        return true;
+    }
+
+    private void withdrawVerified(String pluginId) {
+        for (String id : new ArrayList<String>(verified.keySet())) {
+            List<CapabilityRecord> records = verified.get(id);
+            for (CapabilityRecord record : new ArrayList<CapabilityRecord>(records)) {
+                if (!record.getPluginId().equals(pluginId)) {
+                    continue;
+                }
+                records.remove(record);
+                if (records.isEmpty()) {
+                    verified.remove(id);
+                }
+                notifyCapabilityWatchers(id, record.getImplementation(), false);
+            }
+        }
+    }
+
+    /**
+     * @implNote A watcher that throws is reported and the rest still hear, as for a service watcher;
+     * a watcher removed while the others are being told is skipped rather than called.
+     */
+    private void notifyCapabilityWatchers(String id, Object implementation, boolean provided) {
+        List<CapabilityWatcher> watchers = capabilityWatchers.get(id);
+        if (watchers == null) {
+            return;
+        }
+        for (CapabilityWatcher watcher : new ArrayList<CapabilityWatcher>(watchers)) {
+            if (!watchers.contains(watcher)) {
+                continue;
+            }
+            try {
+                watcher.listener.changed(implementation, provided);
+            } catch (RuntimeException failure) {
+                Diagnostics.report("a watcher of capability \"" + id + "\" threw while handling "
+                        + (provided ? "provide" : "withdraw") + ": " + failure);
+            }
+        }
+    }
+
+    /**
+     * Refuses a capability the plugin did not declare, reporting it once per plugin and id (invariant 14).
+     *
+     * @implNote Every attempt is refused and only the first is reported, as for an undeclared service.
+     */
+    private void refuseUndeclaredCapability(String pluginId, String capabilityId) {
+        String fix = "add \"" + capabilityId + "\" to capabilities.consumes in its plugin.json";
+        if (ledger.recordCapabilityRefused(pluginId, capabilityId)) {
+            Diagnostics.report("refused capability \"" + capabilityId + "\" to " + pluginId
+                    + ", which does not declare it: " + fix);
+        }
+    }
+
+    private static Set<String> declaredCapabilities(ManifestFacts facts) {
+        Set<String> declared = new HashSet<String>(facts.getCapabilitiesConsumed());
+        declared.addAll(facts.getCapabilitiesProvided());
+        return declared;
+    }
+
     private static Set<String> declaredServices(ManifestFacts facts) {
         Set<String> declared = new HashSet<String>(facts.getServicesConsumed());
         declared.addAll(facts.getServicesProvided());
@@ -574,6 +723,15 @@ public final class PluginHost {
         }
         for (String id : emptied) {
             capabilities.remove(id);
+        }
+    }
+
+    /** One installed capability listener, an identity of its own so the same listener can be installed twice. */
+    private static final class CapabilityWatcher {
+        private final ConsumedCapabilities.Listener listener;
+
+        CapabilityWatcher(ConsumedCapabilities.Listener listener) {
+            this.listener = listener;
         }
     }
 

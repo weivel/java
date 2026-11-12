@@ -13,13 +13,16 @@ public final class PluginSession {
     private final ManifestFacts facts;
     private final ServiceHub.Registry services;
     private final EventBus events;
+    private final ConsumedCapabilities capabilities;
     private final PluginHost host;
 
-    PluginSession(PluginHost host, ManifestFacts facts, ServiceHub.Registry services, EventBus events) {
+    PluginSession(PluginHost host, ManifestFacts facts, ServiceHub.Registry services, EventBus events,
+                  ConsumedCapabilities capabilities) {
         this.host = host;
         this.facts = facts;
         this.services = services;
         this.events = events;
+        this.capabilities = capabilities;
     }
 
     /** @return this plugin's manifest facts */
@@ -44,6 +47,16 @@ public final class PluginSession {
      */
     public EventBus getEvents() {
         return events;
+    }
+
+    /**
+     * Fenced to the ids the manifest lists under {@code capabilities.consumes} or
+     * {@code capabilities.provides}, answering only verified implementations.
+     *
+     * @return the capabilities this plugin consumes
+     */
+    public ConsumedCapabilities getCapabilities() {
+        return capabilities;
     }
 
     /**

@@ -131,6 +131,14 @@ public interface PluginContext {
     Services services();
 
     /**
+     * How this plugin sees the implementations of the capabilities it consumes.
+     *
+     * @return this plugin's capabilities handle
+     */
+    @TsProperty(readOnly = true)
+    Capabilities capabilities();
+
+    /**
      * How this plugin says something happened, and hears that something did.
      *
      * @return this plugin's events handle

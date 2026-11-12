@@ -211,7 +211,7 @@ class PluginHostTest {
         host.sessionFor(screens(), new RecordingBus());
         PluginException error = host.verifyActivation(screens());
         assertEquals("capabilities declared but never provided: screens", error.getDetail());
-        assertEquals("call ctx.provide(\"screens\", ...) in activate, or remove it from \"capabilities\" in plugin.json", error.getFix());
+        assertEquals("call ctx.provide(\"screens\", ...) in activate, or remove it from capabilities.provides in plugin.json", error.getFix());
     }
 
     @Test
@@ -221,7 +221,7 @@ class PluginHostTest {
         host.sessionFor(silent, new RecordingBus()).provide("screens", new Object());
         PluginException error = host.verifyActivation(silent);
         assertEquals("capabilities provided but never declared: screens", error.getDetail());
-        assertEquals("add \"screens\" to \"capabilities\" in plugin.json", error.getFix());
+        assertEquals("add \"screens\" to capabilities.provides in plugin.json", error.getFix());
     }
 
     @Test

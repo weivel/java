@@ -62,11 +62,7 @@ public final class ManifestSchema {
                 "Path to a square-viewBox SVG mark, relative to the repo root."));
         properties.put("icons", icons);
 
-        JsonSchema capabilities = described(JsonSchema.ofType("array"), "Host-facing abilities this plugin provides at activation.");
-        capabilities.setItems(JsonSchema.ofType("string"));
-        capabilities.setUniqueItems(Boolean.TRUE);
-        capabilities.setFix("list capability ids as strings, for example [\"provider\", \"screens\"]");
-        properties.put("capabilities", capabilities);
+        properties.put("capabilities", capabilities());
 
         JsonSchema targets = described(JsonSchema.ofType("array"),
                 "The spisor applications this artifact is for. Absent means every application.");
@@ -111,16 +107,39 @@ public final class ManifestSchema {
         return root;
     }
 
+    private static JsonSchema capabilities() {
+        Map<String, JsonSchema> properties = new LinkedHashMap<String, JsonSchema>();
+        properties.put("provides", capabilityIds("Capability ids this plugin provides at activation.",
+                "list the capability ids this plugin provides as strings, for example [\"provider\", \"screens\"]"));
+        properties.put("consumes", capabilityIds(
+                "Capability ids this plugin asks to see the verified implementations of. An empty answer means none right now.",
+                "list the capability ids this plugin consumes as strings, for example [\"provider\"]"));
+        JsonSchema capabilities = described(JsonSchema.ofType("object"),
+                "The host-facing contract: the abilities this plugin provides at activation, and the ones it asks to see the implementations of.");
+        capabilities.setProperties(properties);
+        capabilities.setFix("write capabilities as an object, for example { \"provides\": [\"provider\"], \"consumes\": [\"screens\"] }; "
+                + "a flat list of ids is the old form, move it under \"provides\"");
+        return capabilities;
+    }
+
+    private static JsonSchema capabilityIds(String description, String fix) {
+        JsonSchema ids = described(JsonSchema.ofType("array"), description);
+        ids.setItems(JsonSchema.ofType("string"));
+        ids.setFix(fix);
+        ids.setUniqueItems(Boolean.TRUE);
+        return ids;
+    }
+
     private static JsonSchema capabilitiesDeclared() {
         JsonSchema atLeastOne = JsonSchema.ofType("array");
         atLeastOne.setMinItems(Integer.valueOf(1));
-        return requiring("capabilities", atLeastOne);
+        return requiring("capabilities", requiring("provides", atLeastOne));
     }
 
     private static JsonSchema entryNamed() {
         JsonSchema nonEmpty = JsonSchema.ofType("string");
         nonEmpty.setMinLength(Integer.valueOf(1));
-        nonEmpty.setFix("capabilities are declared, so add \"entry\" naming the module that provides them, for example \"dist/index.js\"");
+        nonEmpty.setFix("capabilities are provided, so add \"entry\" naming the module that provides them, for example \"dist/index.js\"");
         return requiring("entry", nonEmpty);
     }
 

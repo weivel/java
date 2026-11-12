@@ -1,5 +1,6 @@
 package io.github.intisy.ai.conformance;
 
+import io.github.intisy.ai.engine.DeclarationKind;
 import io.github.intisy.ai.engine.Diagnostics;
 import io.github.intisy.ai.engine.ManifestFacts;
 import io.github.intisy.ai.engine.PluginHost;
@@ -172,7 +173,8 @@ final class Reach {
 
     private boolean reported(String pluginId, String serviceId) {
         for (ServiceRefusal refusal : host.getLedger().refusals()) {
-            if (refusal.getPluginId().equals(pluginId) && refusal.getServiceId().equals(serviceId)) {
+            if (refusal.getKind() == DeclarationKind.SERVICE && refusal.getPluginId().equals(pluginId)
+                && refusal.getServiceId().equals(serviceId)) {
                 return true;
             }
         }

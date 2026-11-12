@@ -134,6 +134,9 @@ public final class JavaDriver {
         if ("reach".equals(op)) {
             return Reach.run(given);
         }
+        if ("consume".equals(op)) {
+            return Consume.run(given);
+        }
         if ("context".equals(op)) {
             return ContextOp.run(given);
         }

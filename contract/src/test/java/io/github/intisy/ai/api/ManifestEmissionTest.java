@@ -23,7 +23,9 @@ class ManifestEmissionTest {
         assertTrue(text.contains("  id: string;"), "id is required");
         assertTrue(text.contains("  api: number;"), "api is required");
         assertTrue(text.contains("  entry?: string;"), "entry is optional");
-        assertTrue(text.contains("  capabilities?: string[];"), "capabilities is an optional string list");
+        assertTrue(text.contains("  capabilities?: ManifestCapabilities;"), "capabilities is an optional object");
+        assertTrue(text.contains("export interface ManifestCapabilities {"), "ManifestCapabilities must be emitted");
+        assertTrue(text.contains("  provides?: string[];"), "provides is an optional string list");
     }
 
     @Test

@@ -18,7 +18,7 @@ function runtime(): PluginRuntimeShape {
 }
 
 function manifest(id: string, extra: Partial<PluginManifest> = {}): PluginManifest {
-  return { id, name: id, importName: id, api: 1, entry: "dist/index.js", capabilities: ["settings"], ...extra };
+  return { id, name: id, importName: id, api: 1, entry: "dist/index.js", capabilities: { provides: ["settings"] }, ...extra };
 }
 
 function scanOf(...plugins: Array<{ manifest: PluginManifest; module: unknown }>) {
@@ -102,8 +102,8 @@ describe("startPlugins", () => {
   it("activates a service provider before its consumer", async () => {
     const order: string[] = [];
     const scan = scanOf(
-      { manifest: manifest("consumer", { capabilities: [], entry: "dist/index.js", services: { consumes: ["provider-plugin:store"] } }), module: { default: { activate: () => { order.push("consumer"); }, deactivate: () => {} } } },
-      { manifest: manifest("provider-plugin", { capabilities: [], services: { provides: ["provider-plugin:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { order.push("provider-plugin"); ctx.services.register("provider-plugin:store", {}); }, deactivate: () => {} } } },
+      { manifest: manifest("consumer", { capabilities: {}, entry: "dist/index.js", services: { consumes: ["provider-plugin:store"] } }), module: { default: { activate: () => { order.push("consumer"); }, deactivate: () => {} } } },
+      { manifest: manifest("provider-plugin", { capabilities: {}, services: { provides: ["provider-plugin:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { order.push("provider-plugin"); ctx.services.register("provider-plugin:store", {}); }, deactivate: () => {} } } },
     );
     const loaded = await startPlugins(options(scan));
 
@@ -114,8 +114,8 @@ describe("startPlugins", () => {
   it("quarantines both members of a dependency cycle and starts everything else", async () => {
     const order: string[] = [];
     const scan = scanOf(
-      { manifest: manifest("left", { capabilities: [], services: { provides: ["left:a"], consumes: ["right:b"] } }), module: { default: { activate: () => { order.push("left"); }, deactivate: () => {} } } },
-      { manifest: manifest("right", { capabilities: [], services: { provides: ["right:b"], consumes: ["left:a"] } }), module: { default: { activate: () => { order.push("right"); }, deactivate: () => {} } } },
+      { manifest: manifest("left", { capabilities: {}, services: { provides: ["left:a"], consumes: ["right:b"] } }), module: { default: { activate: () => { order.push("left"); }, deactivate: () => {} } } },
+      { manifest: manifest("right", { capabilities: {}, services: { provides: ["right:b"], consumes: ["left:a"] } }), module: { default: { activate: () => { order.push("right"); }, deactivate: () => {} } } },
       { manifest: manifest("free"), module: settingsPlugin(order, "free") },
     );
     const loaded = await startPlugins(options(scan));
@@ -262,7 +262,7 @@ describe("startPlugins", () => {
   it("attributes a PluginError thrown by another plugin's service to the plugin that called it", async () => {
     const scan = scanOf(
       {
-        manifest: manifest("store", { capabilities: [], services: { provides: ["store:api"] } }),
+        manifest: manifest("store", { capabilities: {}, services: { provides: ["store:api"] } }),
         module: {
           default: {
             activate: (ctx: ContextSurface) => {
@@ -275,7 +275,7 @@ describe("startPlugins", () => {
         },
       },
       {
-        manifest: manifest("reader", { capabilities: [], services: { consumes: ["store:api"] } }),
+        manifest: manifest("reader", { capabilities: {}, services: { consumes: ["store:api"] } }),
         module: {
           default: {
             activate: (ctx: ContextSurface) => { (ctx.services.get("store:api") as { open: () => void }).open(); },
@@ -299,7 +299,7 @@ describe("startPlugins", () => {
     const support = { build: (name: string) => `built ${name}` };
     let seen: string | undefined;
     const scan = scanOf({
-      manifest: manifest("consumer", { capabilities: [], services: { consumes: ["provider-support"] } }),
+      manifest: manifest("consumer", { capabilities: {}, services: { consumes: ["provider-support"] } }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => {
@@ -331,7 +331,7 @@ describe("startPlugins", () => {
   it("deactivates a plugin quarantined for a capability it never declared", async () => {
     const stopped: string[] = [];
     const scan = scanOf({
-      manifest: manifest("extra", { capabilities: [] }),
+      manifest: manifest("extra", { capabilities: {} }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => { ctx.provide("settings", settingsCapability()); },
@@ -360,7 +360,7 @@ describe("startPlugins", () => {
   it("completes the quarantine even when the plugin's deactivate hangs", async () => {
     const scan = scanOf(
       {
-        manifest: manifest("stuck", { capabilities: [] }),
+        manifest: manifest("stuck", { capabilities: {} }),
         module: {
           default: {
             activate: (ctx: ContextSurface) => { ctx.provide("settings", settingsCapability()); },
@@ -383,7 +383,7 @@ describe("startPlugins", () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const scan = scanOf({
-      manifest: manifest("late", { capabilities: [], services: { provides: ["late:store"] } }),
+      manifest: manifest("late", { capabilities: {}, services: { provides: ["late:store"] } }),
       module: {
         default: {
           activate: async (ctx: ContextSurface) => { await gate; ctx.services.register("late:store", {}); },
@@ -406,7 +406,7 @@ describe("startPlugins", () => {
     const reported: string[] = [];
     setEngineDiagnosticSink((message) => reported.push(message));
     const scan = scanOf({
-      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      manifest: manifest("odd", { capabilities: { provides: ["mystery"] } }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => ctx.provide("mystery", {}),
@@ -425,7 +425,7 @@ describe("startPlugins", () => {
     const reported: string[] = [];
     setEngineDiagnosticSink((message) => reported.push(message));
     const scan = scanOf({
-      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      manifest: manifest("odd", { capabilities: { provides: ["mystery"] } }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => ctx.provide("mystery", {}),
@@ -444,7 +444,7 @@ describe("startPlugins", () => {
     const reported: string[] = [];
     setEngineDiagnosticSink((message) => reported.push(message));
     const scan = scanOf({
-      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      manifest: manifest("odd", { capabilities: { provides: ["mystery"] } }),
       module: {
         default: {
           activate: (ctx: ContextSurface) => ctx.provide("mystery", {}),
@@ -559,7 +559,7 @@ describe("ledgerRows", () => {
 
   it("names a consumed service nothing in this home provides", async () => {
     const scan = scanOf({
-      manifest: manifest("lonely", { capabilities: [], services: { consumes: ["routing"] } }),
+      manifest: manifest("lonely", { capabilities: {}, services: { consumes: ["routing"] } }),
       module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("routing"); }, deactivate: () => {} } },
     });
     const [row] = ledgerRows(await startPlugins(options(scan)));
@@ -578,8 +578,8 @@ describe("ledgerRows", () => {
 
   it("does not list a consumed service as unresolved if another active plugin provides it", async () => {
     const scan = scanOf(
-      { manifest: manifest("provider", { capabilities: [], services: { provides: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:store", {}); }, deactivate: () => {} } } },
-      { manifest: manifest("consumer", { capabilities: [], services: { consumes: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:store"); }, deactivate: () => {} } } },
+      { manifest: manifest("provider", { capabilities: {}, services: { provides: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:store", {}); }, deactivate: () => {} } } },
+      { manifest: manifest("consumer", { capabilities: {}, services: { consumes: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:store"); }, deactivate: () => {} } } },
     );
     const loaded = await startPlugins(options(scan));
     const [, consumerRow] = ledgerRows(loaded);
@@ -591,8 +591,8 @@ describe("ledgerRows", () => {
 
   it("lists a consumed service as unresolved if its provider was quarantined or stopped", async () => {
     const scan = scanOf(
-      { manifest: manifest("provider", { capabilities: [], services: { provides: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:store", {}); }, deactivate: () => {} } } },
-      { manifest: manifest("consumer", { capabilities: [], services: { consumes: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:store"); }, deactivate: () => {} } } },
+      { manifest: manifest("provider", { capabilities: {}, services: { provides: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:store", {}); }, deactivate: () => {} } } },
+      { manifest: manifest("consumer", { capabilities: {}, services: { consumes: ["provider:store"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:store"); }, deactivate: () => {} } } },
     );
     const loaded = await startPlugins(options(scan));
     await loaded.host.markBroken("provider", (await import("../../generated/engine.js")).pluginError("provider", "stopped", "restart it"));
@@ -617,8 +617,8 @@ describe("ledgerRows", () => {
 
   it("does not report falsy service values as unresolved", async () => {
     const scan = scanOf(
-      { manifest: manifest("provider", { capabilities: [], services: { provides: ["provider:falsy"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:falsy", false); }, deactivate: () => {} } } },
-      { manifest: manifest("consumer", { capabilities: [], services: { consumes: ["provider:falsy"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:falsy"); }, deactivate: () => {} } } },
+      { manifest: manifest("provider", { capabilities: {}, services: { provides: ["provider:falsy"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.register("provider:falsy", false); }, deactivate: () => {} } } },
+      { manifest: manifest("consumer", { capabilities: {}, services: { consumes: ["provider:falsy"] } }), module: { default: { activate: (ctx: ContextSurface) => { ctx.services.get("provider:falsy"); }, deactivate: () => {} } } },
     );
     const loaded = await startPlugins(options(scan));
     const [, consumerRow] = ledgerRows(loaded);

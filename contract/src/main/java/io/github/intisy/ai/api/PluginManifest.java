@@ -59,9 +59,9 @@ public interface PluginManifest {
     int api();
 
     /**
-     * The built module a host imports. Required once `capabilities` is non-empty.
+     * The built module a host imports. Required once `capabilities.provides` is non-empty.
      *
-     * @return the entry module path, or absent when this plugin declares no capabilities
+     * @return the entry module path, or absent when this plugin provides no capabilities
      */
     @TsOptional
     String entry();
@@ -94,12 +94,12 @@ public interface PluginManifest {
     Map<String, String> icons();
 
     /**
-     * Host-facing abilities this plugin provides at activation, declared statically so a host can answer what it can do without executing it.
+     * The capabilities this plugin provides at activation and the ones it consumes, declared statically so a host can answer what it can do without executing it.
      *
-     * @return the capability ids this plugin provides, or absent when it provides none
+     * @return what this plugin provides and consumes, or absent when it does neither
      */
     @TsOptional
-    List<String> capabilities();
+    ManifestCapabilities capabilities();
 
     /**
      * The applications this artifact is for. Absent means every application.

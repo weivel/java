@@ -109,17 +109,33 @@ public final class PluginLedger {
      * otherwise be reported again every time it restarts.
      */
     public boolean recordServiceRefused(String pluginId, String serviceId) {
+        return recordRefused(DeclarationKind.SERVICE, pluginId, serviceId);
+    }
+
+    /**
+     * Records that a plugin was refused a capability, and answers whether this is the first time.
+     *
+     * @param pluginId the plugin that reached for the capability
+     * @param capabilityId the capability id it reached for without declaring it
+     * @return true when this plugin and id were not refused before, false when they already were
+     * @implNote Kept across activations for the reason {@link #recordServiceRefused} gives.
+     */
+    public boolean recordCapabilityRefused(String pluginId, String capabilityId) {
+        return recordRefused(DeclarationKind.CAPABILITY, pluginId, capabilityId);
+    }
+
+    private boolean recordRefused(DeclarationKind kind, String pluginId, String id) {
         for (ServiceRefusal refusal : refused) {
-            if (refusal.concerns(pluginId, serviceId)) {
+            if (refusal.concerns(kind, pluginId, id)) {
                 return false;
             }
         }
-        refused.add(new ServiceRefusal(pluginId, serviceId));
+        refused.add(new ServiceRefusal(kind, pluginId, id));
         return true;
     }
 
     /**
-     * Every service a plugin reached for without declaring it, once per plugin and id.
+     * Every service or capability a plugin reached for without declaring it, once per plugin, kind and id.
      *
      * @return the refusals in the order first reported, or empty when there were none
      */

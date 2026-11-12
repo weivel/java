@@ -1,5 +1,6 @@
 package io.github.intisy.ai.seam.jvm.context;
 
+import io.github.intisy.ai.api.Capabilities;
 import io.github.intisy.ai.api.CapabilityType;
 import io.github.intisy.ai.api.Events;
 import io.github.intisy.ai.api.HomeDescriptor;
@@ -31,6 +32,7 @@ public final class JvmPluginContext implements PluginContext {
     private final ContextRuntime runtime;
     private final PluginConfig config;
     private final Services services;
+    private final Capabilities capabilities;
     private final Events events;
 
     private JvmPluginContext(PluginSession session, HostDescriptor host, ContextRuntime runtime) {
@@ -40,6 +42,7 @@ public final class JvmPluginContext implements PluginContext {
         boolean hostHasPortableLayer = runtime.paths().portable() != null;
         this.config = new FencedConfig(session.getFacts().getId(), runtime.config(), hostHasPortableLayer);
         this.services = new SessionServices(session.getServices());
+        this.capabilities = new SessionCapabilities(session.getCapabilities());
         this.events = new SessionEvents(session.getEvents());
     }
 
@@ -126,6 +129,11 @@ public final class JvmPluginContext implements PluginContext {
     @Override
     public Services services() {
         return services;
+    }
+
+    @Override
+    public Capabilities capabilities() {
+        return capabilities;
     }
 
     @Override

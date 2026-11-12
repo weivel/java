@@ -51,13 +51,13 @@ it("validates a good manifest and exits 0", () => {
 
 it("reports each problem with its fix and exits 1", () => {
   const dir = tempDir();
-  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1, capabilities: ["settings"] });
+  write(dir, "plugin.json", { importName: "wakatime-sync", api: 1, capabilities: { provides: ["settings"] } });
   const { io, err } = collect();
   expect(run(["validate", "--dir", dir], io)).toBe(1);
   expect(err).toEqual([
     "wakatime-sync: 1 problem",
     '  error  entry: required field "entry" is missing',
-    '    fix: capabilities are declared, so add "entry" naming the module that provides them, for example "dist/index.js"',
+    '    fix: capabilities are provided, so add "entry" naming the module that provides them, for example "dist/index.js"',
   ]);
 });
 

@@ -83,7 +83,7 @@ const SCREENS = {
   id: "config-ledger",
   api: 1,
   entry: "dist/index.js",
-  capabilities: ["screens"],
+  capabilities: { provides: ["screens"] },
   permissions: ["config:write"],
   services: { consumes: ["accounts", "provider-support"], provides: ["config-ledger:store"] },
 };
@@ -206,7 +206,7 @@ it("settles a want as a real promise, and rejects a quarantined plugin's want", 
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
   const context = host.contextFor(SCREENS, runtime());
   const arriving = context.services.want("accounts");
-  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", { list: () => [] });
+  host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime()).services.register("accounts", { list: () => [] });
   expect(await arriving).toEqual({ list: expect.any(Function) });
 
   const quarantined = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
@@ -245,10 +245,10 @@ it("reports an unknown capability id only when the host declared a vocabulary", 
   const seen: string[] = [];
   setDiagnosticSink((message) => seen.push(message));
   const silent = createPluginHost({ app: "claude", api: 1 });
-  silent.contextFor({ id: "a", api: 1, capabilities: ["screns"] }, runtime()).provide("screns", {});
+  silent.contextFor({ id: "a", api: 1, capabilities: { provides: ["screns"] } }, runtime()).provide("screns", {});
   expect(seen).toEqual([]);
   const declaring = createPluginHost({ app: "claude", api: 1, vocabulary: ["screens"] });
-  declaring.contextFor({ id: "b", api: 1, capabilities: ["screns"] }, runtime()).provide("screns", {});
+  declaring.contextFor({ id: "b", api: 1, capabilities: { provides: ["screns"] } }, runtime()).provide("screns", {});
   expect(seen).toEqual(['ignored unknown capability "screns" from b']);
   setDiagnosticSink(null);
 });
@@ -269,7 +269,7 @@ it("returns callable disposers from subscribe, watch and register, which is what
   const watched: unknown[] = [];
   const stopWatch = context.services.watch("accounts", (service, event) => watched.push({ service, event }));
   expect(typeof stopWatch).toBe("function");
-  const provider = host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime());
+  const provider = host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime());
   const stopProvide = provider.services.register("accounts", { list: () => [] });
   stopWatch();
   stopProvide();
@@ -287,7 +287,7 @@ it("reports service watch events as register then unregister, with the service i
   const seen: Array<{ service: unknown; event: string }> = [];
   watcher.services.watch("accounts", (service, event) => seen.push({ service, event }));
 
-  const provider = host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime());
+  const provider = host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime());
   const stop = provider.services.register("accounts", { list: () => [] });
   stop();
 
@@ -301,7 +301,7 @@ it("answers host.service with undefined precisely, never null, and the service b
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
   expect(host.service("accounts")).toBeUndefined();
   const accounts = { list: () => [] };
-  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", accounts);
+  host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime()).services.register("accounts", accounts);
   expect(host.service("accounts")).toBe(accounts);
 });
 
@@ -310,24 +310,24 @@ it("answers context.services.get with undefined precisely, and the service by id
   const context = host.contextFor(SCREENS, runtime());
   expect(context.services.get("accounts")).toBeUndefined();
   const accounts = { list: () => [] };
-  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", accounts);
+  host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime()).services.register("accounts", accounts);
   expect(context.services.get("accounts")).toBe(accounts);
 });
 
 it("answers nothing to an undeclared get and records the refusal on the ledger once", () => {
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
-  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", { list: () => [] });
+  host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime()).services.register("accounts", { list: () => [] });
   const undeclared = host.contextFor({ id: "notes", api: 1 }, runtime());
   expect(undeclared.services.get("accounts")).toBeUndefined();
   expect(undeclared.services.get("accounts")).toBeUndefined();
-  expect(host.ledger.refusals()).toEqual([{ pluginId: "notes", serviceId: "accounts" }]);
+  expect(host.ledger.refusals()).toEqual([{ kind: "service", pluginId: "notes", serviceId: "accounts" }]);
 });
 
 it("lists every service id currently registered that the plugin may reach", () => {
   const host = createPluginHost({ app: "claude", api: 1, wellKnownServices: ["accounts"] });
   const context = host.contextFor(SCREENS, runtime());
   expect(context.services.ids()).toEqual([]);
-  host.contextFor({ id: "core-auth", api: 1, capabilities: [] }, runtime()).services.register("accounts", { list: () => [] });
+  host.contextFor({ id: "core-auth", api: 1, capabilities: {} }, runtime()).services.register("accounts", { list: () => [] });
   expect(context.services.ids()).toEqual(["accounts"]);
 });
 
@@ -340,7 +340,7 @@ it("lists every ledger row, and a non-broken row carries no error property at al
 
 it("opens a fresh ledger entry directly through ledger.recordDeclared, without going through contextFor", () => {
   const host = createPluginHost({ app: "claude", api: 1 });
-  host.ledger.recordDeclared({ id: "config-ledger", api: 1, capabilities: ["screens"], permissions: ["config:write"] });
+  host.ledger.recordDeclared({ id: "config-ledger", api: 1, capabilities: { provides: ["screens"] }, permissions: ["config:write"] });
   expect(host.ledger.entry("config-ledger")).toEqual({
     pluginId: "config-ledger",
     status: "activating",
@@ -383,6 +383,7 @@ it("assembles the context object with exactly these keys, pinning it against Con
   const host = createPluginHost({ app: "claude", api: 1 });
   const context = host.contextFor(SCREENS, runtime());
   expect(Object.keys(context).sort()).toEqual([
+    "capabilities",
     "capability",
     "config",
     "events",
@@ -398,6 +399,28 @@ it("assembles the context object with exactly these keys, pinning it against Con
   ]);
   expect(Object.keys(context.services).sort()).toEqual(["get", "ids", "register", "want", "watch"]);
   expect(Object.keys(context.events).sort()).toEqual(["publish", "subscribe"]);
+  expect(Object.keys(context.capabilities).sort()).toEqual(["all", "watch"]);
+});
+
+it("answers a consumer only verified implementations, and tells a watcher who joined and left", () => {
+  const host = createPluginHost({ app: "claude", api: 1 });
+  const reader = host.contextFor({ id: "reader", api: 1, capabilities: { consumes: ["screens"] } }, runtime());
+  const heard: Array<[unknown, string]> = [];
+  reader.capabilities.watch({ id: "screens" }, (implementation, event) => { heard.push([implementation, event]); });
+  const screens = { screens: () => [] };
+  host.contextFor(SCREENS, runtime()).provide("screens", screens);
+  expect(reader.capabilities.all({ id: "screens" })).toEqual([]);
+  expect(host.verifyActivation(SCREENS)).toBeNull();
+  expect(reader.capabilities.all("screens")).toEqual([screens]);
+  host.release("config-ledger");
+  expect(heard).toEqual([[screens, "provide"], [screens, "withdraw"]]);
+});
+
+it("answers an undeclared capability with nothing and records the refusal by kind", () => {
+  const host = createPluginHost({ app: "claude", api: 1 });
+  const notes = host.contextFor({ id: "notes", api: 1 }, runtime());
+  expect(notes.capabilities.all("screens")).toEqual([]);
+  expect(host.ledger.refusals()).toEqual([{ kind: "capability", pluginId: "notes", serviceId: "screens" }]);
 });
 
 // How a plugin reaches behaviour belonging to a library it may not link: the host links it once and

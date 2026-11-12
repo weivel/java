@@ -9,8 +9,9 @@ service is something ANOTHER PLUGIN consumes. Keeping the two apart is what lets
 several things at once.
 
 Capability ids are bare names minted only by this package, because they are the host contract.
-The manifest declares which ones a plugin has; `activate` supplies the implementations; the host
-checks the two against each other and quarantines the plugin when they disagree.
+The manifest lists the ones a plugin has under `capabilities.provides`; `activate` supplies the
+implementations; the host checks the two against each other and quarantines the plugin when they
+disagree.
 
 | id | interface | what it is |
 | --- | --- | --- |
@@ -50,3 +51,20 @@ for (const { pluginId, implementation } of host.capability("screens")) {
 ```
 
 A host never asks for a plugin by name. That rule is what keeps the number of plugins unbounded.
+
+A plugin may consume them too. It lists the ids under `capabilities.consumes` and reads them through
+its context, which answers only implementations whose plugin's activation was verified, in the order
+those activations were verified:
+
+```ts
+for (const screens of ctx.capabilities.all(ctx.capability<ScreensCapability>("screens"))) {
+  render(await screens.screens());
+}
+ctx.capabilities.watch(ctx.capability<ScreensCapability>("screens"), (screens, event) => {
+  if (event === "withdraw") forget(screens);
+});
+```
+
+`watch` hears changes from its installation onwards, never what is already there, so a consumer
+pairs it with `all`. An id the manifest lists under neither `consumes` nor `provides` answers an
+empty list and is reported once, so a refusal never reads as "none right now".

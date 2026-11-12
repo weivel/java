@@ -1,5 +1,6 @@
 package io.github.intisy.ai.js;
 
+import io.github.intisy.ai.engine.ConsumedCapabilities;
 import io.github.intisy.ai.engine.EventBus;
 import io.github.intisy.ai.engine.Pending;
 import io.github.intisy.ai.engine.PluginException;
@@ -7,10 +8,12 @@ import io.github.intisy.ai.engine.PluginSession;
 import io.github.intisy.ai.engine.Scheduler;
 import io.github.intisy.ai.engine.ServiceHub;
 import io.github.intisy.ai.engine.SettingsLayers;
+import java.util.List;
 import java.util.Map;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
+import org.teavm.jso.core.JSArray;
 
 /**
  * @implNote Shape only, exactly like {@link JsPluginHost}: it converts a Java list to a JSArray (via
@@ -53,6 +56,21 @@ final class JsPluginContext implements JSObject {
     @JSFunctor
     interface WatchFn extends JSObject {
         JsRuntime.Disposer call(String id, ServiceListenerFn listener);
+    }
+
+    @JSFunctor
+    interface CapabilityListenerFn extends JSObject {
+        void call(JSObject implementation, String event);
+    }
+
+    @JSFunctor
+    interface CapabilityWatchFn extends JSObject {
+        JsRuntime.Disposer call(JSObject key, CapabilityListenerFn listener);
+    }
+
+    @JSFunctor
+    interface KeyFn extends JSObject {
+        JSObject call(JSObject key);
     }
 
     @JSFunctor
@@ -196,7 +214,34 @@ final class JsPluginContext implements JSObject {
 
         JSObject config = fencedConfig(session.getFacts().getId(), runtime);
         return assemble(manifest, hostDescriptor, config, runtime.getLog(), runtime.getPaths(), runtime.getSecrets(),
-                servicesObj, eventsObj, provide, capability, service, topic, homes);
+                servicesObj, capabilitiesOf(session.getCapabilities()), eventsObj, provide, capability, service, topic,
+                homes);
+    }
+
+    private static JSObject capabilitiesOf(final ConsumedCapabilities consumed) {
+        KeyFn all = new KeyFn() {
+            @Override
+            public JSObject call(JSObject key) {
+                JSArray<JSObject> out = JSArray.create();
+                List<Object> implementations = consumed.all(capabilityId(key));
+                for (int index = 0; index < implementations.size(); index++) {
+                    out.set(index, (JSObject) implementations.get(index));
+                }
+                return out;
+            }
+        };
+        CapabilityWatchFn watch = new CapabilityWatchFn() {
+            @Override
+            public JsRuntime.Disposer call(JSObject key, final CapabilityListenerFn listener) {
+                return disposerOf(consumed.watch(capabilityId(key), new ConsumedCapabilities.Listener() {
+                    @Override
+                    public void changed(Object implementation, boolean provided) {
+                        listener.call((JSObject) implementation, JsPluginHost.capabilityEvent(provided));
+                    }
+                }));
+            }
+        };
+        return capabilitiesObject(all, watch);
     }
 
     private static JSObject fencedConfig(final String pluginId, JsRuntime runtime) {
@@ -284,17 +329,22 @@ final class JsPluginContext implements JSObject {
             "return { get: get, want: want, watch: watch, register: register, ids: ids };")
     private static native JSObject servicesObject(IdFn get, WantFn want, WatchFn watch, RegisterFn register, IdsFn ids);
 
+    @JSBody(params = {"all", "watch"}, script = "return { all: all, watch: watch };")
+    private static native JSObject capabilitiesObject(KeyFn all, CapabilityWatchFn watch);
+
     @JSBody(params = {"publish", "subscribe"}, script = "return { publish: publish, subscribe: subscribe };")
     private static native JSObject eventsObject(PublishFn publish, SubscribeFn subscribe);
 
-    @JSBody(params = {"manifest", "host", "config", "log", "paths", "secrets", "services", "events", "provide",
-            "capability", "service", "topic", "homes"}, script =
+    @JSBody(params = {"manifest", "host", "config", "log", "paths", "secrets", "services", "capabilities", "events",
+            "provide", "capability", "service", "topic", "homes"}, script =
             "var context = { manifest: manifest, host: host, config: config, log: log, paths: paths, "
-            + "services: services, events: events, provide: provide, capability: capability, service: service, "
+            + "services: services, capabilities: capabilities, events: events, provide: provide, "
+            + "capability: capability, service: service, "
             + "topic: topic, homes: homes };"
             + "if (secrets !== null && secrets !== undefined) { context.secrets = secrets; }"
             + "return context;")
     private static native JsPluginContext assemble(JSObject manifest, JSObject host, JSObject config, JSObject log,
-            JSObject paths, JSObject secrets, JSObject services, JSObject events, ProvideFn provide, IdFn capability,
+            JSObject paths, JSObject secrets, JSObject services, JSObject capabilities, JSObject events,
+            ProvideFn provide, IdFn capability,
             IdFn service, IdFn topic, IdsFn homes);
 }

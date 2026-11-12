@@ -51,6 +51,7 @@ function nodeAt(path: string): SchemaNode | undefined {
 // is spelled out rather than derived: the schema names a field, the contract names a type, and
 // nothing in either connects the two, which is the whole reason this test exists.
 const NESTED: Array<{ field: string; iface: string }> = [
+  { field: "capabilities", iface: "ManifestCapabilities" },
   { field: "services", iface: "ManifestServices" },
   { field: "services.provides", iface: "ManifestOffer" },
   { field: "services.consumes", iface: "ManifestRequirement" },
