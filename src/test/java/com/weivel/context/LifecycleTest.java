@@ -268,6 +268,23 @@ class LifecycleTest {
     }
 
     @Test
+    void aRefusedVerifyEndsThePluginsEntriesSoAListenerFromBeforeHearsNothingAfterIt() {
+        try (ContextFixture fixture = new ContextFixture()) {
+            PluginContext lacking = fixture.opened(ContextFixture.capabilities("lacking",
+                    Collections.singletonList("screens"), Collections.<String>emptyList()));
+            List<PluginEvent> heard = new ArrayList<>();
+            lacking.listen(heard::add);
+
+            assertFalse(ok(fixture.contexts.verify(lacking)).verified());
+            lacking.get("undeclared-while-quarantined");
+            fixture.open(lacking);
+            lacking.get("undeclared-once-open");
+
+            assertEquals(Collections.<PluginEvent>emptyList(), heard);
+        }
+    }
+
+    @Test
     void aDetachedContextAnswersDetachedBeforeItJudgesTheCallersMistake() {
         try (ContextFixture fixture = new ContextFixture(CoreOptions.defaults(), false, Scheduler.none())) {
             PluginContext consumer = fixture.opened(consuming("consumer", GREETER));
