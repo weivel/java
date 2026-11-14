@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -144,6 +145,31 @@ public final class Handles {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Ends every entry {@code owner} owns whose kind is one of {@code kinds}, and leaves its others.
+     *
+     * @param owner a plugin's handle, or {@code WEIVEL_HOST}
+     * @param kinds the kinds to end
+     * @return the entries ended, in no particular order
+     */
+    public List<HandleEntry> endOwned(long owner, Set<HandleKind> kinds) {
+        Objects.requireNonNull(kinds, "kinds");
+        lock.lock();
+        try {
+            List<HandleEntry> ended = entries.removeAll((handle, unused, entry) ->
+                    entry.owner() == owner && kinds.contains(entry.kind()));
+            ended.forEach(this::freeToken);
+            return ended;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Whether the calling thread holds the table's lock: what a test reads from code that must run outside it. */
+    boolean isLockHeldByCurrentThread() {
+        return lock.isHeldByCurrentThread();
     }
 
     /**

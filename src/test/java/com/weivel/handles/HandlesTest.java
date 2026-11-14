@@ -26,6 +26,7 @@ import com.weivel.core.WantOptions;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -210,6 +211,25 @@ class HandlesTest {
 
         assertSame(record, handles.end(plugin).object());
         assertEquals(0, handles.entryCount());
+    }
+
+    @Test
+    void endingAnOwnersEntriesOfSomeKindsLeavesItsOthers() {
+        Manifest manifest = new Manifest("kinds", 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
+                List.of(consumed("kinds:service"), consumed("kinds:awaited")), List.of(), Optional.empty());
+        long plugin = made(CoreCalls.registerManifest(manifest), HandleKind.PLUGIN, Handles.NO_OWNER, new Object());
+        ok(core.call(CoreCalls.openPlugin(plugin, handles.find(plugin).token())));
+        long registration = made(CoreCalls.registerService(plugin, "kinds:service"),
+                HandleKind.SERVICE_REGISTRATION, plugin, new Object());
+        long want = made(CoreCalls.wantService(plugin, "kinds:awaited", WantOptions.unbounded()),
+                HandleKind.WANT, plugin, new Object());
+
+        List<HandleEntry> ended = handles.endOwned(plugin, EnumSet.of(HandleKind.SERVICE_REGISTRATION));
+
+        assertEquals(List.of(registration), ended.stream().map(HandleEntry::handle).toList());
+        assertNull(handles.find(registration));
+        assertEquals(HandleKind.WANT, handles.find(want).kind());
+        assertEquals(HandleKind.PLUGIN, handles.find(plugin).kind());
     }
 
     @Test
