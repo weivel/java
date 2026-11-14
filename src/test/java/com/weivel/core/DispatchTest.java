@@ -256,6 +256,21 @@ class DispatchTest {
     }
 
     @Test
+    void aDestroyMadeByAListenerEndsTheRunningDispatchAtOnce() {
+        Core[] holder = new Core[1];
+        Core core = TestCores.core(event -> holder[0].destroy(), sink);
+        holder[0] = core;
+        core.addListener(listener);
+        ok(core.call(CoreCalls.watchService(HOST, "ended")));
+
+        ok(core.call(CoreCalls.registerService(HOST, "ended")));
+
+        assertTrue(core.isDestroyed());
+        assertEquals(List.of(), listener.events());
+        core.close();
+    }
+
+    @Test
     void aDestroyedCoreAnswersEveryCallDestroyedAndDropsWhatItHadNotDispatched() {
         Core core = TestCores.core(listener, sink);
         ok(core.call(CoreCalls.watchService(HOST, "dropped")));
