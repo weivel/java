@@ -750,6 +750,24 @@ final class Wrapper {
                 : DeferredStep.Deferral.LEFT_TO_THE_DISPATCH;
     }
 
+    /**
+     * Runs {@code step} at once as the dispatcher when no dispatch runs, none waits for the timer's arming and
+     * nothing is queued; otherwise queues nothing and runs nothing.
+     */
+    boolean runAsTheDispatcher(DeferredStep step) {
+        Objects.requireNonNull(step, "step");
+        if (!enter()) {
+            return false;
+        }
+        if (dispatching || following || !queue.isEmpty()) {
+            lock.unlock();
+            return false;
+        }
+        QueueEntry.StepEntry entry = new QueueEntry.StepEntry(step);
+        queue.addLast(entry);
+        return leave(new CallNotes(), entry);
+    }
+
     /** Installs deadline hooks where none are; hooks installed while a deadline is recorded are told it at once. */
     Answer<Void> installDeadlineHooks(DeadlineHooks installing) {
         Objects.requireNonNull(installing, "hooks");

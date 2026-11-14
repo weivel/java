@@ -111,6 +111,27 @@ class HostTest {
     }
 
     @Test
+    void whatAnActivatesOwnCallsQueueIsHeardOnceThatActivateHasReturned() {
+        TestEntry waiting = fixture.entry("waiting");
+        waiting.onActivate = context -> context.want("serving:events", WantLimits.unbounded()).settlement()
+                .thenRun(() -> fixture.trace.add("settled waiting"));
+        TestEntry serving = fixture.entry("serving");
+        serving.onActivate = context -> {
+            value(context.register("serving:events", new Object()));
+            fixture.trace.add("registered serving");
+            return CompletableFuture.completedFuture(null);
+        };
+        long waitingPlugin = fixture.register(consuming("waiting", "serving:events"), waiting);
+        long servingPlugin = fixture.register(services("serving", Collections.singletonList("serving:events"),
+                Collections.<String>emptyList()), serving);
+
+        host.activate(Arrays.asList(waitingPlugin, servingPlugin), EdgeSource.CAPABILITIES);
+
+        assertEquals(Arrays.asList("activate waiting", "activate serving", "registered serving", "settled waiting"),
+                fixture.trace());
+    }
+
+    @Test
     void anActivateThatThrowsAnswersNoStageOrFailsIsQuarantinedWithAReasonSayingSo() {
         TestEntry throwing = fixture.entry("throwing");
         throwing.onActivate = context -> {

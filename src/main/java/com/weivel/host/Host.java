@@ -673,10 +673,28 @@ public final class Host implements AutoCloseable {
         }
         ActivationPlan plan = ((Answer.Ok<ActivationPlan>) planned).value();
         List<CompletableFuture<Outcome>> outcomes = new ArrayList<>(plan.order().size());
+        DeferredStep startingEvery = () -> {
+            startEvery(plan, outcomes);
+            return DeferredStep.Status.DONE;
+        };
+        if (!CoreInternals.runAsTheDispatcher(core, startingEvery)) {
+            startEvery(plan, outcomes);
+        }
+        return new Answer.Ok<>(new Activation(plan, outcomes));
+    }
+
+    /**
+     * Starts every plugin of the plan's order, in that order, on the calling thread.
+     *
+     * @implNote {@link #activate} runs it as a step of a dispatch wherever it can, so what an activate's own calls
+     * queue is heard once that activate has returned, as everywhere else inside a dispatch, and a plugin waiting on a
+     * service another's activate registers is served after that registration returns, never inside it. Where a
+     * dispatch runs already, the calls queue behind it the same way.
+     */
+    private void startEvery(ActivationPlan plan, List<CompletableFuture<Outcome>> outcomes) {
         for (long plugin : plan.order()) {
             outcomes.add(start(plugin));
         }
-        return new Answer.Ok<>(new Activation(plan, outcomes));
     }
 
     private CompletableFuture<Outcome> start(long plugin) {

@@ -137,6 +137,10 @@ public final class Core implements AutoCloseable {
         return wrapper.defer(step);
     }
 
+    boolean runAsTheDispatcher(DeferredStep step) {
+        return wrapper.runAsTheDispatcher(step);
+    }
+
     Answer<Void> installDeadlineHooks(DeadlineHooks hooks) {
         return wrapper.installDeadlineHooks(hooks);
     }
