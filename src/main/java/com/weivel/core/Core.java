@@ -14,6 +14,10 @@ import java.util.Optional;
  * runs dispatches before it returns, so a listener can hear of a handle before the call that answered it returns.
  * Nothing of the caller's is ever called under the lock, and what a listener throws goes to the error sink.
  *
+ * <p>A {@link VirtualMachineError} a listener or a step throws is the one failure not told to the sink: it is
+ * rethrown to the thread that was dispatching once the dispatcher is free again, and the events and steps still queued
+ * behind it stay queued, to be delivered by the next call that dispatches.
+ *
  * <p>Any thread may call. {@link #destroy()} destroys the core; {@link #close()} then frees what the object holds.
  */
 public final class Core implements AutoCloseable {
@@ -57,6 +61,7 @@ public final class Core implements AutoCloseable {
             case Answer.Absent<Wrapper> absent -> new Answer.Defect<>("the core's creation answered nothing");
             case Answer.Detached<Wrapper> detached -> new Answer.Detached<>();
             case Answer.Destroyed<Wrapper> destroyed -> new Answer.Destroyed<>();
+            case Answer.Mistake<Wrapper> mistake -> new Answer.Mistake<>(mistake.detail());
         };
     }
 
@@ -107,8 +112,12 @@ public final class Core implements AutoCloseable {
         return wrapper.defer(step);
     }
 
-    boolean setDeadlineHooks(DeadlineHooks hooks) {
-        return wrapper.setDeadlineHooks(hooks);
+    Answer<Void> installDeadlineHooks(DeadlineHooks hooks) {
+        return wrapper.installDeadlineHooks(hooks);
+    }
+
+    boolean removeDeadlineHooks(DeadlineHooks hooks) {
+        return wrapper.removeDeadlineHooks(hooks);
     }
 
     void report(Failure failure) {

@@ -231,6 +231,46 @@ class DispatchTest {
     }
 
     @Test
+    void aReportMadeUnderTheLayerLockIsADefectAndReachesNoSinkThere() {
+        List<Boolean> lockSeen = new ArrayList<>();
+        Core[] holder = new Core[1];
+        Core core = TestCores.core(listener, failure -> {
+            lockSeen.add(holder[0].isLockHeld());
+            sink.report(failure);
+        });
+        holder[0] = core;
+        Failure underTheLock = new Failure(FailureKind.STEP, "reported under the lock", 0, 0, Optional.empty());
+
+        Answer<Long> answer = CoreInternals.call(core, CoreCalls.registerService(HOST, "reporting"),
+                new CallSteps<>(() -> {
+                    CoreInternals.report(core, underTheLock);
+                    return Optional.empty();
+                }, Answer.Ok::new));
+
+        assertInstanceOf(Answer.Defect.class, answer);
+        assertEquals(List.of(), sink.of(FailureKind.STEP));
+        Failure defect = sink.of(FailureKind.LAYER_DEFECT).getFirst();
+        assertTrue(defect.cause().orElseThrow().getMessage().contains("under the layer lock"), defect.toString());
+        assertEquals(List.of(false), lockSeen);
+        core.destroy();
+    }
+
+    @Test
+    void aDestroyMadeByAListenerEndsTheRunningDispatchAtOnce() {
+        Core[] holder = new Core[1];
+        Core core = TestCores.core(event -> holder[0].destroy(), sink);
+        holder[0] = core;
+        core.addListener(listener);
+        ok(core.call(CoreCalls.watchService(HOST, "ended")));
+
+        ok(core.call(CoreCalls.registerService(HOST, "ended")));
+
+        assertTrue(core.isDestroyed());
+        assertEquals(List.of(), listener.events());
+        core.close();
+    }
+
+    @Test
     void aDestroyedCoreAnswersEveryCallDestroyedAndDropsWhatItHadNotDispatched() {
         Core core = TestCores.core(listener, sink);
         ok(core.call(CoreCalls.watchService(HOST, "dropped")));

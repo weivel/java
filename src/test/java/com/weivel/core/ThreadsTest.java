@@ -88,7 +88,7 @@ class ThreadsTest {
                 await(releaseListener);
             }
         });
-        CoreInternals.setDeadlineHooks(core, new DeadlineHooks() {
+        CoreInternals.installDeadlineHooks(core, new DeadlineHooks() {
             @Override
             public long now() {
                 return 0;
@@ -120,6 +120,102 @@ class ThreadsTest {
             releaseFollow.countDown();
             threads.shutdownNow();
             core.destroy();
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void anAnnouncementDrainedWhileFollowRunsIsToldAgainBeforeAnyOfItsEventsIsHeard() throws Exception {
+        Core core = TestCores.core(listener, sink);
+        GatedFollow follow = new GatedFollow(core);
+        List<Integer> returnedWhenHeard = Collections.synchronizedList(new ArrayList<>());
+        core.addListener(event -> returnedWhenHeard.add(follow.returned.get()));
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> threadA = threads.submit(() ->
+                    ok(core.call(CoreCalls.wantService(HOST, "from-a", WantOptions.timed(0, 100)))));
+            assertTrue(follow.firstEntered.await(GATE_SECONDS, TimeUnit.SECONDS));
+            threads.submit(() -> ok(core.call(CoreCalls.wantService(HOST, "from-b", WantOptions.timed(0, 50)))))
+                    .get(GATE_SECONDS, TimeUnit.SECONDS);
+
+            assertEquals(List.of(), listener.events(), "an event was heard while follow still ran");
+            follow.releaseFirst.countDown();
+            threadA.get(GATE_SECONDS, TimeUnit.SECONDS);
+
+            assertEquals(List.of(new DeadlineHooksTest.Follow(100, true), new DeadlineHooksTest.Follow(50, true)),
+                    follow.follows());
+            assertEquals(2, listener.events().size());
+            assertEquals(List.of(2, 2), returnedWhenHeard);
+            assertEquals(1, follow.mostAtOnce.get());
+        } finally {
+            follow.releaseFirst.countDown();
+            threads.shutdownNow();
+            core.destroy();
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void twoCallsToFollowNeverOverlap() throws Exception {
+        Core core = TestCores.core(listener, sink);
+        GatedFollow follow = new GatedFollow(core);
+        ExecutorService threads = Executors.newFixedThreadPool(3);
+        try {
+            Future<?> threadA = threads.submit(() ->
+                    ok(core.call(CoreCalls.wantService(HOST, "from-a", WantOptions.timed(0, 100)))));
+            assertTrue(follow.firstEntered.await(GATE_SECONDS, TimeUnit.SECONDS));
+            threads.submit(() -> ok(core.call(CoreCalls.wantService(HOST, "from-b", WantOptions.timed(0, 50)))))
+                    .get(GATE_SECONDS, TimeUnit.SECONDS);
+            threads.submit(() -> ok(core.call(CoreCalls.wantService(HOST, "from-c", WantOptions.timed(0, 20)))))
+                    .get(GATE_SECONDS, TimeUnit.SECONDS);
+
+            assertEquals(1, follow.follows().size(), "another thread called follow while the first still ran");
+            follow.releaseFirst.countDown();
+            threadA.get(GATE_SECONDS, TimeUnit.SECONDS);
+
+            assertEquals(1, follow.mostAtOnce.get());
+            assertEquals(new DeadlineHooksTest.Follow(20, true), follow.follows().getLast());
+        } finally {
+            follow.releaseFirst.countDown();
+            threads.shutdownNow();
+            core.destroy();
+        }
+    }
+
+    /** Deadline hooks whose first {@code follow} waits on a gate, counting calls at once and calls returned. */
+    private static final class GatedFollow implements DeadlineHooks {
+        final CountDownLatch firstEntered = new CountDownLatch(1);
+        final CountDownLatch releaseFirst = new CountDownLatch(1);
+        final AtomicInteger returned = new AtomicInteger();
+        final AtomicInteger mostAtOnce = new AtomicInteger();
+        private final AtomicInteger atOnce = new AtomicInteger();
+        private final List<DeadlineHooksTest.Follow> follows = Collections.synchronizedList(new ArrayList<>());
+
+        GatedFollow(Core core) {
+            assertEquals(new Answer.Ok<Void>(null), CoreInternals.installDeadlineHooks(core, this));
+        }
+
+        @Override
+        public long now() {
+            return 0;
+        }
+
+        @Override
+        public void follow(long at, boolean set) {
+            mostAtOnce.accumulateAndGet(atOnce.incrementAndGet(), Math::max);
+            follows.add(new DeadlineHooksTest.Follow(at, set));
+            if (follows.size() == 1) {
+                firstEntered.countDown();
+                await(releaseFirst);
+            }
+            atOnce.decrementAndGet();
+            returned.incrementAndGet();
+        }
+
+        List<DeadlineHooksTest.Follow> follows() {
+            synchronized (follows) {
+                return List.copyOf(follows);
+            }
         }
     }
 

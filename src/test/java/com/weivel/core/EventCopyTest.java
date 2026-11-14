@@ -8,6 +8,7 @@ import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.foreign.Arena;
@@ -80,6 +81,37 @@ class EventCopyTest {
         List<Failure> told = sink.failures().subList(toldBefore, sink.failures().size());
         assertEquals(1, told.stream().filter(failure -> failure.sequence() == settled.sequence()).count());
         assertEquals(FailureKind.EVENT_INCOMPLETE, told.getFirst().kind());
+        core.destroy();
+    }
+
+    @Test
+    void aRejectedWantKeepsItsSubjectOnItsRefusalAndNamesNoUnmetConstraint() {
+        Core core = TestCores.core(listener, sink);
+        ok(core.call(CoreCalls.wantService(HOST, "awaited", WantOptions.timed(0, 10))));
+
+        ok(core.call(CoreCalls.advance(10)));
+
+        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).getFirst();
+        Refusal refusal = settled.refusal().orElseThrow();
+        assertEquals(CoreConstants.REFUSAL_TIMED_OUT, refusal.code());
+        assertEquals(Optional.of("awaited"), refusal.subject());
+        assertEquals(Optional.empty(), settled.unmetConstraint());
+        assertFalse(settled.degraded());
+        core.destroy();
+    }
+
+    @Test
+    void anOutOfMemoryErrorInAWholeCopyFallsBackToAnIncompleteEvent() {
+        Core core = TestCores.core(TestCores.functions(), new StarvedCopy(), listener, sink);
+
+        Refusal refusal = TestCores.refusalOf(core.call(CoreCalls.unregister(424242L)));
+
+        assertEquals(CoreConstants.REFUSAL_STALE_HANDLE, refusal.code());
+        assertEquals(CoreEvent.TEXT_NOT_COPIED, refusal.detail());
+        assertTrue(listener.of(CoreEvent.RefusalEvent.class).getFirst().incomplete());
+        assertEquals(1, sink.of(FailureKind.EVENT_INCOMPLETE).size());
+        assertInstanceOf(OutOfMemoryError.class, sink.of(FailureKind.EVENT_INCOMPLETE).getFirst().cause()
+                .orElseThrow());
         core.destroy();
     }
 
@@ -169,6 +201,19 @@ class EventCopyTest {
 
     private static WantOptions polled() {
         return new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 100);
+    }
+
+    /** A copy whose every whole copy runs out of memory, as a copy of a large text could. */
+    static final class StarvedCopy implements EventCopying {
+        @Override
+        public CoreEvent whole(MemorySegment event, long sequence) {
+            throw new OutOfMemoryError("a copy ran out of memory on purpose");
+        }
+
+        @Override
+        public CoreEvent fixedPart(MemorySegment event, long sequence) {
+            return EventCopy.INSTANCE.fixedPart(event, sequence);
+        }
     }
 
     /** A copy failing whole, or in its fixed part too, for the sequence numbers it is told. */

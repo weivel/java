@@ -62,11 +62,13 @@ def nativeSiblings = [
          taskSuffix          : 'Core',
          targets             : ['weivel_core_shared', 'echo', 'layouts'],
          libraries           : ['weivel_core', 'echo'],
+         compiledSiblings    : ['core'],
          configureDefinitions: []],
         [name                : 'standard',
          taskSuffix          : 'Standard',
          targets             : ['weivel_standard_shared', 'layouts'],
          libraries           : ['weivel_standard'],
+         compiledSiblings    : ['standard', 'core'],
          configureDefinitions: ["-DWEIVEL_CORE_SOURCE_DIR=${new File(siblingsDirectory, 'core').absolutePath}"]],
 ]
 
@@ -108,7 +110,9 @@ def nativeBuildTasks = nativeSiblings.collect { Map nativeSibling ->
         group = 'build'
         description = "Configures siblings/${nativeSibling.name} with CMake in Release."
         dependsOn requireSiblings
-        inputs.files(siblingSources(nativeSibling.name)).withPropertyName('sources')
+        nativeSibling.compiledSiblings.each { String compiled ->
+            inputs.files(siblingSources(compiled)).withPropertyName("${compiled}Sources")
+        }
         outputs.file(new File(siblingBuildDirectory, 'CMakeCache.txt'))
         executable 'cmake'
         args(['-S', siblingSourceDirectory.absolutePath, '-B', siblingBuildDirectory.absolutePath,
@@ -119,7 +123,9 @@ def nativeBuildTasks = nativeSiblings.collect { Map nativeSibling ->
         group = 'build'
         description = "Builds ${nativeSibling.targets.join(', ')} of siblings/${nativeSibling.name} with CMake in Release."
         dependsOn configureTask
-        inputs.files(siblingSources(nativeSibling.name)).withPropertyName('sources')
+        nativeSibling.compiledSiblings.each { String compiled ->
+            inputs.files(siblingSources(compiled)).withPropertyName("${compiled}Sources")
+        }
         outputs.files(builtFileNames(nativeSibling).collectMany { builtFileCandidates(nativeSibling.name, it) })
         executable 'cmake'
         args(['--build', siblingBuildDirectory.absolutePath, '--config', 'Release', '--target'] +

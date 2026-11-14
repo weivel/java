@@ -31,10 +31,13 @@ and its events are drained under the same hold, each copied into a `CoreEvent` r
 before the next is drained; an event that cannot be copied whole is still heard, marked incomplete, with fixed
 sentences in place of its texts. The events are dispatched to the listeners first in, first out, outside the lock, by
 one thread at a time: a call made while a dispatch runs, from a listener or another thread, joins the end of the
-queue and returns. Every call answers an `Answer`: `Ok`, `Absent`, `Refused` with the refusal the core queued for it
-(never one the layer invents), `Detached`, `Destroyed`, or `Defect`, which also goes to the error sink. What a
-listener or a deferred step throws goes to the error sink, never to a caller, and a sink that throws goes to the
-standard error output.
+queue and returns. The wrapper answers every call with an `Answer`: `Ok`, `Absent`, `Refused` with the refusal the
+core queued for it (never one the layer invents), `Destroyed`, `Defect`, which also goes to the error sink, or
+`Mistake`, the caller's own error found before anything reached the core, such as a text holding a NUL character,
+which C would read cut short; `Detached` is answered only through a context. What a listener or a deferred step
+throws goes to the error sink, never to a caller, and a sink that throws goes to the standard error output. A
+`VirtualMachineError` is rethrown instead, once the dispatcher is free again, and the events and steps still queued
+behind it are delivered by the next call that dispatches.
 
 The wrapper also holds what the `timer`, `context` and `host` packages build on, reached through `CoreInternals`:
 a call with a guard and a step run under the lock, a deferred step on the dispatch queue, and the deadline hooks, the
@@ -53,6 +56,8 @@ has one lock of its own, always the innermost.
 `CoreTimer` arms the core's next deadline on the caller's `Scheduler`, which owns the clock: it follows the latest
 deadline announcement drained and nothing else, hands the core the time through the wrapper when its task runs, waits
 in steps on a scheduler that cannot wait as long, and gives the wrapper the clock for its check before each call.
+One timer follows one core: a second started while one follows is the caller's mistake, and a timer's destroy takes
+off its own hooks and nothing else.
 `Schedulers.system()` is one shared daemon thread reading `System.nanoTime()`; `Scheduler.none()` arms nothing and
 reads no clock.
 
@@ -72,4 +77,9 @@ build reads the core, the standard and the conformance kit from `siblings/core`,
 `siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links
 or clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts`
 program, and the standard's shared library and `layouts` program, with CMake in Release, and the tests run against
-those binaries.
+those binaries. Each native build declares every sibling's sources it compiles as its inputs, the core's among the
+standard's, so a change to either rebuilds it.
+
+Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
+symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run
+with `--no-watch-fs` to have Gradle read the files again, or `--rerun-tasks` to rebuild everything.

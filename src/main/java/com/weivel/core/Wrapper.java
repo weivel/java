@@ -77,6 +77,10 @@ final class Wrapper {
                                  Optional<CoreListener> listener, ErrorSink sink) {
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(sink, "sink");
+        Optional<String> mistake = CallerTexts.inOptions(options);
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
         Wrapper wrapper = new Wrapper(functions, copying, sink);
         listener.ifPresent(wrapper.listeners::add);
         return wrapper.create(options);
@@ -92,7 +96,7 @@ final class Wrapper {
                 drain(waiting(), notes, new OwnRefusal());
             }
         } catch (Throwable thrown) {
-            lock.unlock();
+            abandonCreation();
             throw rethrown(thrown);
         }
         if (status != STATUS_OK) {
@@ -111,6 +115,17 @@ final class Wrapper {
                     .invokeExact(Marshal.coreOptions(callArena, options), slot, pending);
             core = status == STATUS_OK ? slot.get(ADDRESS, 0) : MemorySegment.NULL;
             return status;
+        }
+    }
+
+    /** Entered with the lock held and left without it: destroys a core created before the creation failed. */
+    private void abandonCreation() {
+        try {
+            if (!core.equals(MemorySegment.NULL)) {
+                destroyCore();
+            }
+        } finally {
+            discardUncreated();
         }
     }
 
@@ -136,6 +151,10 @@ final class Wrapper {
     }
 
     <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps) {
+        Optional<String> mistake = call.mistake();
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
         if (!enter()) {
             return new Answer.Destroyed<>();
         }
@@ -156,15 +175,22 @@ final class Wrapper {
     }
 
     private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<T> crossed;
-        try (Arena callArena = Arena.ofConfined()) {
-            pending.set(JAVA_INT, 0, 0);
-            crossed = call.crossing().cross(functions, callArena, core, pending);
-        }
+        CoreCalls.Crossed<T> crossed = cross(call.crossing());
         OwnRefusal own = new OwnRefusal();
         drain(waiting(), notes, own);
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
         return answer instanceof Answer.Ok<T> ok ? recorded(steps.answered(), ok.value(), notes) : answer;
+    }
+
+    /**
+     * Makes one crossing into the core, under the lock, in an arena of its own: the one place a call's crossing is
+     * made, so nothing else in the package needs the table of the core's functions.
+     */
+    <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
+        try (Arena callArena = Arena.ofConfined()) {
+            pending.set(JAVA_INT, 0, 0);
+            return crossing.cross(functions, callArena, core, pending);
+        }
     }
 
     private <T> Optional<Answer<T>> guarded(CallSteps.CallGuard<T> guard, CallNotes notes) {
@@ -362,11 +388,7 @@ final class Wrapper {
     }
 
     private void advanceHeld(long now, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<Void> crossed;
-        try (Arena callArena = Arena.ofConfined()) {
-            pending.set(JAVA_INT, 0, 0);
-            crossed = CoreCalls.advanceCrossing(now).cross(functions, callArena, core, pending);
-        }
+        CoreCalls.Crossed<Void> crossed = cross(CoreCalls.advanceCrossing(now));
         if (crossed.status() == STATUS_MALFORMED) {
             notes.noteDefect("the core called the advance made for a due deadline malformed", Optional.empty());
         } else if (crossed.status() != STATUS_OK) {
@@ -545,6 +567,10 @@ final class Wrapper {
     }
 
     void report(Failure failure) {
+        if (lock.isHeldByCurrentThread()) {
+            throw new IllegalStateException(
+                    "a defect of the layer: a failure was reported under the layer lock, where no sink may run");
+        }
         ErrorSink current = sink;
         try {
             current.report(failure);
@@ -568,17 +594,35 @@ final class Wrapper {
                 : DeferredStep.Deferral.LEFT_TO_THE_DISPATCH;
     }
 
-    /** Sets the deadline hooks, none for null; hooks set while a deadline is recorded are told it at once. */
-    boolean setDeadlineHooks(DeadlineHooks replacement) {
+    /** Installs deadline hooks where none are; hooks installed while a deadline is recorded are told it at once. */
+    Answer<Void> installDeadlineHooks(DeadlineHooks installing) {
+        Objects.requireNonNull(installing, "hooks");
         if (!enter()) {
-            return false;
+            return new Answer.Destroyed<>();
         }
-        hooks = replacement;
+        if (hooks != null) {
+            lock.unlock();
+            return new Answer.Mistake<>("other deadline hooks follow this core already; take them off first");
+        }
+        hooks = installing;
         if (deadlineSerial != 0) {
             deadlineSerial++;
         }
         leave(new CallNotes(), null);
-        return true;
+        return new Answer.Ok<>(null);
+    }
+
+    /** Takes the deadline hooks off when they are {@code removing}, and leaves any others installed. */
+    boolean removeDeadlineHooks(DeadlineHooks removing) {
+        if (!enter()) {
+            return false;
+        }
+        boolean installed = hooks == removing;
+        if (installed) {
+            hooks = null;
+        }
+        leave(new CallNotes(), null);
+        return installed;
     }
 
     void addListener(CoreListener listener) {
