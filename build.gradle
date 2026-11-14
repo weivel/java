@@ -9,13 +9,15 @@ repositories {
     mavenCentral()
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
-    }
+def jdk8 = { JavaToolchainSpec spec ->
+    spec.languageVersion = JavaLanguageVersion.of(8)
+    spec.vendor = JvmVendorSpec.AMAZON
 }
-
 def jdk25 = { JavaToolchainSpec spec -> spec.languageVersion = JavaLanguageVersion.of(25) }
+
+java {
+    toolchain(jdk8)
+}
 
 sourceSets {
     java22 {
@@ -240,9 +242,7 @@ def testJava8 = tasks.register('testJava8', Test) {
     group = 'verification'
     description = 'Runs the suite on Java 8, where the jar reaches the core through JNA.'
     runsTheSuiteAgainstTheJar(it, 'jna')
-    javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(8)
-    }
+    javaLauncher = javaToolchains.launcherFor(jdk8)
 }
 
 tasks.named('check') {

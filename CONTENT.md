@@ -102,11 +102,13 @@ the standard's shared library and `layouts` program, with CMake in Release, and 
 Each native build declares every sibling's sources it compiles as its inputs, the core's among the standard's, so a
 change to either rebuilds it.
 
+Every Java 8 toolchain is Amazon Corretto, whose Java 8 also ships for macOS on arm64, where the core is built natively.
+
 Java 8 compiles every source but the foreign function backend, which Java 25 compiles at release 22 into the jar's
-`META-INF/versions/22`. `check` runs the whole suite twice against the built jar, never against the class
-directories, so the multi-release choice is the one a caller gets: `test` on Java 25 through the foreign function
-API, and `testJava8` on Java 8 through JNA, each asserting which backend it ran on. Javadoc runs on Java 25, at
-release 8 for the jar's base and at release 22 for the Java 22 sources.
+`META-INF/versions/22`. `check` runs the whole suite twice against the built jar, never against the class directories,
+so the multi-release choice is the one a caller gets: `test` on Java 25 through the foreign function API, and
+`testJava8` on Java 8 through JNA, each asserting which backend it ran on. Javadoc runs on Java 25, at release 8 for the
+jar's base and at release 22 for the Java 22 sources.
 
 Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
 symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run
