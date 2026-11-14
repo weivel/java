@@ -449,4 +449,18 @@ class TimerTest {
         assertTrue(refusal.hasFix());
         assertFalse(refusal.fix().isEmpty());
     }
+
+    @Test
+    void aSchedulerThatFailsToScheduleLeavesTheTimerDisarmedAndTellsTheSink() {
+        CoreTimer timer = started(scheduler);
+        scheduler.whenScheduled(at -> {
+            throw new IllegalStateException("a scheduler failing on purpose");
+        });
+
+        ok(core.call(CoreCalls.wantService(HOST, "unscheduled", WantOptions.timed(0, 100))));
+
+        assertEquals(OptionalLong.empty(), timer.armed());
+        assertEquals(1, failures.size());
+        failures.clear();
+    }
 }

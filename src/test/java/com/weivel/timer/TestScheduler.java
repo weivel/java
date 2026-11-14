@@ -52,7 +52,7 @@ public final class TestScheduler implements Scheduler {
         onRead = action;
     }
 
-    void whenScheduled(LongConsumer action) {
+    public void whenScheduled(LongConsumer action) {
         onSchedule = action;
     }
 

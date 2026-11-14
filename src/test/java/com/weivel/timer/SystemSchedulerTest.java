@@ -155,4 +155,29 @@ class SystemSchedulerTest {
             Thread.currentThread().interrupt();
         }
     }
+
+    @Test
+    void closingLetsARunningCallbackFinishUninterruptedAndRunsNoQueuedOne() throws Exception {
+        SystemScheduler system = Schedulers.system();
+        CountDownLatch begun = new CountDownLatch(1);
+        CountDownLatch finish = new CountDownLatch(1);
+        List<String> happened = Collections.synchronizedList(new ArrayList<>());
+        system.schedule(system.now(), () -> {
+            begun.countDown();
+            try {
+                finish.await(WAIT_SECONDS, TimeUnit.SECONDS);
+                happened.add(Thread.currentThread().isInterrupted() ? "interrupted" : "finished");
+            } catch (InterruptedException interrupted) {
+                happened.add("interrupted");
+            }
+        });
+        system.schedule(system.now(), () -> happened.add("queued ran"));
+        assertTrue(begun.await(WAIT_SECONDS, TimeUnit.SECONDS));
+
+        system.close();
+        finish.countDown();
+
+        assertTrue(system.awaitClosed(TimeUnit.SECONDS.toMillis(WAIT_SECONDS)));
+        assertEquals(Collections.singletonList("finished"), happened);
+    }
 }

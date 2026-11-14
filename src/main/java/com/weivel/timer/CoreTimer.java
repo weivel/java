@@ -180,6 +180,7 @@ public final class CoreTimer {
     private void arm(long arming, long at, OptionalLong knownNow) {
         Optional<Scheduler.Task> scheduled = scheduled(arming, waitEnd(at, knownNow));
         if (!scheduled.isPresent()) {
+            disarmIfCurrent(arming);
             return;
         }
         boolean current;
@@ -261,17 +262,7 @@ public final class CoreTimer {
      * never reads armed with no task to fire; the deadline is left to the wrapper's check before each call.
      */
     private void disarmAfterAFailedAdvance(long firing, Answer<Void> advanced) {
-        lock.lock();
-        try {
-            if (destroyed || ticket != firing) {
-                return;
-            }
-            armed = false;
-            ticket++;
-        } finally {
-            lock.unlock();
-        }
-        if (!(advanced instanceof Answer.Destroyed)) {
+        if (disarmIfCurrent(firing) && !(advanced instanceof Answer.Destroyed)) {
             report("the core did not take the time the timer handed it, so the deadline is left to the check before "
                     + "each call: " + advanced, Optional.empty());
         }
@@ -281,6 +272,25 @@ public final class CoreTimer {
         lock.lock();
         try {
             return !destroyed && ticket == firing;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Disarms the timer when nothing armed it again since {@code arming}, so it never reads armed with no task.
+     *
+     * @return whether it disarmed
+     */
+    private boolean disarmIfCurrent(long arming) {
+        lock.lock();
+        try {
+            if (destroyed || ticket != arming) {
+                return false;
+            }
+            armed = false;
+            ticket++;
+            return true;
         } finally {
             lock.unlock();
         }
