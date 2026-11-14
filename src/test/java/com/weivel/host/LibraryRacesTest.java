@@ -103,11 +103,13 @@ class LibraryRacesTest {
             CountDownLatch halfway = new CountDownLatch(threads * callsEach / 2);
             List<String> wrong = Collections.synchronizedList(new ArrayList<>());
             AtomicInteger unloaded = new AtomicInteger();
+            CountDownLatch unloadAnswered = new CountDownLatch(1);
             List<Thread> callers = new ArrayList<>();
             for (int index = 0; index < threads; index++) {
                 int caller = index;
+                boolean waitsForTheUnload = index % 2 == 0;
                 Thread thread = new Thread(() -> callRepeatedly(echo, caller, callsEach, start, halfway, wrong,
-                        unloaded));
+                        unloaded, waitsForTheUnload ? unloadAnswered : null));
                 thread.start();
                 callers.add(thread);
             }
@@ -115,6 +117,7 @@ class LibraryRacesTest {
             Gates.await(halfway);
 
             assertEquals(true, value(fixture.host.unloadLibrary(library)));
+            unloadAnswered.countDown();
             for (Thread thread : callers) {
                 thread.join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS));
             }
@@ -126,8 +129,24 @@ class LibraryRacesTest {
         }
     }
 
+    /**
+     * Waits for the unload to have answered.
+     *
+     * @implNote Half the callers wait here at their halfway call, so some call is always made after the unload; the
+     *     test once asserted that and failed where every caller finished before the unload landed.
+     */
+    private static boolean awaited(CountDownLatch unloadAnswered) {
+        try {
+            return unloadAnswered.await(WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     private static void callRepeatedly(LibraryService echo, int caller, int calls, CyclicBarrier start,
-                                       CountDownLatch halfway, List<String> wrong, AtomicInteger unloaded) {
+                                       CountDownLatch halfway, List<String> wrong, AtomicInteger unloaded,
+                                       CountDownLatch unloadAnswered) {
         try {
             start.await(WAIT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception interrupted) {
@@ -136,6 +155,10 @@ class LibraryRacesTest {
         }
         boolean sawUnloaded = false;
         for (int call = 0; call < calls; call++) {
+            if (call == calls / 2 && unloadAnswered != null && !awaited(unloadAnswered)) {
+                wrong.add("caller " + caller + " never heard the unload answered");
+                return;
+            }
             byte[] input = ("caller " + caller + " call " + call).getBytes(StandardCharsets.UTF_8);
             LibraryAnswer answer = echo.call("echo", input);
             if (answer instanceof LibraryAnswer.Unloaded) {
