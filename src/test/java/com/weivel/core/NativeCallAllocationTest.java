@@ -15,13 +15,13 @@ class NativeCallAllocationTest {
     private static final int WARM_UP_CALLS = 200_000;
     private static final int MEASURED_CALLS = 100_000;
     /**
-     * Rounds measured, the least counted.
+     * The most rounds measured before the test gives up; it stops at the first round that allocates nothing.
      *
-     * @implNote One round after a fixed warm-up failed on two-core runners, where the call path was still interpreted
-     *     and the interpreter's method handle path allocates; a spreader allocates in every round, so the least of
-     *     several rounds still tells the two apart.
+     * @implNote A fixed number of rounds failed on macOS runners, where every one finished before the call path was
+     *     compiled and the interpreter's method handle path allocates; a spreader allocates in every round, however
+     *     many are run, so measuring until one round is clean still tells the two apart.
      */
-    private static final int MEASURED_ROUNDS = 10;
+    private static final int MOST_ROUNDS = 300;
     /** What reading the allocation counter itself may cost, measured as 0 on JDK 25; a spreader costs 40 B a call. */
     private static final long ALLOWED_BYTES = 1024;
 
@@ -35,7 +35,7 @@ class NativeCallAllocationTest {
             callRepeatedly(release, WARM_UP_CALLS);
 
             long least = Long.MAX_VALUE;
-            for (int round = 0; round < MEASURED_ROUNDS; round++) {
+            for (int round = 0; round < MOST_ROUNDS && least > ALLOWED_BYTES; round++) {
                 long before = threads.getThreadAllocatedBytes(thread);
                 callRepeatedly(release, MEASURED_CALLS);
                 least = Math.min(least, threads.getThreadAllocatedBytes(thread) - before);
