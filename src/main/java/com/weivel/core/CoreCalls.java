@@ -67,6 +67,21 @@ public final class CoreCalls {
     }
 
     /**
+     * {@code weivel_plugin_payload}.
+     *
+     * @param plugin the plugin's handle
+     * @return the call, answering the payload the plugin was last opened with, 0 for one never opened
+     */
+    public static CoreCall<Long> pluginPayload(long plugin) {
+        return builtByTheLayer((functions, arena, core, pending) -> {
+            MemorySegment payload = arena.allocate(JAVA_LONG);
+            int status = (int) functions.handle(CoreFunction.PLUGIN_PAYLOAD).invokeExact(core, plugin, payload,
+                    pending);
+            return new Crossed<>(status, payload.get(JAVA_LONG, 0));
+        });
+    }
+
+    /**
      * {@code weivel_release_plugin}.
      *
      * @param plugin the plugin's handle
@@ -181,6 +196,23 @@ public final class CoreCalls {
             int status = (int) functions.handle(CoreFunction.WATCH_SERVICE)
                     .invokeExact(core, plugin, arena.allocateFrom(id), watch, pending);
             return new Crossed<>(status, watch.get(JAVA_LONG, 0));
+        });
+    }
+
+    /**
+     * {@code weivel_provide_capability}.
+     *
+     * @param plugin the providing plugin's handle
+     * @param id the capability id
+     * @return the call, answering the implementation handle
+     */
+    public static CoreCall<Long> provideCapability(long plugin, String id) {
+        Objects.requireNonNull(id, "id");
+        return carryingCallersParts((functions, arena, core, pending) -> {
+            MemorySegment implementation = arena.allocate(JAVA_LONG);
+            int status = (int) functions.handle(CoreFunction.PROVIDE_CAPABILITY)
+                    .invokeExact(core, plugin, arena.allocateFrom(id), implementation, pending);
+            return new Crossed<>(status, implementation.get(JAVA_LONG, 0));
         });
     }
 
