@@ -1,47 +1,81 @@
 package com.weivel.core;
 
-import java.lang.foreign.Linker;
-import java.lang.foreign.SymbolLookup;
-import java.lang.invoke.MethodHandle;
-import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.BiFunction;
 
-/** The one table of downcall handles through which the layer reaches every function of one loaded core. */
+/**
+ * The one table of native functions through which the layer reaches every function of one loaded core, with the
+ * native seam its arguments are laid out through.
+ */
 final class CoreFunctions {
-    private final MethodHandle[] handles;
+    private final NativeAccess access;
+    private final NativeFunction[] functions;
 
-    private CoreFunctions(MethodHandle[] handles) {
-        this.handles = handles;
+    private CoreFunctions(NativeAccess access, NativeFunction[] functions) {
+        this.access = access;
+        this.functions = functions;
     }
 
-    static Optional<CoreFunction> firstMissing(SymbolLookup binary) {
-        return Arrays.stream(CoreFunction.values())
-                .filter(function -> binary.find(function.symbol()).isEmpty())
-                .findFirst();
+    static Optional<CoreFunction> firstMissing(OpenLibrary binary) {
+        for (CoreFunction function : CoreFunction.values()) {
+            if (!binary.has(function.symbol())) {
+                return Optional.of(function);
+            }
+        }
+        return Optional.empty();
     }
 
     /** Links every function of a binary {@link #firstMissing} found complete. */
-    static CoreFunctions link(SymbolLookup binary) {
-        Linker linker = Linker.nativeLinker();
-        MethodHandle[] handles = new MethodHandle[CoreFunction.values().length];
+    static CoreFunctions link(NativeAccess access, OpenLibrary binary) {
+        NativeFunction[] functions = new NativeFunction[CoreFunction.values().length];
         for (CoreFunction function : CoreFunction.values()) {
-            handles[function.ordinal()] = linker.downcallHandle(binary.findOrThrow(function.symbol()),
-                    function.descriptor());
+            functions[function.ordinal()] = binary.function(function.symbol(), function.signature());
         }
-        return new CoreFunctions(handles);
+        return new CoreFunctions(access, functions);
     }
 
-    /** A table whose every handle {@code replacement} answers for: the seam a test counts or fails a call through. */
-    CoreFunctions mapped(BiFunction<CoreFunction, MethodHandle, MethodHandle> replacement) {
-        MethodHandle[] replaced = new MethodHandle[handles.length];
+    /** A table whose every function {@code replacement} answers for: the seam a test counts or fails a call through. */
+    CoreFunctions mapped(BiFunction<CoreFunction, NativeFunction, NativeFunction> replacement) {
+        NativeFunction[] replaced = new NativeFunction[functions.length];
         for (CoreFunction function : CoreFunction.values()) {
-            replaced[function.ordinal()] = replacement.apply(function, handles[function.ordinal()]);
+            replaced[function.ordinal()] = replacement.apply(function, functions[function.ordinal()]);
         }
-        return new CoreFunctions(replaced);
+        return new CoreFunctions(access, replaced);
     }
 
-    MethodHandle handle(CoreFunction function) {
-        return handles[function.ordinal()];
+    NativeFunction function(CoreFunction function) {
+        return functions[function.ordinal()];
+    }
+
+    /**
+     * Calls {@code function}, answering the status every function of the core answers. One overload per arity the
+     * core's calls use, so no call allocates an argument array.
+     */
+    int status(CoreFunction function, long first) {
+        return (int) functions[function.ordinal()].call(first);
+    }
+
+    int status(CoreFunction function, long first, long second) {
+        return (int) functions[function.ordinal()].call(first, second);
+    }
+
+    int status(CoreFunction function, long first, long second, long third) {
+        return (int) functions[function.ordinal()].call(first, second, third);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth, long fifth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth, long fifth, long sixth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth, sixth);
+    }
+
+    NativeAccess access() {
+        return access;
     }
 }

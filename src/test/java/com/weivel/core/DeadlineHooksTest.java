@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /** The wrapper's deadline hooks: the announcement recorded at drain time, the timer told before dispatch, the due check. */
@@ -28,9 +30,9 @@ class DeadlineHooksTest {
 
         ok(core.call(CoreCalls.wantService(HOST, "awaited", WantOptions.timed(0, 100))));
 
-        assertEquals(List.of(new Follow(100, true)), hooks.follows());
-        assertEquals(List.of(1), toldWhenHeard);
-        assertEquals(List.of(false), hooks.lockSeen());
+        assertEquals(Collections.singletonList(new Follow(100, true)), hooks.follows());
+        assertEquals(Collections.singletonList(1), toldWhenHeard);
+        assertEquals(Collections.singletonList(false), hooks.lockSeen());
         core.destroy();
     }
 
@@ -42,8 +44,8 @@ class DeadlineHooksTest {
 
         ok(core.call(CoreCalls.wantService(HOST, "awaited", WantOptions.timed(0, 100))));
 
-        assertEquals(List.of(), listener.events());
-        assertEquals(List.of(new Follow(100, true)), hooks.follows());
+        assertEquals(Collections.emptyList(), listener.events());
+        assertEquals(Collections.singletonList(new Follow(100, true)), hooks.follows());
         assertEquals(1, sink.of(FailureKind.EVENT_DROPPED).size());
         core.destroy();
     }
@@ -60,14 +62,14 @@ class DeadlineHooksTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "late")));
 
-        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).getFirst();
+        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).get(0);
         assertEquals(want, settled.want());
-        assertEquals(CoreConstants.REFUSAL_TIMED_OUT, settled.refusal().orElseThrow().code());
+        assertEquals(CoreConstants.REFUSAL_TIMED_OUT, settled.refusal().get().code());
         assertEquals(1, hooks.reads.get() - readsBefore);
-        assertEquals(List.of(CoreFunction.ADVANCE, CoreFunction.REGISTER_SERVICE),
+        assertEquals(Arrays.asList(CoreFunction.ADVANCE, CoreFunction.REGISTER_SERVICE),
                 log.calls().stream().filter(function -> function == CoreFunction.ADVANCE
-                        || function == CoreFunction.REGISTER_SERVICE).toList());
-        assertEquals(new Follow(0, false), hooks.follows().getLast());
+                        || function == CoreFunction.REGISTER_SERVICE).collect(Collectors.toList()));
+        assertEquals(new Follow(0, false), TestCores.last(hooks.follows()));
         assertTrue(hooks.lockSeen().stream().noneMatch(Boolean::booleanValue));
         core.destroy();
     }
@@ -83,7 +85,7 @@ class DeadlineHooksTest {
         ok(core.call(CoreCalls.advance(50)));
 
         assertEquals(readsBefore, hooks.reads.get());
-        assertEquals(List.of(), listener.of(CoreEvent.WantSettledEvent.class));
+        assertEquals(Collections.emptyList(), listener.of(CoreEvent.WantSettledEvent.class));
         core.destroy();
     }
 
@@ -117,8 +119,8 @@ class DeadlineHooksTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "trigger")));
 
-        List<Class<?>> heard = listener.events().stream().<Class<?>>map(Object::getClass).toList();
-        assertEquals(List.of(CoreEvent.WatchEvent.class, CoreEvent.WatchEvent.class,
+        List<Class<?>> heard = listener.events().stream().<Class<?>>map(Object::getClass).collect(Collectors.toList());
+        assertEquals(Arrays.asList(CoreEvent.WatchEvent.class, CoreEvent.WatchEvent.class,
                 CoreEvent.WantSettledEvent.class, CoreEvent.DeadlineEvent.class, CoreEvent.WatchEvent.class), heard);
         core.destroy();
     }
@@ -130,7 +132,7 @@ class DeadlineHooksTest {
 
         TestHooks hooks = TestHooks.on(core);
 
-        assertEquals(List.of(new Follow(70, true)), hooks.follows());
+        assertEquals(Collections.singletonList(new Follow(70, true)), hooks.follows());
         core.destroy();
     }
 
@@ -170,12 +172,53 @@ class DeadlineHooksTest {
         assertTrue(CoreInternals.removeDeadlineHooks(core, installed));
         ok(core.call(CoreCalls.wantService(HOST, "unfollowed", WantOptions.timed(0, 50))));
 
-        assertEquals(List.of(new Follow(100, true)), installed.follows());
-        assertEquals(List.of(), other.follows());
+        assertEquals(Collections.singletonList(new Follow(100, true)), installed.follows());
+        assertEquals(Collections.emptyList(), other.follows());
         core.destroy();
     }
 
-    record Follow(long at, boolean set) {
+    static final class Follow {
+        private final long at;
+        private final boolean set;
+
+        Follow(long at, boolean set) {
+            this.at = at;
+            this.set = set;
+        }
+
+        public long at() {
+            return at;
+        }
+
+        public boolean set() {
+            return set;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Follow)) {
+                return false;
+            }
+            Follow that = (Follow) other;
+            return at == that.at
+                    && set == that.set;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Long.hashCode(at);
+            hash = 31 * hash + Boolean.hashCode(set);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Follow[at=" + at + ", set=" + set + "]";
+        }
     }
 
     /** Hooks over a clock the test sets, recording what they are told and whether the layer lock was held. */
@@ -211,13 +254,13 @@ class DeadlineHooksTest {
 
         List<Follow> follows() {
             synchronized (follows) {
-                return List.copyOf(follows);
+                return Collections.unmodifiableList(new ArrayList<>(follows));
             }
         }
 
         List<Boolean> lockSeen() {
             synchronized (lockSeen) {
-                return List.copyOf(lockSeen);
+                return Collections.unmodifiableList(new ArrayList<>(lockSeen));
             }
         }
     }

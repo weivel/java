@@ -88,16 +88,30 @@ final class ContextState {
     }
 
     private static int kindOf(CoreEvent event) {
-        return switch (event) {
-            case CoreEvent.LogEvent log -> CoreConstants.EVENT_LOG;
-            case CoreEvent.RefusalEvent refusal -> CoreConstants.EVENT_REFUSAL;
-            case CoreEvent.WantSettledEvent want -> CoreConstants.EVENT_WANT_SETTLED;
-            case CoreEvent.WatchEvent watch -> CoreConstants.EVENT_WATCH;
-            case CoreEvent.RevokedEvent revoked -> CoreConstants.EVENT_REVOKED;
-            case CoreEvent.ReachRefusedEvent reach -> CoreConstants.EVENT_REACH_REFUSED;
-            case CoreEvent.CapacityWantedEvent capacity -> CoreConstants.EVENT_CAPACITY_WANTED;
-            case CoreEvent.CapabilityEvent capability -> CoreConstants.EVENT_CAPABILITY;
-            case CoreEvent.DeadlineEvent deadline -> CoreConstants.EVENT_DEADLINE;
-        };
+        if (event instanceof CoreEvent.LogEvent) {
+            return CoreConstants.EVENT_LOG;
+        }
+        if (event instanceof CoreEvent.RefusalEvent) {
+            return CoreConstants.EVENT_REFUSAL;
+        }
+        if (event instanceof CoreEvent.WantSettledEvent) {
+            return CoreConstants.EVENT_WANT_SETTLED;
+        }
+        if (event instanceof CoreEvent.WatchEvent) {
+            return CoreConstants.EVENT_WATCH;
+        }
+        if (event instanceof CoreEvent.RevokedEvent) {
+            return CoreConstants.EVENT_REVOKED;
+        }
+        if (event instanceof CoreEvent.ReachRefusedEvent) {
+            return CoreConstants.EVENT_REACH_REFUSED;
+        }
+        if (event instanceof CoreEvent.CapacityWantedEvent) {
+            return CoreConstants.EVENT_CAPACITY_WANTED;
+        }
+        if (event instanceof CoreEvent.CapabilityEvent) {
+            return CoreConstants.EVENT_CAPABILITY;
+        }
+        return CoreConstants.EVENT_DEADLINE;
     }
 }

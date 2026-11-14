@@ -1,18 +1,16 @@
 package com.weivel.core;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.SymbolLookup;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 
 /** The core's shared binary, loaded from a path its caller gives, and the table of its functions. */
 public final class CoreBinary implements AutoCloseable {
-    private final Arena arena;
+    private final OpenLibrary library;
     private final CoreFunctions functions;
 
-    private CoreBinary(Arena arena, CoreFunctions functions) {
-        this.arena = arena;
+    private CoreBinary(OpenLibrary library, CoreFunctions functions) {
+        this.library = library;
         this.functions = functions;
     }
 
@@ -21,24 +19,22 @@ public final class CoreBinary implements AutoCloseable {
      *
      * @param path the binary, a path the caller chose
      * @return the loaded binary, or why there is none; a failure is answered, never thrown
-     * @implNote The arena is shared because any thread may call into the core, and closing it unloads the library.
      */
     public static CoreLoad load(Path path) {
         Objects.requireNonNull(path, "path");
-        Arena arena = Arena.ofShared();
-        SymbolLookup binary;
+        NativeAccess access = NativeBackends.current();
+        OpenLibrary library;
         try {
-            binary = SymbolLookup.libraryLookup(path, arena);
+            library = access.open(path);
         } catch (IllegalArgumentException notALibrary) {
-            arena.close();
             return new CoreLoad.NotALibrary(path, String.valueOf(notALibrary.getMessage()));
         }
-        Optional<CoreFunction> missing = CoreFunctions.firstMissing(binary);
+        Optional<CoreFunction> missing = CoreFunctions.firstMissing(library);
         if (missing.isPresent()) {
-            arena.close();
+            library.close();
             return new CoreLoad.MissingFunction(path, missing.get().symbol());
         }
-        return new CoreLoad.Loaded(new CoreBinary(arena, CoreFunctions.link(binary)));
+        return new CoreLoad.Loaded(new CoreBinary(library, CoreFunctions.link(access, library)));
     }
 
     CoreFunctions functions() {
@@ -52,6 +48,6 @@ public final class CoreBinary implements AutoCloseable {
      */
     @Override
     public void close() {
-        arena.close();
+        library.close();
     }
 }

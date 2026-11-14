@@ -73,6 +73,6 @@ final class CallerTexts {
     }
 
     private static Optional<String> firstOf(Stream<Optional<String>> found) {
-        return found.flatMap(Optional::stream).findFirst();
+        return found.filter(Optional::isPresent).map(Optional::get).findFirst();
     }
 }

@@ -1,15 +1,10 @@
 package com.weivel.core;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemoryLayout.PathElement;
-import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -26,22 +21,23 @@ class CoreBinaryTest {
     }
 
     @Test
-    void aCallThroughTheTableCreatesAndDestroysACore() throws Throwable {
+    void aCallThroughTheTableCreatesAndDestroysACore() {
         CoreLoad.Loaded loaded = assertInstanceOf(CoreLoad.Loaded.class, CoreBinary.load(NativeFiles.coreBinary()));
-        try (CoreBinary binary = loaded.binary(); Arena arena = Arena.ofConfined()) {
+        try (CoreBinary binary = loaded.binary();
+             NativeArena arena = new NativeArena(binary.functions().access())) {
             CoreFunctions functions = binary.functions();
-            MemorySegment options = arena.allocate(CoreLayouts.CORE_OPTIONS);
-            options.set(JAVA_INT, CoreLayouts.CORE_OPTIONS.byteOffset(PathElement.groupElement("size")),
-                    (int) CoreLayouts.CORE_OPTIONS.byteSize());
-            MemorySegment coreSlot = arena.allocate(ADDRESS);
-            MemorySegment pendingEvents = arena.allocate(JAVA_INT);
+            NativeRegion options = arena.allocate(CoreLayouts.CORE_OPTIONS);
+            options.putInt(CoreLayouts.CORE_OPTIONS.offsetOf("size"), (int) CoreLayouts.CORE_OPTIONS.byteSize());
+            NativeRegion coreSlot = arena.allocate(Layout.ADDRESS);
+            NativeRegion pendingEvents = arena.allocate(Layout.INT);
 
-            int created = (int) functions.handle(CoreFunction.CORE_CREATE).invokeExact(options, coreSlot, pendingEvents);
-            MemorySegment core = coreSlot.get(ADDRESS, 0);
-            int destroyed = (int) functions.handle(CoreFunction.CORE_DESTROY).invokeExact(core);
+            int created = functions.status(CoreFunction.CORE_CREATE, options.address(), coreSlot.address(),
+                    pendingEvents.address());
+            long core = coreSlot.getAddress(0);
+            int destroyed = functions.status(CoreFunction.CORE_DESTROY, core);
 
             assertEquals(STATUS_OK, created);
-            assertNotEquals(MemorySegment.NULL, core);
+            assertNotEquals(0, core);
             assertEquals(STATUS_OK, destroyed);
         }
     }
@@ -84,6 +80,6 @@ class CoreBinaryTest {
         loaded.binary().close();
 
         assertThrows(IllegalStateException.class,
-                () -> { int ignored = (int) functions.handle(CoreFunction.CORE_DESTROY).invokeExact(MemorySegment.NULL); });
+                () -> functions.status(CoreFunction.CORE_DESTROY, 0));
     }
 }

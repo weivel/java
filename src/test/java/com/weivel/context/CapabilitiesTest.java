@@ -12,6 +12,8 @@ import com.weivel.core.CoreCalls;
 import com.weivel.core.CoreConstants;
 import com.weivel.core.FailureKind;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +25,8 @@ class CapabilitiesTest {
     private static final String SCREENS = "screens";
 
     private final ContextFixture fixture = new ContextFixture();
-    private final PluginContext consumer = fixture.opened(capabilities("consumer", List.of(), List.of(SCREENS)));
+    private final PluginContext consumer = fixture.opened(capabilities("consumer", Collections.emptyList(),
+            Collections.singletonList(SCREENS)));
 
     @AfterEach
     void close() {
@@ -32,8 +35,10 @@ class CapabilitiesTest {
 
     @Test
     void theImplementationsListedAreTheProvidersOwnObjectsInTheOrderTheCoreAnswers() {
-        PluginContext first = fixture.opened(capabilities("first", List.of(SCREENS), List.of()));
-        PluginContext second = fixture.opened(capabilities("second", List.of(SCREENS), List.of()));
+        PluginContext first = fixture.opened(capabilities("first", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
+        PluginContext second = fixture.opened(capabilities("second", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
         Object firstScreen = new Object();
         Object secondScreen = new Object();
         value(first.provide(SCREENS, firstScreen));
@@ -46,15 +51,16 @@ class CapabilitiesTest {
         assertEquals(2, listed.size());
         assertSame(secondScreen, listed.get(0));
         assertSame(firstScreen, listed.get(1));
-        assertEquals(List.of(), fixture.failures);
+        assertEquals(Collections.emptyList(), fixture.failures);
     }
 
     @Test
     void anImplementationReachesNoConsumerBeforeItsProviderIsVerified() {
-        PluginContext provider = fixture.opened(capabilities("provider", List.of(SCREENS), List.of()));
+        PluginContext provider = fixture.opened(capabilities("provider", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
         value(provider.provide(SCREENS, new Object()));
 
-        assertEquals(List.of(), value(consumer.implementations(SCREENS)));
+        assertEquals(Collections.emptyList(), value(consumer.implementations(SCREENS)));
     }
 
     @Test
@@ -62,12 +68,13 @@ class CapabilitiesTest {
         Answer.Refused<List<Object>> refused = assertInstanceOf(Answer.Refused.class,
                 consumer.implementations("undeclared"));
 
-        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().orElseThrow().code());
+        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().get().code());
     }
 
     @Test
     void aWatchHearsAnImplementationJoinAndTheVeryImplementationLeave() {
-        PluginContext provider = fixture.opened(capabilities("provider", List.of(SCREENS), List.of()));
+        PluginContext provider = fixture.opened(capabilities("provider", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
         List<Object> heard = new ArrayList<>();
         value(consumer.watchCapability(SCREENS, recording(heard)));
         Object screen = new Object();
@@ -76,15 +83,17 @@ class CapabilitiesTest {
         fixture.verify(provider);
         fixture.release(provider);
 
-        assertEquals(List.of("provided", screen, "withdrawn", screen), heard);
+        assertEquals(Arrays.asList("provided", screen, "withdrawn", screen), heard);
         assertSame(screen, heard.get(1));
         assertSame(screen, heard.get(3));
     }
 
     @Test
     void anImplementationAWatchOrAListingHandedOverIsRevokedWithItsObjectBeforeTheWatchHearsItLeave() {
-        PluginContext provider = fixture.opened(capabilities("provider", List.of(SCREENS), List.of()));
-        PluginContext lister = fixture.opened(capabilities("lister", List.of(), List.of(SCREENS)));
+        PluginContext provider = fixture.opened(capabilities("provider", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
+        PluginContext lister = fixture.opened(capabilities("lister", Collections.emptyList(),
+                Collections.singletonList(SCREENS)));
         List<Object> heard = new ArrayList<>();
         value(consumer.watchCapability(SCREENS, recording(heard)));
         Object screen = new Object();
@@ -98,8 +107,8 @@ class CapabilitiesTest {
         fixture.release(provider);
 
         assertSame(screen, assertInstanceOf(PluginEvent.Revoked.class, heard.get(2)).object());
-        assertEquals(List.of("withdrawn", screen), heard.subList(3, 5));
-        assertSame(screen, assertInstanceOf(PluginEvent.Revoked.class, listerHeard.getFirst()).object());
+        assertEquals(Arrays.asList("withdrawn", screen), heard.subList(3, 5));
+        assertSame(screen, assertInstanceOf(PluginEvent.Revoked.class, listerHeard.get(0)).object());
     }
 
     @Test
@@ -109,13 +118,14 @@ class CapabilitiesTest {
 
     @Test
     void anImplementationTheLayerHoldsNoObjectForIsLeftOutAndTheSinkIsTold() {
-        long stranger = ok(fixture.core.call(CoreCalls.registerManifest(capabilities("stranger", List.of(SCREENS),
-                List.of()))));
+        long stranger = ok(fixture.core.call(CoreCalls.registerManifest(capabilities("stranger",
+                Collections.singletonList(SCREENS),
+                Collections.emptyList()))));
         ok(fixture.core.call(CoreCalls.openPlugin(stranger, 0)));
         ok(fixture.core.call(CoreCalls.provideCapability(stranger, SCREENS)));
         ok(fixture.core.call(CoreCalls.verifyActivation(stranger)));
 
-        assertEquals(List.of(), value(consumer.implementations(SCREENS)));
+        assertEquals(Collections.emptyList(), value(consumer.implementations(SCREENS)));
         assertEquals(1, fixture.failuresOf(FailureKind.OBJECT_UNKNOWN).size());
     }
 
@@ -123,7 +133,8 @@ class CapabilitiesTest {
     void aListingLongerThanTheRoomFirstTakenIsAnsweredWhole() {
         List<Object> provided = new ArrayList<>();
         for (int index = 0; index < 9; index++) {
-            PluginContext provider = fixture.opened(capabilities("provider" + index, List.of(SCREENS), List.of()));
+            PluginContext provider = fixture.opened(capabilities("provider" + index,
+                    Collections.singletonList(SCREENS), Collections.emptyList()));
             Object screen = new Object();
             value(provider.provide(SCREENS, screen));
             fixture.verify(provider);

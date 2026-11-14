@@ -9,6 +9,7 @@ import com.weivel.core.CoreEvent;
 import com.weivel.core.FailureKind;
 import com.weivel.core.NamedNumber;
 import com.weivel.handles.HandleKind;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -30,7 +31,7 @@ final class CapacityAnswering {
         }
         Optional<Records.Service> registration = state.recordOf(question.registration(),
                 HandleKind.SERVICE_REGISTRATION, Records.Service.class);
-        if (registration.isEmpty()) {
+        if (!registration.isPresent()) {
             return;
         }
         Optional<CapacityAnswer> answer = answerOf(state, registration.get().answerer(), question);
@@ -40,13 +41,16 @@ final class CapacityAnswering {
     private static Optional<CapacityAnswer> answerOf(ContextState state, Optional<CapacityAnswerer> answerer,
                                                      CoreEvent.CapacityWantedEvent question) {
         try {
-            return switch (question.question()) {
-                case CoreConstants.CAPACITY_ATTRIBUTES -> Optional.of(new CapacityAnswer(question.request(),
-                        answerer.map(CapacityAnswerer::attributes).orElse(List.of()), Choice.DEFAULT));
-                case CoreConstants.CAPACITY_SERVE -> Optional.of(new CapacityAnswer(question.request(), List.of(),
-                        serves(answerer, question.constraints()) ? Choice.YES : Choice.NO));
-                default -> Optional.empty();
-            };
+            switch (question.question()) {
+                case CoreConstants.CAPACITY_ATTRIBUTES:
+                    return Optional.of(new CapacityAnswer(question.request(), answerer.map(CapacityAnswerer::attributes)
+                            .orElse(Collections.<NamedNumber>emptyList()), Choice.DEFAULT));
+                case CoreConstants.CAPACITY_SERVE:
+                    return Optional.of(new CapacityAnswer(question.request(), Collections.<NamedNumber>emptyList(),
+                            serves(answerer, question.constraints()) ? Choice.YES : Choice.NO));
+                default:
+                    return Optional.empty();
+            }
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable failure) {
@@ -63,15 +67,15 @@ final class CapacityAnswering {
     /** Hands the core the answer; one it does not take goes to the sink, an absence being a question already closed. */
     private static void report(ContextState state, CoreEvent.CapacityWantedEvent question, CapacityAnswer answer) {
         OptionalLong now = state.timer.time();
-        if (now.isEmpty()) {
+        if (!now.isPresent()) {
             state.report(FailureKind.CAPACITY_UNANSWERED, "a capacity question has no clock to be answered by",
                     Optional.of(question), Optional.empty());
             return;
         }
         Answer<Void> reported = state.core.call(CoreCalls.reportCapacity(question.want(), question.registration(),
                 answer, now.getAsLong()));
-        if (!(reported instanceof Answer.Ok<Void>) && !(reported instanceof Answer.Absent<Void>)
-                && !(reported instanceof Answer.Destroyed<Void>)) {
+        if (!(reported instanceof Answer.Ok) && !(reported instanceof Answer.Absent)
+                && !(reported instanceof Answer.Destroyed)) {
             state.report(FailureKind.CAPACITY_UNANSWERED, "the core did not take a capacity answer: " + reported,
                     Optional.of(question), Optional.empty());
         }

@@ -17,9 +17,12 @@ import com.weivel.core.FailureKind;
 import com.weivel.core.Manifest;
 import com.weivel.core.NamedNumber;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -42,7 +45,7 @@ class EventsTest {
             value(registration.unregister());
 
             assertEquals(1, heard.size());
-            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, heard.getFirst()).object());
+            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, heard.get(0)).object());
         }
     }
 
@@ -64,8 +67,8 @@ class EventsTest {
 
             value(registration.unregister());
 
-            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, wantingHeard.getFirst()).object());
-            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, watchingHeard.getFirst()).object());
+            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, wantingHeard.get(0)).object());
+            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, watchingHeard.get(0)).object());
             assertEquals(0, fixture.handles.holdingCount());
         }
     }
@@ -79,7 +82,7 @@ class EventsTest {
 
             consumer.get("undeclared");
 
-            PluginEvent.ReachRefused refused = assertInstanceOf(PluginEvent.ReachRefused.class, heard.getFirst());
+            PluginEvent.ReachRefused refused = assertInstanceOf(PluginEvent.ReachRefused.class, heard.get(0));
             assertEquals(CoreConstants.REACH_SERVICE, refused.kind());
             assertEquals("undeclared", refused.id());
             assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().code());
@@ -89,9 +92,12 @@ class EventsTest {
     @Test
     void aPluginHearsAConstrainedWantThatSettledDegraded() {
         try (ContextFixture fixture = new ContextFixture(ContextFixture.LATENCY_VOCABULARY)) {
-            PluginContext provider = fixture.opened(new Manifest("provider", 0, Optional.empty(), List.of(),
-                    List.of(), List.of(), List.of(new Manifest.ServiceOffer(GREETER,
-                    List.of(new NamedNumber("latency", 50)))), List.of(), List.of(), Optional.empty()));
+            PluginContext provider = fixture.opened(new Manifest("provider", 0, Optional.empty(),
+                    Collections.emptyList(),
+                    Collections.emptyList(), Collections.emptyList(),
+                            Collections.singletonList(new Manifest.ServiceOffer(GREETER,
+                    Collections.singletonList(new NamedNumber("latency", 50)))), Collections.emptyList(),
+                            Collections.emptyList(), Optional.empty()));
             PluginContext consumer = fixture.opened(ContextFixture.constrained("consumer", GREETER, 10, Choice.YES));
             Object greeter = new Object();
             value(provider.register(GREETER, greeter));
@@ -103,7 +109,7 @@ class EventsTest {
             fixture.scheduler.moveTo(1000);
 
             assertSame(greeter, value(settlement.join()));
-            PluginEvent.Degraded degraded = assertInstanceOf(PluginEvent.Degraded.class, heard.getFirst());
+            PluginEvent.Degraded degraded = assertInstanceOf(PluginEvent.Degraded.class, heard.get(0));
             assertEquals(GREETER, degraded.id());
             assertSame(greeter, degraded.service());
             assertEquals(Optional.of("latency"), degraded.unmetConstraint());
@@ -113,9 +119,12 @@ class EventsTest {
     @Test
     void aThrowingListenerDoesNotSilenceTheOthers() {
         try (ContextFixture fixture = new ContextFixture()) {
-            PluginContext calendar = fixture.opened(capabilities("calendar", List.of("screens"), List.of()));
-            PluginContext bad = fixture.opened(capabilities("bad", List.of(), List.of("screens")));
-            PluginContext agenda = fixture.opened(capabilities("agenda", List.of(), List.of("screens")));
+            PluginContext calendar = fixture.opened(capabilities("calendar", Collections.singletonList("screens"),
+                    Collections.emptyList()));
+            PluginContext bad = fixture.opened(capabilities("bad", Collections.emptyList(),
+                    Collections.singletonList("screens")));
+            PluginContext agenda = fixture.opened(capabilities("agenda", Collections.emptyList(),
+                    Collections.singletonList("screens")));
             List<Object> badHeard = new ArrayList<>();
             List<Object> agendaHeard = new ArrayList<>();
             value(bad.watchCapability("screens", new CapabilityWatcher() {
@@ -137,9 +146,11 @@ class EventsTest {
 
             fixture.verify(calendar);
 
-            assertEquals(List.of("provided", screen), agendaHeard);
-            assertEquals(List.of(screen), badHeard);
-            assertEquals(List.of(), fixture.heard.stream().filter(CoreEvent.RefusalEvent.class::isInstance).toList());
+            assertEquals(Arrays.asList("provided", screen), agendaHeard);
+            assertEquals(Collections.singletonList(screen), badHeard);
+            assertEquals(Collections.emptyList(),
+                    fixture.heard.stream().filter(CoreEvent.RefusalEvent.class::isInstance)
+                            .collect(Collectors.toList()));
             assertEquals(1, fixture.failuresOf(FailureKind.PLUGIN_CALLBACK).size());
             assertEquals(1, fixture.failures.size());
         }
@@ -158,7 +169,7 @@ class EventsTest {
 
             consumer.get("undeclared");
 
-            assertEquals(List.of("first", "third"), heard);
+            assertEquals(Arrays.asList("first", "third"), heard);
             assertEquals(1, fixture.failuresOf(FailureKind.PLUGIN_CALLBACK).size());
         }
     }
@@ -172,7 +183,7 @@ class EventsTest {
 
             consumer.get("undeclared");
 
-            assertEquals(List.of(), heard);
+            assertEquals(Collections.emptyList(), heard);
         }
     }
 
@@ -183,7 +194,8 @@ class EventsTest {
 
             consumer.log().write(CoreConstants.LOG_INFO, "hello");
 
-            assertEquals(List.of(new LogRecord(CoreConstants.LOG_INFO, Optional.of("consumer"), "hello")),
+            assertEquals(Collections.singletonList(new LogRecord(CoreConstants.LOG_INFO, Optional.of("consumer"),
+                    "hello")),
                     fixture.logs);
         }
     }
@@ -197,8 +209,8 @@ class EventsTest {
             provider.register(GREETER, new Object());
 
             CoreEvent.LogEvent logged = (CoreEvent.LogEvent) fixture.heard.stream()
-                    .filter(CoreEvent.LogEvent.class::isInstance).reduce((first, second) -> second).orElseThrow();
-            LogRecord written = fixture.logs.getLast();
+                    .filter(CoreEvent.LogEvent.class::isInstance).reduce((first, second) -> second).get();
+            LogRecord written = fixture.logs.get(fixture.logs.size() - 1);
             assertEquals(new LogRecord(logged.level(), Optional.empty(), logged.text()), written);
         }
     }

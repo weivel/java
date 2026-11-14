@@ -9,6 +9,8 @@ import com.weivel.handles.HandleEntry;
 import com.weivel.handles.HandleKind;
 import com.weivel.handles.Handles;
 import com.weivel.timer.CoreTimer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -110,8 +112,9 @@ public final class PluginContexts implements AutoCloseable {
      */
     public Optional<PluginContext> byPayload(long payload) {
         HandleEntry entry = state.handles.findByToken(payload);
-        return entry != null && entry.object() instanceof PluginContext context ? Optional.of(context)
-                : Optional.empty();
+        return entry != null && entry.object() instanceof PluginContext
+                ? Optional.of((PluginContext) entry.object())
+                : Optional.<PluginContext>empty();
     }
 
     /**
@@ -141,7 +144,7 @@ public final class PluginContexts implements AutoCloseable {
             state.handles.end(context.plugin());
             return new Answer.Ok<>(forgotten);
         });
-        if (answer instanceof Answer.Ok<Void>) {
+        if (answer instanceof Answer.Ok) {
             context.dropListeners();
             state.contexts.remove(context);
         }
@@ -162,9 +165,10 @@ public final class PluginContexts implements AutoCloseable {
         }
         closed = true;
         state.core.removeListener(routing);
-        for (PluginContext context : List.copyOf(state.contexts)) {
+        for (PluginContext context : Collections.unmodifiableList(new ArrayList<>(state.contexts))) {
             for (HandleEntry ended : state.handles.endOwned(context.plugin())) {
-                if (ended.object() instanceof Records.Want want) {
+                if (ended.object() instanceof Records.Want) {
+                    Records.Want want = (Records.Want) ended.object();
                     want.holdingRoom().cancel();
                     want.settlement().complete(new Answer.Destroyed<>());
                 }

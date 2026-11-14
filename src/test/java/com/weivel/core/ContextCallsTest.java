@@ -2,18 +2,12 @@ package com.weivel.core;
 
 import static com.weivel.core.CoreConstants.HOST;
 import static com.weivel.core.TestCores.ok;
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -36,15 +30,17 @@ class ContextCallsTest {
     void theIdsAPluginMayReachAreAnsweredConsumedBeforeProvidedInItsManifestsOrder() {
         TestCores.CallLog log = new TestCores.CallLog();
         core = TestCores.core(log.around(TestCores.functions()), EventCopy.INSTANCE, listener, sink);
-        Manifest manifest = new Manifest("lister", 0, Optional.empty(), List.of(), List.of(), List.of(),
-                List.of(new Manifest.ServiceOffer("lister:own", List.of())),
-                List.of(consumed("second"), consumed("first"), consumed("absent")), List.of(), Optional.empty());
+        Manifest manifest = new Manifest("lister", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(new Manifest.ServiceOffer("lister:own", Collections.emptyList())),
+                Arrays.asList(consumed("second"), consumed("first"), consumed("absent")), Collections.emptyList(),
+                        Optional.empty());
         long plugin = WrapperCallTest.openedPlugin(core, manifest);
         ok(core.call(CoreCalls.registerService(HOST, "first")));
         ok(core.call(CoreCalls.registerService(HOST, "second")));
         ok(core.call(CoreCalls.registerService(plugin, "lister:own")));
 
-        assertEquals(List.of("second", "first", "lister:own"), ok(core.call(CoreCalls.serviceIds(plugin))));
+        assertEquals(Arrays.asList("second", "first", "lister:own"), ok(core.call(CoreCalls.serviceIds(plugin))));
         assertEquals(1, log.count(CoreFunction.SERVICE_LIST_RELEASE));
     }
 
@@ -71,7 +67,7 @@ class ContextCallsTest {
 
         List<CapabilityImplementation> listed = ok(core.call(CoreCalls.allCapabilities(HOST, "screens")));
 
-        assertEquals(List.of(new CapabilityImplementation(secondImplementation, second),
+        assertEquals(Arrays.asList(new CapabilityImplementation(secondImplementation, second),
                 new CapabilityImplementation(firstImplementation, first)), listed);
         assertEquals(1, log.count(CoreFunction.CAPABILITY_LIST_RELEASE));
     }
@@ -88,7 +84,7 @@ class ContextCallsTest {
         ok(core.call(CoreCalls.verifyActivation(first)));
         ok(core.call(CoreCalls.verifyActivation(second)));
 
-        assertEquals(List.of(new CapabilityImplementation(firstImplementation, first),
+        assertEquals(Arrays.asList(new CapabilityImplementation(firstImplementation, first),
                 new CapabilityImplementation(secondImplementation, second)),
                 ok(core.call(CoreCalls.allCapabilities(HOST, "screens"))));
     }
@@ -123,11 +119,11 @@ class ContextCallsTest {
         long provider = provider("joining");
         long watch = ok(core.call(CoreCalls.watchCapability(HOST, "screens")));
         long implementation = ok(core.call(CoreCalls.provideCapability(provider, "screens")));
-        assertEquals(List.of(), listener.of(CoreEvent.CapabilityEvent.class));
+        assertEquals(Collections.emptyList(), listener.of(CoreEvent.CapabilityEvent.class));
 
         ok(core.call(CoreCalls.verifyActivation(provider)));
 
-        CoreEvent.CapabilityEvent joined = listener.of(CoreEvent.CapabilityEvent.class).getFirst();
+        CoreEvent.CapabilityEvent joined = listener.of(CoreEvent.CapabilityEvent.class).get(0);
         assertEquals(watch, joined.watch());
         assertEquals(implementation, joined.implementation());
         assertEquals(provider, joined.provider());
@@ -146,8 +142,10 @@ class ContextCallsTest {
     @Test
     void aQuarantinedPluginsCallsAreLate() {
         core = TestCores.core(listener, sink);
-        Manifest providing = new Manifest("fenced", 0, Optional.empty(), List.of(), List.of(), List.of(),
-                List.of(new Manifest.ServiceOffer("fenced:service", List.of())), List.of(), List.of(),
+        Manifest providing = new Manifest("fenced", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(new Manifest.ServiceOffer("fenced:service", Collections.emptyList())),
+                        Collections.emptyList(), Collections.emptyList(),
                 Optional.empty());
         long plugin = WrapperCallTest.openedPlugin(core, providing);
 
@@ -160,24 +158,30 @@ class ContextCallsTest {
 
     @Test
     void aCapacityAnswerIsHandedToTheCoreWhichSettlesTheWantOnAYes() {
-        core = TestCores.created(TestCores.functions(), EventCopy.INSTANCE, new CoreOptions(0, 0, 0, List.of(),
-                List.of(), List.of(new CoreOptions.ConstraintEntry("latency", "latency", 2))), listener, sink);
-        long consumer = WrapperCallTest.openedPlugin(core, new Manifest("consumer", 0, Optional.empty(), List.of(),
-                List.of(), List.of(), List.of(), List.of(new Manifest.ServiceWant("measured", Optional.empty(),
-                        Choice.YES, Choice.NO, List.of(new NamedNumber("latency", 10.0)))), List.of(),
+        core = TestCores.created(TestCores.functions(), EventCopy.INSTANCE, new CoreOptions(0, 0, 0,
+                Collections.emptyList(),
+                Collections.emptyList(), Collections.singletonList(new CoreOptions.ConstraintEntry("latency",
+                        "latency", 2))), listener, sink);
+        long consumer = WrapperCallTest.openedPlugin(core, new Manifest("consumer", 0, Optional.empty(),
+                Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                        Collections.singletonList(new Manifest.ServiceWant("measured", Optional.empty(),
+                        Choice.YES, Choice.NO, Collections.singletonList(new NamedNumber("latency", 10.0)))),
+                                Collections.emptyList(),
                 Optional.empty()));
         long registration = ok(core.call(CoreCalls.registerService(HOST, "measured")));
         long want = ok(core.call(CoreCalls.wantService(consumer, "measured",
                 new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 100))));
-        CoreEvent.CapacityWantedEvent attributes = listener.of(CoreEvent.CapacityWantedEvent.class).getFirst();
+        CoreEvent.CapacityWantedEvent attributes = listener.of(CoreEvent.CapacityWantedEvent.class).get(0);
 
         ok(core.call(CoreCalls.reportCapacity(want, registration, new CapacityAnswer(attributes.request(),
-                List.of(new NamedNumber("latency", 5.0)), Choice.DEFAULT), 0)));
-        CoreEvent.CapacityWantedEvent serve = listener.of(CoreEvent.CapacityWantedEvent.class).getLast();
-        ok(core.call(CoreCalls.reportCapacity(want, registration, new CapacityAnswer(serve.request(), List.of(),
+                Collections.singletonList(new NamedNumber("latency", 5.0)), Choice.DEFAULT), 0)));
+        CoreEvent.CapacityWantedEvent serve = TestCores.last(listener.of(CoreEvent.CapacityWantedEvent.class));
+        ok(core.call(CoreCalls.reportCapacity(want, registration, new CapacityAnswer(serve.request(),
+                Collections.emptyList(),
                 Choice.YES), 0)));
 
-        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).getFirst();
+        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).get(0);
         assertEquals(registration, settled.implementation());
         assertEquals(Optional.empty(), settled.refusal());
     }
@@ -187,7 +191,7 @@ class ContextCallsTest {
         core = TestCores.core(listener, sink);
 
         assertEquals(new Answer.Absent<Void>(), core.call(CoreCalls.reportCapacity(1L, 2L,
-                new CapacityAnswer(3L, List.of(), Choice.YES), 0)));
+                new CapacityAnswer(3L, Collections.emptyList(), Choice.YES), 0)));
     }
 
     @Test
@@ -198,20 +202,21 @@ class ContextCallsTest {
         assertInstanceOf(Answer.Mistake.class, core.call(CoreCalls.allCapabilities(HOST, cut)));
         assertInstanceOf(Answer.Mistake.class, core.call(CoreCalls.watchCapability(HOST, cut)));
         assertInstanceOf(Answer.Mistake.class, core.call(CoreCalls.reportCapacity(1L, 2L,
-                new CapacityAnswer(3L, List.of(new NamedNumber(cut, 1.0)), Choice.YES), 0)));
+                new CapacityAnswer(3L, Collections.singletonList(new NamedNumber(cut, 1.0)), Choice.YES), 0)));
         assertInstanceOf(Answer.Mistake.class, core.call(CoreCalls.quarantinePlugin(1L,
                 Optional.of(new QuarantineReason(0, cut, "fix")))));
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
     }
 
     private long provider(String importName) {
-        Manifest manifest = new Manifest(importName, 0, Optional.empty(), List.of(), List.of("screens"), List.of(),
-                List.of(), List.of(), List.of(), Optional.empty());
+        Manifest manifest = new Manifest(importName, 0, Optional.empty(), Collections.emptyList(),
+                Collections.singletonList("screens"), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Optional.empty());
         return WrapperCallTest.openedPlugin(core, manifest);
     }
 
     private static Manifest.ServiceWant consumed(String id) {
-        return new Manifest.ServiceWant(id, Optional.empty(), Choice.YES, Choice.NO, List.of());
+        return new Manifest.ServiceWant(id, Optional.empty(), Choice.YES, Choice.NO, Collections.emptyList());
     }
 
     /**
@@ -219,43 +224,35 @@ class ContextCallsTest {
      * {@code size} saying so, as a newer core would lay out wider ones and no core lays out narrower ones.
      */
     static final class Restrided {
-        private final MethodHandle original;
-        private final long stride;
-
-        private Restrided(MethodHandle original, long stride) {
-            this.original = original;
-            this.stride = stride;
+        private Restrided() {
         }
 
-        static MethodHandle around(MethodHandle original, long stride) {
-            try {
-                return MethodHandles.lookup().findVirtual(Restrided.class, "call", MethodType.methodType(int.class,
-                                MemorySegment.class, long.class, MemorySegment.class, MemorySegment.class,
-                                MemorySegment.class))
-                        .bindTo(new Restrided(original, stride));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
+        static NativeFunction around(NativeFunction original, long stride) {
+            return arguments -> {
+                long status = original.call(arguments);
+                restride(arguments[3], stride, (int) status);
+                return status;
+            };
         }
 
-        int call(MemorySegment core, long plugin, MemorySegment id, MemorySegment list, MemorySegment pending)
-                throws Throwable {
-            int status = (int) original.invokeExact(core, plugin, id, list, pending);
-            int count = list.get(JAVA_INT, 16);
+        private static void restride(long listAddress, long stride, int status) {
+            NativeAccess access = NativeBackends.current();
+            NativeRegion list = new NativeRegion(access, listAddress, CoreLayouts.CAPABILITY_LIST.byteSize(), null);
+            int count = list.getInt(16);
             if (status == 0 && count > 0) {
-                MemorySegment items = list.get(ADDRESS, 8).reinterpret(24L * count);
-                MemorySegment restrided = Arena.global().allocate(Math.max(stride, 24) * count, 8);
+                NativeRegion items = list.at(list.getAddress(8), 24L * count);
+                long restridedSize = Math.max(stride, 24) * count;
+                NativeRegion restrided = list.at(access.allocate(restridedSize), restridedSize);
                 for (int index = 0; index < count; index++) {
                     long base = index * stride;
-                    restrided.set(JAVA_INT, base, (int) stride);
+                    restrided.putInt(base, (int) stride);
                     if (stride >= 24) {
-                        restrided.set(JAVA_LONG, base + 8, items.get(JAVA_LONG, index * 24L + 8));
-                        restrided.set(JAVA_LONG, base + 16, items.get(JAVA_LONG, index * 24L + 16));
+                        restrided.putLong(base + 8, items.getLong(index * 24L + 8));
+                        restrided.putLong(base + 16, items.getLong(index * 24L + 16));
                     }
                 }
-                list.set(ADDRESS, 8, restrided);
+                list.putAddress(8, restrided.address());
             }
-            return status;
         }
     }
 }

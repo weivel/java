@@ -1,94 +1,89 @@
 package com.weivel.core;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
-import java.lang.foreign.MemoryLayout;
-import java.lang.foreign.MemoryLayout.PathElement;
-import java.lang.foreign.StructLayout;
-import java.lang.foreign.UnionLayout;
+import static com.weivel.core.Layout.ADDRESS;
+import static com.weivel.core.Layout.DOUBLE;
+import static com.weivel.core.Layout.INT;
+import static com.weivel.core.Layout.LONG;
 
 /** The core's structs the {@code core} package hands in or reads back, each named as the core's header names it. */
 final class CoreLayouts {
-    static final StructLayout STRINGS = MemoryLayout.structLayout(
+    static final Layout STRINGS = Layout.struct(
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_strings");
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_strings");
 
-    static final StructLayout CONSTRAINT_ENTRY = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout CONSTRAINT_ENTRY = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("constraint_name"),
             ADDRESS.withName("attribute_name"),
-            JAVA_INT.withName("bound"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_constraint_entry");
+            INT.withName("bound"),
+            Layout.padding(4)).withName("weivel_constraint_entry");
 
-    static final StructLayout CONSTRAINT_VOCABULARY = MemoryLayout.structLayout(
+    static final Layout CONSTRAINT_VOCABULARY = Layout.struct(
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_constraint_vocabulary");
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_constraint_vocabulary");
 
-    static final StructLayout CORE_OPTIONS = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            JAVA_INT.withName("initial_event_capacity"),
-            JAVA_INT.withName("minimum_log_level"),
-            JAVA_INT.withName("api"),
+    static final Layout CORE_OPTIONS = Layout.struct(
+            INT.withName("size"),
+            INT.withName("initial_event_capacity"),
+            INT.withName("minimum_log_level"),
+            INT.withName("api"),
             STRINGS.withName("applications"),
             STRINGS.withName("well_known_services"),
             CONSTRAINT_VOCABULARY.withName("constraint_vocabulary")).withName("weivel_core_options");
 
-    static final StructLayout NUMBER = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout NUMBER = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("name"),
-            JAVA_DOUBLE.withName("value")).withName("weivel_number");
+            DOUBLE.withName("value")).withName("weivel_number");
 
-    static final StructLayout NUMBERS = MemoryLayout.structLayout(
+    static final Layout NUMBERS = Layout.struct(
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_numbers");
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_numbers");
 
-    static final StructLayout SERVICE_OFFER = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout SERVICE_OFFER = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("id"),
             NUMBERS.withName("attributes")).withName("weivel_service_offer");
 
-    static final StructLayout SERVICE_OFFERS = MemoryLayout.structLayout(
+    static final Layout SERVICE_OFFERS = Layout.struct(
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_service_offers");
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_service_offers");
 
-    static final StructLayout SERVICE_WANT = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout SERVICE_WANT = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("id"),
             ADDRESS.withName("provider"),
-            JAVA_INT.withName("optional"),
-            JAVA_INT.withName("degradable"),
+            INT.withName("optional"),
+            INT.withName("degradable"),
             NUMBERS.withName("constraints")).withName("weivel_service_want");
 
-    static final StructLayout SERVICE_WANTS = MemoryLayout.structLayout(
+    static final Layout SERVICE_WANTS = Layout.struct(
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_service_wants");
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_service_wants");
 
-    static final StructLayout CAPABILITY_DECLARATIONS = MemoryLayout.structLayout(
+    static final Layout CAPABILITY_DECLARATIONS = Layout.struct(
             STRINGS.withName("provides"),
             STRINGS.withName("consumes")).withName("weivel_capability_declarations");
 
-    static final StructLayout SERVICE_DECLARATIONS = MemoryLayout.structLayout(
+    static final Layout SERVICE_DECLARATIONS = Layout.struct(
             SERVICE_OFFERS.withName("provides"),
             SERVICE_WANTS.withName("consumes")).withName("weivel_service_declarations");
 
-    static final StructLayout MANIFEST = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout MANIFEST = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("import_name"),
-            JAVA_INT.withName("api"),
-            MemoryLayout.paddingLayout(4),
+            INT.withName("api"),
+            Layout.padding(4),
             ADDRESS.withName("entry"),
             STRINGS.withName("targets"),
             CAPABILITY_DECLARATIONS.withName("capabilities"),
@@ -96,127 +91,127 @@ final class CoreLayouts {
             STRINGS.withName("permissions"),
             ADDRESS.withName("identity")).withName("weivel_manifest");
 
-    static final StructLayout WANT_OPTIONS = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            JAVA_INT.withName("timed"),
-            JAVA_LONG.withName("now"),
-            JAVA_LONG.withName("timeout_millis"),
-            JAVA_INT.withName("budgeted"),
-            MemoryLayout.paddingLayout(4),
-            JAVA_LONG.withName("budget_millis"),
-            JAVA_LONG.withName("poll_millis")).withName("weivel_want_options");
+    static final Layout WANT_OPTIONS = Layout.struct(
+            INT.withName("size"),
+            INT.withName("timed"),
+            LONG.withName("now"),
+            LONG.withName("timeout_millis"),
+            INT.withName("budgeted"),
+            Layout.padding(4),
+            LONG.withName("budget_millis"),
+            LONG.withName("poll_millis")).withName("weivel_want_options");
 
-    static final StructLayout PLUGIN_OPTIONS = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
-            JAVA_LONG.withName("payload")).withName("weivel_plugin_options");
+    static final Layout PLUGIN_OPTIONS = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            LONG.withName("payload")).withName("weivel_plugin_options");
 
-    static final StructLayout QUARANTINE_REASON = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            JAVA_INT.withName("code"),
+    static final Layout QUARANTINE_REASON = Layout.struct(
+            INT.withName("size"),
+            INT.withName("code"),
             ADDRESS.withName("detail"),
             ADDRESS.withName("fix")).withName("weivel_quarantine_reason");
 
-    static final StructLayout CAPACITY = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
-            JAVA_LONG.withName("request"),
+    static final Layout CAPACITY = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            LONG.withName("request"),
             NUMBERS.withName("attributes"),
-            JAVA_INT.withName("serves"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_capacity");
+            INT.withName("serves"),
+            Layout.padding(4)).withName("weivel_capacity");
 
-    static final StructLayout SERVICE_LIST = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout SERVICE_LIST = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             STRINGS.withName("ids"),
             ADDRESS.withName("storage")).withName("weivel_service_list");
 
-    static final StructLayout CAPABILITY_IMPLEMENTATION = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
-            JAVA_LONG.withName("implementation"),
-            JAVA_LONG.withName("provider")).withName("weivel_capability_implementation");
+    static final Layout CAPABILITY_IMPLEMENTATION = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            LONG.withName("implementation"),
+            LONG.withName("provider")).withName("weivel_capability_implementation");
 
-    static final StructLayout CAPABILITY_LIST = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout CAPABILITY_LIST = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
             ADDRESS.withName("items"),
-            JAVA_INT.withName("count"),
-            MemoryLayout.paddingLayout(4),
+            INT.withName("count"),
+            Layout.padding(4),
             ADDRESS.withName("storage")).withName("weivel_capability_list");
 
-    static final StructLayout REFUSAL = MemoryLayout.structLayout(
-            JAVA_INT.withName("code"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout REFUSAL = Layout.struct(
+            INT.withName("code"),
+            Layout.padding(4),
             ADDRESS.withName("detail"),
             ADDRESS.withName("fix")).withName("weivel_refusal");
 
-    static final StructLayout LOG_EVENT = MemoryLayout.structLayout(
-            JAVA_INT.withName("level"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout LOG_EVENT = Layout.struct(
+            INT.withName("level"),
+            Layout.padding(4),
             ADDRESS.withName("text")).withName("weivel_log_event");
 
-    static final StructLayout WANT_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("want"),
-            JAVA_LONG.withName("plugin"),
-            JAVA_LONG.withName("implementation"),
+    static final Layout WANT_EVENT = Layout.struct(
+            LONG.withName("want"),
+            LONG.withName("plugin"),
+            LONG.withName("implementation"),
             REFUSAL.withName("refusal"),
-            JAVA_INT.withName("degraded"),
-            MemoryLayout.paddingLayout(4),
+            INT.withName("degraded"),
+            Layout.padding(4),
             ADDRESS.withName("subject"),
-            JAVA_INT.withName("has_fix"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_want_event");
+            INT.withName("has_fix"),
+            Layout.padding(4)).withName("weivel_want_event");
 
-    static final StructLayout WATCH_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("watch"),
-            JAVA_LONG.withName("plugin"),
-            JAVA_LONG.withName("implementation"),
-            JAVA_INT.withName("change"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_watch_event");
+    static final Layout WATCH_EVENT = Layout.struct(
+            LONG.withName("watch"),
+            LONG.withName("plugin"),
+            LONG.withName("implementation"),
+            INT.withName("change"),
+            Layout.padding(4)).withName("weivel_watch_event");
 
-    static final StructLayout REVOKED_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("plugin"),
-            JAVA_LONG.withName("implementation")).withName("weivel_revoked_event");
+    static final Layout REVOKED_EVENT = Layout.struct(
+            LONG.withName("plugin"),
+            LONG.withName("implementation")).withName("weivel_revoked_event");
 
-    static final StructLayout REACH_REFUSAL = MemoryLayout.structLayout(
-            JAVA_INT.withName("kind"),
-            MemoryLayout.paddingLayout(4),
-            JAVA_LONG.withName("plugin"),
+    static final Layout REACH_REFUSAL = Layout.struct(
+            INT.withName("kind"),
+            Layout.padding(4),
+            LONG.withName("plugin"),
             ADDRESS.withName("id"),
             REFUSAL.withName("refusal"),
             ADDRESS.withName("subject"),
-            JAVA_INT.withName("has_fix"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_reach_refusal");
+            INT.withName("has_fix"),
+            Layout.padding(4)).withName("weivel_reach_refusal");
 
-    static final StructLayout REFUSAL_EVENT = MemoryLayout.structLayout(
+    static final Layout REFUSAL_EVENT = Layout.struct(
             REFUSAL.withName("refusal"),
             ADDRESS.withName("subject"),
-            JAVA_INT.withName("has_fix"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_refusal_event");
+            INT.withName("has_fix"),
+            Layout.padding(4)).withName("weivel_refusal_event");
 
-    static final StructLayout CAPACITY_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("want"),
-            JAVA_LONG.withName("plugin"),
-            JAVA_LONG.withName("registration"),
-            JAVA_LONG.withName("request"),
-            JAVA_INT.withName("question"),
-            MemoryLayout.paddingLayout(4),
+    static final Layout CAPACITY_EVENT = Layout.struct(
+            LONG.withName("want"),
+            LONG.withName("plugin"),
+            LONG.withName("registration"),
+            LONG.withName("request"),
+            INT.withName("question"),
+            Layout.padding(4),
             NUMBERS.withName("constraints")).withName("weivel_capacity_event");
 
-    static final StructLayout CAPABILITY_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("watch"),
-            JAVA_LONG.withName("plugin"),
-            JAVA_LONG.withName("implementation"),
-            JAVA_LONG.withName("provider"),
-            JAVA_INT.withName("change"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_capability_event");
+    static final Layout CAPABILITY_EVENT = Layout.struct(
+            LONG.withName("watch"),
+            LONG.withName("plugin"),
+            LONG.withName("implementation"),
+            LONG.withName("provider"),
+            INT.withName("change"),
+            Layout.padding(4)).withName("weivel_capability_event");
 
-    static final StructLayout DEADLINE_EVENT = MemoryLayout.structLayout(
-            JAVA_LONG.withName("at"),
-            JAVA_INT.withName("set"),
-            MemoryLayout.paddingLayout(4)).withName("weivel_deadline_event");
+    static final Layout DEADLINE_EVENT = Layout.struct(
+            LONG.withName("at"),
+            INT.withName("set"),
+            Layout.padding(4)).withName("weivel_deadline_event");
 
-    static final UnionLayout EVENT_DATA = MemoryLayout.unionLayout(
+    static final Layout EVENT_DATA = Layout.union(
             LOG_EVENT.withName("log"),
             REFUSAL.withName("refusal"),
             WANT_EVENT.withName("want"),
@@ -227,23 +222,19 @@ final class CoreLayouts {
             CAPABILITY_EVENT.withName("capability"),
             REFUSAL_EVENT.withName("refused"),
             DEADLINE_EVENT.withName("deadline"),
-            MemoryLayout.sequenceLayout(16, JAVA_LONG).withName("reserved"));
+            Layout.sequence(16, LONG).withName("reserved"));
 
-    static final StructLayout EVENT = MemoryLayout.structLayout(
-            JAVA_INT.withName("size"),
-            JAVA_INT.withName("kind"),
+    static final Layout EVENT = Layout.struct(
+            INT.withName("size"),
+            INT.withName("kind"),
             ADDRESS.withName("storage"),
             EVENT_DATA.withName("data")).withName("weivel_event");
 
     private CoreLayouts() {
     }
 
-    /** The offset of a field reached by naming each member on its way, as {@link MemoryLayout#byteOffset} reads it. */
-    static long offsetOf(MemoryLayout layout, String... names) {
-        PathElement[] path = new PathElement[names.length];
-        for (int index = 0; index < names.length; index++) {
-            path[index] = PathElement.groupElement(names[index]);
-        }
-        return layout.byteOffset(path);
+    /** The offset of a field reached by naming each member on its way. */
+    static long offsetOf(Layout layout, String... names) {
+        return layout.offsetOf(names);
     }
 }

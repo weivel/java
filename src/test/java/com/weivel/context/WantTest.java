@@ -19,6 +19,7 @@ import com.weivel.core.Refusal;
 import com.weivel.core.WantOptions;
 import com.weivel.timer.Scheduler;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -84,8 +85,8 @@ class WantTest {
 
             fixture.core.call(CoreCalls.unregister(424242L));
 
-            assertEquals(List.of(false), doneWhenMade);
-            assertInstanceOf(Answer.Ok.class, made.getFirst().join());
+            assertEquals(Collections.singletonList(false), doneWhenMade);
+            assertInstanceOf(Answer.Ok.class, made.get(0).join());
         }
     }
 
@@ -107,8 +108,8 @@ class WantTest {
 
             fixture.core.call(CoreCalls.unregister(424242L));
 
-            assertEquals(List.of(false), doneWhenMade);
-            assertInstanceOf(Answer.Refused.class, made.getFirst().join());
+            assertEquals(Collections.singletonList(false), doneWhenMade);
+            assertInstanceOf(Answer.Refused.class, made.get(0).join());
         }
     }
 
@@ -136,7 +137,7 @@ class WantTest {
                     .settlement();
             fixture.scheduler.moveTo(1100);
 
-            assertEquals(List.of(new WantOptions(Choice.YES, 1000, 100, Choice.DEFAULT, 0, 0)),
+            assertEquals(Collections.singletonList(new WantOptions(Choice.YES, 1000, 100, Choice.DEFAULT, 0, 0)),
                     fixture.crossings.wantOptions());
             assertEquals(CoreConstants.REFUSAL_TIMED_OUT, refusalOf(settlement).code());
         }
@@ -150,7 +151,7 @@ class WantTest {
 
             consumer.want(GREETER, WantLimits.budgeted(500, 100));
 
-            assertEquals(List.of(new WantOptions(Choice.DEFAULT, 40, 0, Choice.YES, 500, 100)),
+            assertEquals(Collections.singletonList(new WantOptions(Choice.DEFAULT, 40, 0, Choice.YES, 500, 100)),
                     fixture.crossings.wantOptions());
         }
     }
@@ -162,7 +163,7 @@ class WantTest {
 
             consumer.want(GREETER, WantLimits.unbounded());
 
-            assertEquals(List.of(new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 0)),
+            assertEquals(Collections.singletonList(new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 0)),
                     fixture.crossings.wantOptions());
             assertEquals(new Answer.Absent<Long>(), fixture.core.call(CoreCalls.nextDeadline()));
         }
@@ -179,7 +180,7 @@ class WantTest {
             assertInstanceOf(Answer.Mistake.class, timed);
             assertInstanceOf(Answer.Mistake.class, polled);
             assertEquals(0, fixture.crossings.count("weivel_want_service"));
-            assertEquals(List.of(), fixture.failures);
+            assertEquals(Collections.emptyList(), fixture.failures);
         }
     }
 
@@ -237,12 +238,12 @@ class WantTest {
 
             value(provider.register(GREETER, new Object()));
 
-            assertEquals(List.of(false), locked);
+            assertEquals(Collections.singletonList(false), locked);
         }
     }
 
     static Refusal refusalOf(CompletableFuture<Answer<Object>> settlement) {
         Answer.Refused<?> refused = assertInstanceOf(Answer.Refused.class, settlement.join());
-        return refused.refusal().orElseThrow();
+        return refused.refusal().get();
     }
 }

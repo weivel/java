@@ -8,14 +8,25 @@ final class Answers {
     }
 
     static <T> Answer<T> retyped(Answer<?> answer) {
-        return switch (answer) {
-            case Answer.Ok<?> ok -> throw new IllegalArgumentException("a success carries its own value");
-            case Answer.Absent<?> absent -> new Answer.Absent<>();
-            case Answer.Refused<?> refused -> new Answer.Refused<>(refused.status(), refused.refusal());
-            case Answer.Detached<?> detached -> new Answer.Detached<>();
-            case Answer.Destroyed<?> destroyed -> new Answer.Destroyed<>();
-            case Answer.Defect<?> defect -> new Answer.Defect<>(defect.detail());
-            case Answer.Mistake<?> mistake -> new Answer.Mistake<>(mistake.detail());
-        };
+        if (answer instanceof Answer.Ok) {
+            throw new IllegalArgumentException("a success carries its own value");
+        }
+        if (answer instanceof Answer.Absent) {
+            return new Answer.Absent<>();
+        }
+        if (answer instanceof Answer.Refused) {
+            Answer.Refused<?> refused = (Answer.Refused<?>) answer;
+            return new Answer.Refused<>(refused.status(), refused.refusal());
+        }
+        if (answer instanceof Answer.Detached) {
+            return new Answer.Detached<>();
+        }
+        if (answer instanceof Answer.Destroyed) {
+            return new Answer.Destroyed<>();
+        }
+        if (answer instanceof Answer.Defect) {
+            return new Answer.Defect<>(((Answer.Defect<?>) answer).detail());
+        }
+        return new Answer.Mistake<>(((Answer.Mistake<?>) answer).detail());
     }
 }

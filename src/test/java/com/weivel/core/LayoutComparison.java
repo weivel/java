@@ -3,10 +3,6 @@ package com.weivel.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import java.lang.foreign.MemoryLayout;
-import java.lang.foreign.PaddingLayout;
-import java.lang.foreign.StructLayout;
-import java.lang.foreign.UnionLayout;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -20,16 +16,16 @@ public final class LayoutComparison {
     }
 
     /** Asserts that {@code holder} declares at least one struct layout and that each matches C's. */
-    public static void assertEveryDeclaredLayoutMatches(Class<?> holder, CLayouts printed) {
-        List<StructLayout> declared = declaredStructLayouts(holder);
+    static void assertEveryDeclaredLayoutMatches(Class<?> holder, CLayouts printed) {
+        List<Layout> declared = declaredStructLayouts(holder);
         assertFalse(declared.isEmpty(), holder.getName() + " declares no struct layout");
-        for (StructLayout layout : declared) {
+        for (Layout layout : declared) {
             assertMatches(layout, printed);
         }
     }
 
     /** Asserts that one declared struct layout has C's fields, offsets, sizes and size. */
-    public static void assertMatches(StructLayout declared, CLayouts printed) {
+    static void assertMatches(Layout declared, CLayouts printed) {
         String name = declared.name().orElseThrow(() -> new AssertionError("a declared struct layout has no name"));
         CLayouts.CStruct struct = printed.structs().get(name);
         if (struct == null) {
@@ -39,11 +35,14 @@ public final class LayoutComparison {
         assertEquals(struct.size(), declared.byteSize(), name + " sizeof");
     }
 
-    private static List<StructLayout> declaredStructLayouts(Class<?> holder) {
-        List<StructLayout> layouts = new ArrayList<>();
+    private static List<Layout> declaredStructLayouts(Class<?> holder) {
+        List<Layout> layouts = new ArrayList<>();
         for (Field field : holder.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && StructLayout.class.isAssignableFrom(field.getType())) {
-                layouts.add((StructLayout) valueOf(field));
+            if (Modifier.isStatic(field.getModifiers()) && Layout.class.isAssignableFrom(field.getType())) {
+                Layout layout = (Layout) valueOf(field);
+                if (layout.isStruct()) {
+                    layouts.add(layout);
+                }
             }
         }
         return layouts;
@@ -58,11 +57,11 @@ public final class LayoutComparison {
         }
     }
 
-    private static Map<String, CLayouts.CField> fieldsOf(StructLayout declared) {
+    private static Map<String, CLayouts.CField> fieldsOf(Layout declared) {
         Map<String, CLayouts.CField> fields = new LinkedHashMap<>();
         long offset = 0;
-        for (MemoryLayout member : declared.memberLayouts()) {
-            if (!(member instanceof PaddingLayout)) {
+        for (Layout member : declared.members()) {
+            if (!member.isPadding()) {
                 addField(fields, "", member, offset);
             }
             offset += member.byteSize();
@@ -70,11 +69,11 @@ public final class LayoutComparison {
         return fields;
     }
 
-    private static void addField(Map<String, CLayouts.CField> fields, String prefix, MemoryLayout member, long offset) {
+    private static void addField(Map<String, CLayouts.CField> fields, String prefix, Layout member, long offset) {
         String name = prefix + member.name().orElseThrow(() -> new AssertionError("a declared field has no name"));
         fields.put(name, new CLayouts.CField(offset, member.byteSize()));
-        if (member instanceof UnionLayout union) {
-            for (MemoryLayout alternative : union.memberLayouts()) {
+        if (member.isUnion()) {
+            for (Layout alternative : member.members()) {
                 addField(fields, name + ".", alternative, offset);
             }
         }

@@ -1,17 +1,11 @@
 package com.weivel.core;
 
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
-import java.lang.foreign.MemorySegment;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Real cores for the tests of the layer's other packages, which cannot reach the wrapper's seams: a plain one, and
@@ -71,7 +65,7 @@ public final class CoreProbes {
                                                        CoreListener listener, ErrorSink sink) {
         EventCopying incompleteQuestions = new EventCopying() {
             @Override
-            public CoreEvent whole(MemorySegment event, long sequence) {
+            public CoreEvent whole(NativeRegion event, long sequence) {
                 if (EventCopy.kindOf(event) == CoreConstants.EVENT_CAPACITY_WANTED) {
                     throw new IllegalStateException("a capacity question left incomplete on purpose");
                 }
@@ -79,7 +73,7 @@ public final class CoreProbes {
             }
 
             @Override
-            public CoreEvent fixedPart(MemorySegment event, long sequence) {
+            public CoreEvent fixedPart(NativeRegion event, long sequence) {
                 return EventCopy.INSTANCE.fixedPart(event, sequence);
             }
         };
@@ -110,18 +104,27 @@ public final class CoreProbes {
 
     /** Every crossing a counted core made, by symbol, and every time it handed {@code weivel_advance}. */
     public static final class Crossings {
-        private static final MethodHandle RECORD_TIME = recordTimeHandle();
-        private static final MethodHandle RECORD_OPTIONS = recordOptionsHandle();
         private final List<WantOptions> wantOptions = Collections.synchronizedList(new ArrayList<>());
         private final TestCores.CallLog log = new TestCores.CallLog();
         private final List<Long> advanceTimes = Collections.synchronizedList(new ArrayList<>());
 
         CoreFunctions around(CoreFunctions table) {
             CoreFunctions counted = log.around(table);
-            return counted.mapped((function, handle) -> switch (function) {
-                case ADVANCE -> MethodHandles.filterArguments(handle, 1, RECORD_TIME.bindTo(this));
-                case WANT_SERVICE -> MethodHandles.filterArguments(handle, 3, RECORD_OPTIONS.bindTo(this));
-                default -> handle;
+            return counted.mapped((function, original) -> {
+                switch (function) {
+                    case ADVANCE:
+                        return arguments -> {
+                            recordTime(arguments[1]);
+                            return original.call(arguments);
+                        };
+                    case WANT_SERVICE:
+                        return arguments -> {
+                            recordOptions(table.access(), arguments[3]);
+                            return original.call(arguments);
+                        };
+                    default:
+                        return original;
+                }
             });
         }
 
@@ -132,19 +135,18 @@ public final class CoreProbes {
          */
         public List<WantOptions> wantOptions() {
             synchronized (wantOptions) {
-                return List.copyOf(wantOptions);
+                return Collections.unmodifiableList(new ArrayList<>(wantOptions));
             }
         }
 
-        MemorySegment recordOptions(MemorySegment options) {
-            if (!options.equals(MemorySegment.NULL)) {
-                MemorySegment struct = options.reinterpret(CoreLayouts.WANT_OPTIONS.byteSize());
-                wantOptions.add(new WantOptions(choiceOf(struct.get(JAVA_INT, field("timed"))),
-                        struct.get(JAVA_LONG, field("now")), struct.get(JAVA_LONG, field("timeout_millis")),
-                        choiceOf(struct.get(JAVA_INT, field("budgeted"))), struct.get(JAVA_LONG,
-                        field("budget_millis")), struct.get(JAVA_LONG, field("poll_millis"))));
+        void recordOptions(NativeAccess access, long options) {
+            if (options != 0) {
+                NativeRegion struct = new NativeRegion(access, options, CoreLayouts.WANT_OPTIONS.byteSize(), null);
+                wantOptions.add(new WantOptions(choiceOf(struct.getInt(field("timed"))),
+                        struct.getLong(field("now")), struct.getLong(field("timeout_millis")),
+                        choiceOf(struct.getInt(field("budgeted"))), struct.getLong(field("budget_millis")),
+                        struct.getLong(field("poll_millis"))));
             }
-            return options;
         }
 
         private static long field(String name) {
@@ -153,7 +155,7 @@ public final class CoreProbes {
 
         private static Choice choiceOf(int value) {
             return Arrays.stream(Choice.values()).filter(choice -> choice.value() == value).findFirst()
-                    .orElseThrow();
+                    .get();
         }
 
         /**
@@ -183,7 +185,7 @@ public final class CoreProbes {
          * @return the symbols
          */
         public List<String> symbols() {
-            return log.calls().stream().map(CoreFunction::symbol).toList();
+            return log.calls().stream().map(CoreFunction::symbol).collect(Collectors.toList());
         }
 
         /**
@@ -193,31 +195,12 @@ public final class CoreProbes {
          */
         public List<Long> advanceTimes() {
             synchronized (advanceTimes) {
-                return List.copyOf(advanceTimes);
+                return Collections.unmodifiableList(new ArrayList<>(advanceTimes));
             }
         }
 
-        long recordTime(long now) {
+        void recordTime(long now) {
             advanceTimes.add(now);
-            return now;
-        }
-
-        private static MethodHandle recordOptionsHandle() {
-            try {
-                return MethodHandles.lookup().findVirtual(Crossings.class, "recordOptions",
-                        MethodType.methodType(MemorySegment.class, MemorySegment.class));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
-        }
-
-        private static MethodHandle recordTimeHandle() {
-            try {
-                return MethodHandles.lookup().findVirtual(Crossings.class, "recordTime",
-                        MethodType.methodType(long.class, long.class));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
         }
     }
 }

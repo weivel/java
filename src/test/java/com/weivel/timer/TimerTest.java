@@ -17,10 +17,12 @@ import com.weivel.core.Failure;
 import com.weivel.core.Refusal;
 import com.weivel.core.WantOptions;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +41,7 @@ class TimerTest {
     void destroy() {
         core.destroy();
         core.close();
-        assertEquals(List.of(), failures);
+        assertEquals(Collections.emptyList(), failures);
     }
 
     @Test
@@ -47,22 +49,22 @@ class TimerTest {
         CoreTimer timer = started(scheduler);
         long later = ok(core.call(CoreCalls.wantService(HOST, "later", WantOptions.timed(0, 100))));
         assertEquals(OptionalLong.of(100), timer.armed());
-        assertEquals(List.of(100L), scheduler.live());
+        assertEquals(Collections.singletonList(100L), scheduler.live());
 
         long earlier = ok(core.call(CoreCalls.wantService(HOST, "earlier", WantOptions.timed(0, 50))));
         assertEquals(OptionalLong.of(50), timer.armed());
-        assertEquals(List.of(50L), scheduler.live());
+        assertEquals(Collections.singletonList(50L), scheduler.live());
 
         ok(core.call(CoreCalls.registerService(HOST, "unrelated")));
-        assertEquals(List.of(100L, 50L), scheduler.scheduled());
+        assertEquals(Arrays.asList(100L, 50L), scheduler.scheduled());
 
         ok(core.call(CoreCalls.unregister(earlier)));
         assertEquals(OptionalLong.of(100), timer.armed());
         ok(core.call(CoreCalls.unregister(later)));
 
         assertEquals(OptionalLong.empty(), timer.armed());
-        assertEquals(List.of(), scheduler.live());
-        assertEquals(List.of(100L, 50L, 100L), scheduler.scheduled());
+        assertEquals(Collections.emptyList(), scheduler.live());
+        assertEquals(Arrays.asList(100L, 50L, 100L), scheduler.scheduled());
     }
 
     @Test
@@ -70,14 +72,16 @@ class TimerTest {
         CoreTimer timer = started(scheduler);
         List<Object> armedWhenHeard = new ArrayList<>();
         core.addListener(event -> {
-            if (event instanceof CoreEvent.DeadlineEvent deadline) {
-                armedWhenHeard.add(List.of(deadline.at(), timer.armed(), scheduler.live()));
+            if (event instanceof CoreEvent.DeadlineEvent) {
+                CoreEvent.DeadlineEvent deadline = (CoreEvent.DeadlineEvent) event;
+                armedWhenHeard.add(Arrays.asList(deadline.at(), timer.armed(), scheduler.live()));
             }
         });
 
         ok(core.call(CoreCalls.wantService(HOST, "announced", WantOptions.timed(0, 70))));
 
-        assertEquals(List.of(List.of(70L, OptionalLong.of(70), List.of(70L))), armedWhenHeard);
+        assertEquals(Collections.singletonList(Arrays.asList(70L, OptionalLong.of(70),
+                Collections.singletonList(70L))), armedWhenHeard);
     }
 
     @Test
@@ -88,16 +92,16 @@ class TimerTest {
 
         scheduler.moveTo(100);
 
-        assertEquals(List.of(100L), crossings.advanceTimes());
-        assertEquals(List.of(first), timedOut());
+        assertEquals(Collections.singletonList(100L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(first), timedOut());
         assertEquals(OptionalLong.of(200), timer.armed());
-        assertEquals(List.of(200L), scheduler.live());
+        assertEquals(Collections.singletonList(200L), scheduler.live());
 
         scheduler.moveTo(200);
 
-        assertEquals(List.of(100L, 200L), crossings.advanceTimes());
+        assertEquals(Arrays.asList(100L, 200L), crossings.advanceTimes());
         assertEquals(OptionalLong.empty(), timer.armed());
-        assertEquals(List.of(), scheduler.live());
+        assertEquals(Collections.emptyList(), scheduler.live());
     }
 
     @Test
@@ -108,7 +112,7 @@ class TimerTest {
         scheduler.setClock(137);
         scheduler.moveTo(137);
 
-        assertEquals(List.of(137L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(137L), crossings.advanceTimes());
         assertEquals(1, timedOut().size());
     }
 
@@ -117,19 +121,19 @@ class TimerTest {
         scheduler.limitWaitsTo(40);
         CoreTimer timer = started(scheduler);
         ok(core.call(CoreCalls.wantService(HOST, "far", WantOptions.timed(0, 100))));
-        assertEquals(List.of(40L), scheduler.live());
+        assertEquals(Collections.singletonList(40L), scheduler.live());
 
         scheduler.moveTo(40);
         scheduler.moveTo(80);
         scheduler.moveTo(99);
 
-        assertEquals(List.of(), crossings.advanceTimes());
-        assertEquals(List.of(40L, 80L, 100L), scheduler.scheduled());
+        assertEquals(Collections.emptyList(), crossings.advanceTimes());
+        assertEquals(Arrays.asList(40L, 80L, 100L), scheduler.scheduled());
         assertEquals(OptionalLong.of(100), timer.armed());
 
         scheduler.moveTo(100);
 
-        assertEquals(List.of(100L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(100L), crossings.advanceTimes());
         assertEquals(1, timedOut().size());
     }
 
@@ -142,12 +146,12 @@ class TimerTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "raced")));
 
-        assertEquals(List.of(want), timedOut());
-        assertEquals(List.of(), served());
-        assertEquals(List.of(100L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(want), timedOut());
+        assertEquals(Collections.emptyList(), served());
+        assertEquals(Collections.singletonList(100L), crossings.advanceTimes());
         assertEquals(1, scheduler.reads() - readsBefore);
-        assertEquals(List.of(), scheduler.live());
-        assertEquals(List.of(), scheduler.fired());
+        assertEquals(Collections.emptyList(), scheduler.live());
+        assertEquals(Collections.emptyList(), scheduler.fired());
     }
 
     @Test
@@ -176,7 +180,7 @@ class TimerTest {
         scheduler.moveTo(40);
 
         assertEquals(2, scheduler.reads());
-        assertEquals(List.of(40L, 80L), scheduler.scheduled());
+        assertEquals(Arrays.asList(40L, 80L), scheduler.scheduled());
     }
 
     @Test
@@ -187,7 +191,7 @@ class TimerTest {
         ok(core.call(CoreCalls.registerService(HOST, "other")));
 
         assertEquals(OptionalLong.empty(), timer.armed());
-        assertEquals(List.of(), scheduler.scheduled());
+        assertEquals(Collections.emptyList(), scheduler.scheduled());
         assertEquals(0, scheduler.reads());
     }
 
@@ -221,8 +225,8 @@ class TimerTest {
         ok(core.call(CoreCalls.registerService(HOST, "after")));
 
         assertEquals(readsBefore, scheduler.reads());
-        assertEquals(List.of(), crossings.advanceTimes());
-        assertEquals(List.of(), timedOut());
+        assertEquals(Collections.emptyList(), crossings.advanceTimes());
+        assertEquals(Collections.emptyList(), timedOut());
     }
 
     @Test
@@ -235,8 +239,8 @@ class TimerTest {
         assertInstanceOf(Answer.Mistake.class, second);
         ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
         assertEquals(OptionalLong.of(100), first.armed());
-        assertEquals(List.of(100L), scheduler.live());
-        assertEquals(List.of(), other.scheduled());
+        assertEquals(Collections.singletonList(100L), scheduler.live());
+        assertEquals(Collections.emptyList(), other.scheduled());
     }
 
     @Test
@@ -248,8 +252,8 @@ class TimerTest {
         ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
 
         assertEquals(OptionalLong.of(100), second.armed());
-        assertEquals(List.of(100L), other.live());
-        assertEquals(List.of(), scheduler.scheduled());
+        assertEquals(Collections.singletonList(100L), other.live());
+        assertEquals(Collections.emptyList(), scheduler.scheduled());
     }
 
     @Test
@@ -261,7 +265,7 @@ class TimerTest {
 
         assertEquals(OptionalLong.empty(), timer.armed());
         assertEquals(OptionalLong.empty(), timer.time());
-        assertEquals(List.of(), crossings.advanceTimes());
+        assertEquals(Collections.emptyList(), crossings.advanceTimes());
     }
 
     @Test
@@ -280,10 +284,10 @@ class TimerTest {
 
         scheduler.moveTo(10_000);
 
-        assertEquals(List.of(want), timedOut());
+        assertEquals(Collections.singletonList(want), timedOut());
         assertTimedOutAbout("accounts");
-        assertEquals(List.of(1000L), crossings.advanceTimes());
-        assertEquals(List.of(1000L), scheduler.fired());
+        assertEquals(Collections.singletonList(1000L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(1000L), scheduler.fired());
         assertEquals(OptionalLong.empty(), timer.armed());
     }
 
@@ -297,10 +301,10 @@ class TimerTest {
         assertEquals(OptionalLong.empty(), timer.armed());
         scheduler.moveTo(10_000);
 
-        assertEquals(List.of(want), served());
-        assertEquals(List.of(), timedOut());
-        assertEquals(List.of(), scheduler.fired());
-        assertEquals(List.of(), scheduler.live());
+        assertEquals(Collections.singletonList(want), served());
+        assertEquals(Collections.emptyList(), timedOut());
+        assertEquals(Collections.emptyList(), scheduler.fired());
+        assertEquals(Collections.emptyList(), scheduler.live());
     }
 
     @Test
@@ -312,10 +316,10 @@ class TimerTest {
         ok(core.call(CoreCalls.registerService(HOST, "accounts")));
         scheduler.moveTo(10_000);
 
-        assertEquals(List.of(want), timedOut());
-        assertEquals(List.of(), served());
+        assertEquals(Collections.singletonList(want), timedOut());
+        assertEquals(Collections.emptyList(), served());
         assertTimedOutAbout("accounts");
-        assertEquals(List.of(1000L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(1000L), crossings.advanceTimes());
     }
 
     @Test
@@ -327,11 +331,11 @@ class TimerTest {
         ok(core.call(CoreCalls.registerService(HOST, "accounts")));
         scheduler.moveTo(10_000);
 
-        assertEquals(List.of(want), timedOut());
-        assertEquals(List.of(), served());
+        assertEquals(Collections.singletonList(want), timedOut());
+        assertEquals(Collections.emptyList(), served());
         assertTimedOutAbout("accounts");
-        assertEquals(List.of(1500L), crossings.advanceTimes());
-        assertEquals(List.of(), scheduler.fired());
+        assertEquals(Collections.singletonList(1500L), crossings.advanceTimes());
+        assertEquals(Collections.emptyList(), scheduler.fired());
     }
 
     private CoreTimer started(Scheduler chosen) {
@@ -341,23 +345,23 @@ class TimerTest {
     private List<CoreEvent.WantSettledEvent> settlements() {
         synchronized (heard) {
             return heard.stream().filter(CoreEvent.WantSettledEvent.class::isInstance)
-                    .map(CoreEvent.WantSettledEvent.class::cast).toList();
+                    .map(CoreEvent.WantSettledEvent.class::cast).collect(Collectors.toList());
         }
     }
 
     private List<Long> timedOut() {
         return settlements().stream()
                 .filter(settled -> settled.refusal().map(Refusal::code).orElse(0) == CoreConstants.REFUSAL_TIMED_OUT)
-                .map(CoreEvent.WantSettledEvent::want).toList();
+                .map(CoreEvent.WantSettledEvent::want).collect(Collectors.toList());
     }
 
     private List<Long> served() {
-        return settlements().stream().filter(settled -> settled.refusal().isEmpty())
-                .map(CoreEvent.WantSettledEvent::want).toList();
+        return settlements().stream().filter(settled -> !settled.refusal().isPresent())
+                .map(CoreEvent.WantSettledEvent::want).collect(Collectors.toList());
     }
 
     private void assertTimedOutAbout(String serviceId) {
-        Refusal refusal = settlements().getFirst().refusal().orElseThrow();
+        Refusal refusal = settlements().get(0).refusal().get();
         assertEquals(CoreConstants.REFUSAL_TIMED_OUT, refusal.code());
         assertEquals(Optional.of(serviceId), refusal.subject());
         assertTrue(refusal.hasFix());

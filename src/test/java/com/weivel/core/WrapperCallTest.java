@@ -8,10 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -23,11 +21,12 @@ class WrapperCallTest {
 
     @Test
     void theCreationIsDrainedAndHeardByTheListenerGivenWithIt() {
-        CoreOptions debug = new CoreOptions(0, CoreConstants.LOG_DEBUG, 0, List.of(), List.of(), List.of());
+        CoreOptions debug = new CoreOptions(0, CoreConstants.LOG_DEBUG, 0, Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList());
 
         Core core = TestCores.created(TestCores.functions(), EventCopy.INSTANCE, debug, listener, sink);
 
-        CoreEvent.LogEvent created = assertInstanceOf(CoreEvent.LogEvent.class, listener.events().getFirst());
+        CoreEvent.LogEvent created = assertInstanceOf(CoreEvent.LogEvent.class, listener.events().get(0));
         assertEquals("core created", created.text());
         assertEquals(1, created.sequence());
         core.destroy();
@@ -35,18 +34,19 @@ class WrapperCallTest {
 
     @Test
     void aCreationThatThrowsAfterTheCoreAnsweredDestroysThatCoreAndClosesItsArena() {
-        CoreOptions debug = new CoreOptions(0, CoreConstants.LOG_DEBUG, 0, List.of(), List.of(), List.of());
+        CoreOptions debug = new CoreOptions(0, CoreConstants.LOG_DEBUG, 0, Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList());
         TestCores.CallLog log = new TestCores.CallLog();
-        MemorySegment[] seen = new MemorySegment[1];
+        NativeRegion[] seen = new NativeRegion[1];
         EventCopying overflowing = new EventCopying() {
             @Override
-            public CoreEvent whole(MemorySegment event, long sequence) {
+            public CoreEvent whole(NativeRegion event, long sequence) {
                 seen[0] = event;
                 throw new StackOverflowError("a copy overflowing on purpose");
             }
 
             @Override
-            public CoreEvent fixedPart(MemorySegment event, long sequence) {
+            public CoreEvent fixedPart(NativeRegion event, long sequence) {
                 return EventCopy.INSTANCE.fixedPart(event, sequence);
             }
         };
@@ -56,12 +56,13 @@ class WrapperCallTest {
 
         assertEquals(1, log.count(CoreFunction.CORE_CREATE));
         assertEquals(1, log.count(CoreFunction.CORE_DESTROY));
-        assertFalse(seen[0].scope().isAlive());
+        assertFalse(seen[0].isAlive());
     }
 
     @Test
     void optionsTheCoreCallsMalformedAreTheCallersMistakeAndNoSinkHearsOfThem() {
-        CoreOptions tooLarge = new CoreOptions(70000, 0, 0, List.of(), List.of(), List.of());
+        CoreOptions tooLarge = new CoreOptions(70000, 0, 0, Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList());
 
         Answer<Core> created = Core.wrapped(Wrapper.start(TestCores.functions(), EventCopy.INSTANCE, tooLarge,
                 Optional.of(listener), sink));
@@ -69,7 +70,7 @@ class WrapperCallTest {
         Answer.Refused<Core> refused = assertInstanceOf(Answer.Refused.class, created);
         assertEquals(RefusalStatus.MALFORMED, refused.status());
         assertEquals(Optional.empty(), refused.refusal());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
     }
 
     @Test
@@ -80,7 +81,7 @@ class WrapperCallTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "quiet")));
 
-        assertEquals(List.of(CoreFunction.REGISTER_SERVICE), log.calls());
+        assertEquals(Collections.singletonList(CoreFunction.REGISTER_SERVICE), log.calls());
         core.destroy();
     }
 
@@ -94,7 +95,7 @@ class WrapperCallTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "watched")));
 
-        assertEquals(List.of(CoreFunction.REGISTER_SERVICE, CoreFunction.NEXT_EVENT, CoreFunction.EVENT_RELEASE,
+        assertEquals(Arrays.asList(CoreFunction.REGISTER_SERVICE, CoreFunction.NEXT_EVENT, CoreFunction.EVENT_RELEASE,
                 CoreFunction.NEXT_EVENT, CoreFunction.EVENT_RELEASE), log.calls());
         assertEquals(2, listener.of(CoreEvent.WatchEvent.class).size());
         core.destroy();
@@ -107,7 +108,7 @@ class WrapperCallTest {
 
         long registration = ok(core.call(CoreCalls.registerService(HOST, "copied")));
 
-        CoreEvent.WatchEvent heard = listener.of(CoreEvent.WatchEvent.class).getFirst();
+        CoreEvent.WatchEvent heard = listener.of(CoreEvent.WatchEvent.class).get(0);
         assertEquals(watch, heard.watch());
         assertEquals(HOST, heard.plugin());
         assertEquals(registration, heard.implementation());
@@ -124,11 +125,11 @@ class WrapperCallTest {
 
         Answer.Refused<Void> refused = assertInstanceOf(Answer.Refused.class, answer);
         assertEquals(RefusalStatus.REFUSED, refused.status());
-        Refusal refusal = refused.refusal().orElseThrow();
+        Refusal refusal = refused.refusal().get();
         assertEquals(CoreConstants.REFUSAL_STALE_HANDLE, refusal.code());
         assertFalse(refusal.detail().isEmpty());
-        assertEquals(refusal, listener.of(CoreEvent.RefusalEvent.class).getFirst().refusal());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(refusal, listener.of(CoreEvent.RefusalEvent.class).get(0).refusal());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -152,8 +153,10 @@ class WrapperCallTest {
     @Test
     void aLateRegistrationIsAnsweredWithTheStatusAlone() {
         Core core = TestCores.core(listener, sink);
-        Manifest providing = new Manifest("late", 0, Optional.empty(), List.of(), List.of(), List.of(),
-                List.of(new Manifest.ServiceOffer("late:service", List.of())), List.of(), List.of(), Optional.empty());
+        Manifest providing = new Manifest("late", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(new Manifest.ServiceOffer("late:service", Collections.emptyList())),
+                        Collections.emptyList(), Collections.emptyList(), Optional.empty());
         long plugin = openedPlugin(core, providing);
         ok(core.call(CoreCalls.releasePlugin(plugin)));
 
@@ -172,7 +175,7 @@ class WrapperCallTest {
         Answer<Integer> state = core.call(CoreCalls.handleState(424242L));
 
         assertEquals(new Answer.Refused<Integer>(RefusalStatus.REFUSED, Optional.empty()), state);
-        assertEquals(List.of(), listener.events());
+        assertEquals(Collections.emptyList(), listener.events());
         core.destroy();
     }
 
@@ -199,8 +202,8 @@ class WrapperCallTest {
 
         Answer.Refused<Long> refused = assertInstanceOf(Answer.Refused.class, answer);
         assertEquals(RefusalStatus.MALFORMED, refused.status());
-        assertEquals(CoreConstants.REFUSAL_MALFORMED_CALL, refused.refusal().orElseThrow().code());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(CoreConstants.REFUSAL_MALFORMED_CALL, refused.refusal().get().code());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -213,10 +216,10 @@ class WrapperCallTest {
         Answer<Integer> answer = core.call(CoreCalls.handleState(1L));
 
         Answer.Defect<Integer> defect = assertInstanceOf(Answer.Defect.class, answer);
-        Refusal queued = listener.of(CoreEvent.RefusalEvent.class).getFirst().refusal();
+        Refusal queued = listener.of(CoreEvent.RefusalEvent.class).get(0).refusal();
         assertTrue(defect.detail().contains(queued.detail()), defect.detail());
         assertEquals(1, sink.failures().size());
-        assertEquals(FailureKind.LAYER_DEFECT, sink.failures().getFirst().kind());
+        assertEquals(FailureKind.LAYER_DEFECT, sink.failures().get(0).kind());
         core.destroy();
     }
 
@@ -229,7 +232,7 @@ class WrapperCallTest {
 
         assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, got).status());
         assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, watched).status());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -256,7 +259,7 @@ class WrapperCallTest {
         Answer<Void> answer = core.call(CoreCalls.openPlugin(plugin, 7));
 
         assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, answer).status());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -269,7 +272,7 @@ class WrapperCallTest {
         Answer<Long> answer = core.call(CoreCalls.registerService(HOST, "starved"));
 
         assertEquals(new Answer.Refused<Long>(RefusalStatus.OUT_OF_MEMORY, Optional.empty()), answer);
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -291,45 +294,38 @@ class WrapperCallTest {
         return plugin;
     }
 
-    /** The handle made as it is, its status replaced by {@code status}. */
-    static MethodHandle withStatus(MethodHandle handle, int status) {
-        MethodHandle replaced = MethodHandles.dropArguments(MethodHandles.constant(int.class, status), 0, int.class);
-        return MethodHandles.filterReturnValue(handle, replaced);
+    /** The function called as it is, its status replaced by {@code status}. */
+    static NativeFunction withStatus(NativeFunction original, int status) {
+        return arguments -> {
+            original.call(arguments);
+            return status;
+        };
     }
 
-    static MethodHandle withNullArgument(MethodHandle handle, int position) {
-        MethodHandle nothing = MethodHandles.dropArguments(MethodHandles.constant(MemorySegment.class,
-                MemorySegment.NULL), 0, MemorySegment.class);
-        return MethodHandles.filterArguments(handle, position, nothing);
+    static NativeFunction withNullArgument(NativeFunction original, int position) {
+        return arguments -> {
+            long[] replaced = arguments.clone();
+            replaced[position] = 0;
+            return original.call(replaced);
+        };
     }
 
     /** A {@code weivel_get_service} that first asks for {@link #FIRST_ID}, so one call drains two refusals of reach. */
     static final class GetTwice {
         static final String FIRST_ID = "asked-first";
-        private final MethodHandle original;
 
-        private GetTwice(MethodHandle original) {
-            this.original = original;
+        private GetTwice() {
         }
 
-        static MethodHandle around(MethodHandle original) {
-            try {
-                return MethodHandles.lookup().findVirtual(GetTwice.class, "call", MethodType.methodType(int.class,
-                                MemorySegment.class, long.class, MemorySegment.class, MemorySegment.class,
-                                MemorySegment.class))
-                        .bindTo(new GetTwice(original));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
-        }
-
-        int call(MemorySegment core, long plugin, MemorySegment id, MemorySegment implementation,
-                 MemorySegment pending) throws Throwable {
-            try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
-                int ignored = (int) original.invokeExact(core, plugin, arena.allocateFrom(FIRST_ID), implementation,
-                        pending);
-            }
-            return (int) original.invokeExact(core, plugin, id, implementation, pending);
+        static NativeFunction around(NativeFunction original) {
+            return arguments -> {
+                try (NativeArena arena = new NativeArena(NativeBackends.current())) {
+                    long[] first = arguments.clone();
+                    first[2] = arena.text(FIRST_ID).address();
+                    original.call(first);
+                }
+                return original.call(arguments);
+            };
         }
     }
 }

@@ -54,15 +54,26 @@ public final class Core implements AutoCloseable {
     }
 
     static Answer<Core> wrapped(Answer<Wrapper> started) {
-        return switch (started) {
-            case Answer.Ok<Wrapper> ok -> new Answer.Ok<>(new Core(ok.value()));
-            case Answer.Refused<Wrapper> refused -> new Answer.Refused<>(refused.status(), refused.refusal());
-            case Answer.Defect<Wrapper> defect -> new Answer.Defect<>(defect.detail());
-            case Answer.Absent<Wrapper> absent -> new Answer.Defect<>("the core's creation answered nothing");
-            case Answer.Detached<Wrapper> detached -> new Answer.Detached<>();
-            case Answer.Destroyed<Wrapper> destroyed -> new Answer.Destroyed<>();
-            case Answer.Mistake<Wrapper> mistake -> new Answer.Mistake<>(mistake.detail());
-        };
+        if (started instanceof Answer.Ok) {
+            return new Answer.Ok<>(new Core(((Answer.Ok<Wrapper>) started).value()));
+        }
+        if (started instanceof Answer.Refused) {
+            Answer.Refused<Wrapper> refused = (Answer.Refused<Wrapper>) started;
+            return new Answer.Refused<>(refused.status(), refused.refusal());
+        }
+        if (started instanceof Answer.Defect) {
+            return new Answer.Defect<>(((Answer.Defect<Wrapper>) started).detail());
+        }
+        if (started instanceof Answer.Absent) {
+            return new Answer.Defect<>("the core's creation answered nothing");
+        }
+        if (started instanceof Answer.Detached) {
+            return new Answer.Detached<>();
+        }
+        if (started instanceof Answer.Destroyed) {
+            return new Answer.Destroyed<>();
+        }
+        return new Answer.Mistake<>(((Answer.Mistake<Wrapper>) started).detail());
     }
 
     /**
