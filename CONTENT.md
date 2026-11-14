@@ -113,11 +113,15 @@ destroy, close a library to calls at once and close its binary once no call runs
 built jar with `jdeps`. `StandardBinary.load` opens the standard's binary from the caller's path through the same
 seam, through `ForeignLibrary`, which binds only the symbols its caller names and never one of the core's, and fails
 naming the first function missing. `Standard` answers what the standard answers, each as a `StandardAnswer`: a JSON
-manifest validated and read into a `Manifest`, plugins discovered on disk as `DiscoveredPlugin`s, which register with
-a host from the JAR their manifest names and an entry class name the caller gives, a library declaration read into a
+manifest validated and read into a `Manifest`, plugins discovered on disk as `DiscoveredPlugin`s, a library declaration read into a
 `LibraryDeclaration` for `loadLibrary`, identities, the mirror list, SHA-256, and the three service ids, read from the
 standard's functions. Every struct the standard fills is copied into Java values and released through the standard's
-own release before the call answers. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
+own release before the call answers, every release of a call running even when another fails. `readManifest`
+reads a manifest without validating it, and `validate` validates one without reading it.
+`DiscoveredPlugin.register` is one default for a Java plugin packed as a JAR: it loads the JAR its manifest's entry
+names by a class name the caller gives. The manifest calls its entry opaque, so it is never the only way: a host that
+lays its plugins out otherwise registers `manifest()` with an entry of its own, from `entryPath()` or anything else.
+`ForeignMemory.manifest` reads a manifest another library laid out up to the size it declares, as the core does. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
 interfaces, a refusal thrown as a `ServiceRefusal`.
 
 The other packages hold only their purpose so far.

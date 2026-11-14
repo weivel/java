@@ -49,6 +49,10 @@ public final class DiscoveredPlugin {
      * Registers the plugin with a host: loads its entry, the JAR its manifest names, by the class name the caller
      * gives, and registers its manifest value with that entry.
      *
+     * <p>This is one default, for a Java plugin packed as a JAR, never the only way to register what discovery
+     * found: core.h calls a manifest's {@code entry} opaque, so a host that lays its plugins out otherwise reads
+     * {@link #manifest()} and {@link #entryPath()} and hands {@link Host#register} an entry of its own making.
+     *
      * @param host the host
      * @param entryClassName the entry's binary class name inside the JAR, the caller's, since nothing names a default
      * @return the plugin's handle; {@link Answer.Mistake} for a manifest naming no entry or an entry not present, or
