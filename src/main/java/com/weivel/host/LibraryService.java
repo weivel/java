@@ -15,7 +15,8 @@ import java.util.Objects;
  * called by its declared name. A consumer resolving the service is answered this very object, and a call through it
  * is a plain Java call into the library that crosses no core call and takes no lock of the layer's.
  *
- * <p>The input is lent to the library for the length of the call wherever Java can lend it, and the body the library
+ * <p>A direct buffer's input is lent to the library for the length of the call, and a heap array's copied once into
+ * native memory, since lending the heap would hold off garbage collection for the whole call. The body the library
  * answers is copied once into a Java array and released before the call answers. Once the library is unloaded every
  * call answers {@link LibraryAnswer.Unloaded}, calling nothing. Any thread may call.
  */
@@ -51,8 +52,7 @@ public final class LibraryService {
     }
 
     /**
-     * Calls a function with a heap array, lent in place where the backend can lend the heap and copied once for the
-     * call where it cannot.
+     * Calls a function with a heap array, copied once into native memory for the call.
      *
      * @param function the function's declared name
      * @param input the bytes, never changed
@@ -74,7 +74,7 @@ public final class LibraryService {
     }
 
     /**
-     * Calls a function with a buffer's remaining bytes, a direct buffer's lent in place on every backend.
+     * Calls a function with a buffer's remaining bytes: a direct buffer's lent in place, a heap buffer's copied once.
      *
      * @param function the function's declared name
      * @param input the bytes, never changed, its position and limit left as they were

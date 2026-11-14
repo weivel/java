@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.core.Answer;
@@ -53,21 +54,7 @@ class LibrariesTest {
     }
 
     @Test
-    void aDirectBufferIsLentOnEveryBackend() throws Exception {
-        try (HostFixture fixture = new HostFixture()) {
-            LibraryService echo = loadedEcho(fixture);
-            ByteBuffer input = ByteBuffer.allocateDirect(32);
-            input.position(8);
-
-            long seen = addressIn(echo.call("where", input));
-
-            assertEquals(MemoryAddresses.firstByteOf(input) + 8, seen);
-            assertEquals(8, input.position());
-        }
-    }
-
-    @Test
-    void aHeapBufferIsLentAsItsArrayIsAndAReadOnlyOneIsCopied() throws Exception {
+    void aHeapBufferIsReadFromItsPositionWhetherWritableOrReadOnly() throws Exception {
         try (HostFixture fixture = new HostFixture()) {
             LibraryService echo = loadedEcho(fixture);
             ByteBuffer slice = ByteBuffer.wrap(bytes("..sliced.."), 2, 6);
@@ -288,16 +275,62 @@ class LibrariesTest {
         }
     }
 
+    @Test
+    void anUnloadKeepsItsIdsClaimedUntilItsServicesAreUnregistered() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        AtomicReference<Answer<HostService>> slippedIn = new AtomicReference<>();
+        try (HostFixture fixture = new HostFixture(pauses)) {
+            LoadedLibrary library = value(fixture.host.loadLibrary(echoBinary(), declaring("echo")));
+            pauses.whileUnregistering = () -> slippedIn.set(fixture.host.registerHostService("echo", new Object()));
+
+            value(fixture.host.unloadLibrary(library));
+
+            assertMistakeNaming("echo", slippedIn.get());
+            assertEquals(Collections.emptyList(), fixture.failures);
+            assertInstanceOf(Answer.Ok.class, fixture.host.registerHostService("echo", new Object()));
+        }
+    }
+
+    @Test
+    void anUnloadedLibraryIsNoLongerKeptByTheHost() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        try (HostFixture fixture = new HostFixture(pauses)) {
+            LoadedLibrary first = value(fixture.host.loadLibrary(echoBinary(), declaringAs("first", "one")));
+            value(fixture.host.loadLibrary(echoBinary(), declaringAs("second", "two")));
+            fixture.host.loadLibrary(echoBinary(), declaringAs("third", "three", ""));
+
+            value(fixture.host.unloadLibrary(first));
+
+            assertEquals(1, fixture.host.libraryCount());
+            assertEquals(Arrays.asList("third", "first"), pauses.closed());
+        }
+    }
+
+    @Test
+    void aLoadWhoseRegistrationThrowsIsUndoneAsAnUnload() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        pauses.failAfterRegistering = "echo";
+        try (HostFixture fixture = new HostFixture(pauses)) {
+            assertThrows(IllegalStateException.class,
+                    () -> fixture.host.loadLibrary(echoBinary(), declaring("echo", "other")));
+
+            assertEquals(0, fixture.host.libraryCount());
+            assertEquals(Collections.singletonList("echo-test"), pauses.closed());
+            assertInstanceOf(Answer.Ok.class, fixture.host.registerHostService("echo", new Object()));
+            assertInstanceOf(Answer.Ok.class, fixture.host.registerHostService("other", new Object()));
+        }
+    }
+
     static LibraryService loadedEcho(HostFixture fixture) {
         return value(fixture.host.loadLibrary(echoBinary(), declaring("echo"))).services().get(0);
     }
 
     /** The echo library, imported as {@code echo-test}, declaring each id as a service offering every echo function. */
-    private static LibraryDeclaration declaring(String... ids) {
+    static LibraryDeclaration declaring(String... ids) {
         return declaringAs("echo-test", ids);
     }
 
-    private static LibraryDeclaration declaringAs(String importName, String... ids) {
+    static LibraryDeclaration declaringAs(String importName, String... ids) {
         List<LibraryDeclaration.Service> services = new ArrayList<>();
         for (String id : ids) {
             services.add(new LibraryDeclaration.Service(id, Arrays.asList(
@@ -316,7 +349,7 @@ class LibrariesTest {
         return ids;
     }
 
-    private static Path echoBinary() {
+    static Path echoBinary() {
         return CoreProbes.echoBinary();
     }
 
@@ -337,47 +370,9 @@ class LibrariesTest {
         return addressIn(answer);
     }
 
-    private static void assertMistakeNaming(String text, Answer<?> answer) {
+    static void assertMistakeNaming(String text, Answer<?> answer) {
         assertInstanceOf(Answer.Mistake.class, answer, String.valueOf(answer));
         String detail = ((Answer.Mistake<?>) answer).detail();
         assertTrue(detail.contains(text), detail);
-    }
-
-    /** Records each close of a library's binary, can refuse one, and can hold every call inside its library. */
-    private static final class LibraryPauses implements Pauses {
-        private final List<String> closingAsked = Collections.synchronizedList(new ArrayList<>());
-        private final List<String> closed = Collections.synchronizedList(new ArrayList<>());
-        private final AtomicReference<Boolean> holding = new AtomicReference<>(true);
-        volatile Gates.Gate holdCalls;
-        volatile String refuseToClose;
-
-        @Override
-        public void whileALibraryCallRuns(String id) {
-            Gates.Gate gate = holdCalls;
-            if (gate != null && holding.getAndSet(false)) {
-                gate.hold();
-            }
-        }
-
-        @Override
-        public void beforeALibraryCloses(String importName) {
-            closingAsked.add(importName);
-            if (importName.equals(refuseToClose)) {
-                throw new IllegalStateException("the platform refused to close " + importName);
-            }
-            closed.add(importName);
-        }
-
-        List<String> closingAsked() {
-            synchronized (closingAsked) {
-                return new ArrayList<>(closingAsked);
-            }
-        }
-
-        List<String> closed() {
-            synchronized (closed) {
-                return new ArrayList<>(closed);
-            }
-        }
     }
 }

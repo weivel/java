@@ -247,47 +247,20 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
     task.systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
 }
 
-def heapLendingTests = 'com.weivel.host.HeapLendingTest'
-
-def readsHeapAddresses = { Test task ->
-    task.filter.includeTestsMatching heapLendingTests
-    task.jvmArgs '-XX:-UseCompressedOops'
-}
-
 tasks.named('test', Test) {
     description = 'Runs the suite on Java 25, where the jar reaches the core through the foreign function API.'
     runsTheSuiteAgainstTheJar(it, 'ffm')
-    filter.excludeTestsMatching heapLendingTests
     javaLauncher = javaToolchains.launcherFor(jdk25)
-    jvmArgs '--enable-native-access=ALL-UNNAMED', '--sun-misc-unsafe-memory-access=allow'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
 
 def testJava8 = tasks.register('testJava8', Test) {
     group = 'verification'
     description = 'Runs the suite on Java 8, where the jar reaches the core through JNA.'
     runsTheSuiteAgainstTheJar(it, 'jna')
-    filter.excludeTestsMatching heapLendingTests
-    javaLauncher = javaToolchains.launcherFor(jdk8)
-}
-
-def testHeapLending = tasks.register('testHeapLending', Test) {
-    group = 'verification'
-    description = 'Proves on Java 25 that a heap array reaches a C library in place, reading heap addresses, which ' +
-            'needs uncompressed references and so a JVM of its own.'
-    runsTheSuiteAgainstTheJar(it, 'ffm')
-    readsHeapAddresses(it)
-    javaLauncher = javaToolchains.launcherFor(jdk25)
-    jvmArgs '--enable-native-access=ALL-UNNAMED', '--sun-misc-unsafe-memory-access=allow'
-}
-
-def testHeapLendingJava8 = tasks.register('testHeapLendingJava8', Test) {
-    group = 'verification'
-    description = 'Proves on Java 8 that JNA copies a heap array for a C library, in a JVM of its own as above.'
-    runsTheSuiteAgainstTheJar(it, 'jna')
-    readsHeapAddresses(it)
     javaLauncher = javaToolchains.launcherFor(jdk8)
 }
 
 tasks.named('check') {
-    dependsOn testJava8, testHeapLending, testHeapLendingJava8
+    dependsOn testJava8
 }

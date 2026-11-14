@@ -241,16 +241,17 @@ public final class Host implements AutoCloseable {
             }
             changeCount(hostServiceClaims, id, 1);
             claimed.set(true);
-            return Optional.empty();
         } finally {
             lock.unlock();
         }
+        pauses.afterAHostServiceIsClaimed(id);
+        return Optional.empty();
     }
 
     /** Under the host's lock. */
     private boolean aLiveLibraryDeclares(String id) {
         for (LoadedLibrary library : libraries) {
-            if (library.isLive() && library.declares(id)) {
+            if (library.holdsItsIds() && library.declares(id)) {
                 return true;
             }
         }
@@ -328,12 +329,20 @@ public final class Host implements AutoCloseable {
             return built;
         }
         LoadedLibrary library = ((Answer.Ok<LoadedLibrary>) built).value();
+        pauses.beforeALibraryIsKept(declaration.importName());
         Answer<LoadedLibrary> kept = kept(library);
         if (!(kept instanceof Answer.Ok)) {
             library.lifetime().closeToCalls();
             return kept;
         }
-        Answer<Void> registration = registerServices(library);
+        Answer<Void> registration;
+        try {
+            registration = registerServices(library);
+        } catch (RuntimeException defect) {
+            undo(library);
+            throw defect;
+        }
+        pauses.afterALibrarysServicesAreRegistered(declaration.importName());
         if (!(registration instanceof Answer.Ok) || isDestroyCalled()) {
             undo(library);
             return registration instanceof Answer.Ok ? new Answer.Destroyed<>() : Answer.retyped(registration);
@@ -423,6 +432,7 @@ public final class Host implements AutoCloseable {
             if (!keepRegistration(library, registration)) {
                 unregister(registration);
             }
+            pauses.afterALibraryServiceIsRegistered(id);
         }
         return new Answer.Ok<>(null);
     }
@@ -487,8 +497,24 @@ public final class Host implements AutoCloseable {
 
     private void unloadTaken(LoadedLibrary library, List<HostService> registrations) {
         library.lifetime().closeToCalls();
-        for (HostService registration : registrations) {
-            unregister(registration);
+        pauses.beforeALibrarysServicesAreUnregistered(library.declaration().importName());
+        try {
+            for (HostService registration : registrations) {
+                unregister(registration);
+            }
+        } finally {
+            dropLibrary(library);
+        }
+    }
+
+    /** Drops an unloaded library from the host's, freeing its ids: its binary closes through its own hold. */
+    private void dropLibrary(LoadedLibrary library) {
+        lock.lock();
+        try {
+            library.releaseIds();
+            libraries.remove(library);
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -509,7 +535,11 @@ public final class Host implements AutoCloseable {
     private void unloadEveryLibrary() {
         LoadedLibrary next;
         while ((next = nextToUnload()) != null) {
-            next.lifetime().closeToCalls();
+            try {
+                next.lifetime().closeToCalls();
+            } finally {
+                dropLibrary(next);
+            }
         }
     }
 
@@ -540,6 +570,16 @@ public final class Host implements AutoCloseable {
                 report(FailureKind.LIBRARY_UNLOAD, "the C library " + importName + " could not be closed",
                         Optional.<Throwable>of(refused));
             }
+        }
+    }
+
+    /** How many libraries the host keeps: what a test of this package reads. */
+    int libraryCount() {
+        lock.lock();
+        try {
+            return libraries.size();
+        } finally {
+            lock.unlock();
         }
     }
 

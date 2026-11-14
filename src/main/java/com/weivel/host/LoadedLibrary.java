@@ -5,8 +5,9 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A C library the host loaded as host services, kept by the host until it is freed: the services it registered and
- * the hold its binary is closed through. {@link Host#unloadLibrary} unloads it.
+ * A C library the host loaded as host services: the services it registered and the hold its binary is closed through.
+ * The host keeps it until it is unloaded, by {@link Host#unloadLibrary} or by the destroy; an object of it a consumer
+ * still holds then answers {@link LibraryAnswer.Unloaded}.
  */
 public final class LoadedLibrary {
     private final Host host;
@@ -15,6 +16,7 @@ public final class LoadedLibrary {
     private final LibraryLifetime lifetime;
     private final List<HostService> registrations = new ArrayList<>();
     private boolean unloaded;
+    private boolean idsReleased;
 
     LoadedLibrary(Host host, LibraryDeclaration declaration, List<LibraryService> services, LibraryLifetime lifetime) {
         this.host = host;
@@ -49,9 +51,17 @@ public final class LoadedLibrary {
         return lifetime;
     }
 
-    /** Under the host's lock: whether the library is still live, so its ids are its own. */
-    boolean isLive() {
-        return !unloaded;
+    /**
+     * Under the host's lock: whether the library still holds its ids, which it does from its keeping until its unload
+     * has unregistered every service, so no registration of the host's own can replace one of them meanwhile.
+     */
+    boolean holdsItsIds() {
+        return !idsReleased;
+    }
+
+    /** Under the host's lock: its unload has unregistered every service, so its ids are free again. */
+    void releaseIds() {
+        idsReleased = true;
     }
 
     /** Under the host's lock: whether it declares {@code id}. */
