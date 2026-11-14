@@ -79,6 +79,16 @@ public final class CoreConstants {
     /** {@code WEIVEL_CHANGE_UNREGISTERED}. */
     public static final int CHANGE_UNREGISTERED = 2;
 
+    /** {@code WEIVEL_CAPABILITY_PROVIDED}. */
+    public static final int CAPABILITY_PROVIDED = 1;
+    /** {@code WEIVEL_CAPABILITY_WITHDRAWN}. */
+    public static final int CAPABILITY_WITHDRAWN = 2;
+
+    /** {@code WEIVEL_CAPACITY_ATTRIBUTES}. */
+    public static final int CAPACITY_ATTRIBUTES = 1;
+    /** {@code WEIVEL_CAPACITY_SERVE}. */
+    public static final int CAPACITY_SERVE = 2;
+
     /** {@code WEIVEL_REACH_SERVICE}. */
     public static final int REACH_SERVICE = 1;
     /** {@code WEIVEL_REACH_CAPABILITY}. */
