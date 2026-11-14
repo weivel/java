@@ -10,6 +10,9 @@ public enum ActivationState {
     REFUSED,
     /** It was released while its activate was in flight, or the destroy kept it from its activate. */
     RELEASED,
-    /** Its open failed for a reason other than the core's refusal, a defect of the layer told to the error sink. */
+    /**
+     * Its open failed for a reason other than the core's refusal, or the core refused to quarantine it once its
+     * activate failed: a defect of the layer, told to the error sink.
+     */
     FAILED
 }

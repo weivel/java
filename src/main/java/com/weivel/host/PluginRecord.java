@@ -2,6 +2,7 @@ package com.weivel.host;
 
 import com.weivel.context.PluginContext;
 import com.weivel.context.PluginContexts;
+import com.weivel.core.Answer;
 import com.weivel.core.Manifest;
 import java.util.concurrent.CompletableFuture;
 
@@ -18,6 +19,9 @@ final class PluginRecord {
     private volatile PluginContext context;
     CompletableFuture<Outcome> activation;
     boolean activateCalled;
+    CompletableFuture<Void> activateCall;
+    boolean opening;
+    CompletableFuture<Answer<Boolean>> releaseAskedWhileOpening;
     CompletableFuture<Void> settling;
     CompletableFuture<Void> release;
 

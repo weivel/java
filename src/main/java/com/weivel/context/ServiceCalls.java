@@ -88,10 +88,16 @@ final class ServiceCalls {
 
     static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
                                                 Optional<CapacityAnswerer> answerer) {
+        return register(state, context, id, service, answerer, () -> { });
+    }
+
+    static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
+                                                Optional<CapacityAnswerer> answerer, Runnable registered) {
         Handles.Reservation room = state.handles.reserve();
         Records.Service record = new Records.Service(id, service, answerer);
         Answer<Long> answer = state.call(context, CoreCalls.registerService(context.plugin(), id), registration -> {
             room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
+            registered.run();
             return new Answer.Ok<>(registration);
         });
         room.cancel();

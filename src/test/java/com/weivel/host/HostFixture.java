@@ -38,9 +38,17 @@ final class HostFixture implements AutoCloseable {
     }
 
     HostFixture(Opening opening) {
+        this(opening, Pauses.NONE);
+    }
+
+    HostFixture(Pauses pauses) {
+        this(Opening.THROUGH_THE_CONTEXTS, pauses);
+    }
+
+    HostFixture(Opening opening, Pauses pauses) {
         host = ok(Host.create(CoreProbes.binary(), HostOptions.defaults().withCore(INFO_AND_ABOVE)
                 .withScheduler(scheduler)
-                .withLog(logs::add).withErrorSink(failures::add), opening));
+                .withLog(logs::add).withErrorSink(failures::add), opening, pauses));
     }
 
     TestEntry entry(String name) {

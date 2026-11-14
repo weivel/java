@@ -12,6 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.context.PluginContext;
 import com.weivel.core.Answer;
+import java.io.File;
+import java.lang.reflect.Method;
+import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,6 +83,29 @@ class EntriesTest {
         fixture.host.close();
 
         assertThrows(ClassNotFoundException.class, () -> loader.loadClass("com.weivel.host.jar.Unloaded"));
+    }
+
+    @Test
+    void aJarsClassLoaderHasTheLoaderOfEntryAsItsParentEvenWhereThatIsNotTheSystemLoader() throws Exception {
+        try (URLClassLoader isolated = new URLClassLoader(classPath(), ClassLoader.getSystemClassLoader().getParent())) {
+            Class<?> entries = Class.forName(Entries.class.getName(), true, isolated);
+            Method jarLoader = entries.getDeclaredMethod("jarLoader", URL.class);
+            jarLoader.setAccessible(true);
+
+            try (URLClassLoader opened = (URLClassLoader) jarLoader.invoke(null, pluginsJar().toUri().toURL())) {
+                assertSame(isolated, Class.forName(Entry.class.getName(), false, isolated).getClassLoader());
+                assertSame(isolated, opened.getParent());
+            }
+        }
+    }
+
+    private static URL[] classPath() throws Exception {
+        String[] entries = System.getProperty("java.class.path").split(File.pathSeparator);
+        URL[] urls = new URL[entries.length];
+        for (int index = 0; index < entries.length; index++) {
+            urls[index] = Paths.get(entries[index]).toUri().toURL();
+        }
+        return urls;
     }
 
     private static Path pluginsJar() {

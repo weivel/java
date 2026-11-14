@@ -148,7 +148,7 @@ public final class PluginContexts implements AutoCloseable {
             answered.set(verification);
             return new Answer.Ok<>(verification);
         }, () -> {
-            if (answered.get().quarantinedInTheCore()) {
+            if (!answered.get().verified()) {
                 endEntries(context);
             }
         });
@@ -160,11 +160,27 @@ public final class PluginContexts implements AutoCloseable {
      *
      * @param id the service id
      * @param service the host's own object
+     * @param registered the host's own record of the registration, run under the layer lock once the core has
+     *     answered it OK; it may not call into the core
      * @return the registration; the core's refusal
      */
-    public Answer<ServiceRegistration> registerHostService(String id, Object service) {
+    public Answer<ServiceRegistration> registerHostService(String id, Object service, Runnable registered) {
+        Objects.requireNonNull(registered, "registered");
         return ServiceCalls.register(state, hostContext, Objects.requireNonNull(id, "id"),
-                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty());
+                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(), registered);
+    }
+
+    /**
+     * Unregisters a service {@link #registerHostService} registered.
+     *
+     * @param registration the registration
+     * @param unregistered the host's own record of the unregistration, run under the layer lock once the core has
+     *     answered it OK; it may not call into the core
+     * @return nothing beyond its success, or the core's refusal
+     */
+    public Answer<Void> unregisterHostService(ServiceRegistration registration, Runnable unregistered) {
+        return Objects.requireNonNull(registration, "registration")
+                .unregister(Objects.requireNonNull(unregistered, "unregistered"));
     }
 
     /**

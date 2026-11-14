@@ -69,7 +69,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * thread may call.
  *
  * @implNote The host's lock guards its tables and counts alone. It is never held while the core, a plugin or a
- * caller's code runs, and nothing run under the layer lock takes it, so it never orders against the layer lock.
+ * caller's code runs, so it is always taken innermost: the registration of a host service counts its id, and a plan
+ * reads the ids counted, under the layer lock, which makes the registration and the count one step to every plan.
  */
 public final class Host implements AutoCloseable {
     private final Core core;
@@ -77,6 +78,7 @@ public final class Host implements AutoCloseable {
     private final PluginContexts contexts;
     private final Optional<SystemScheduler> ownScheduler;
     private final Opening opening;
+    private final Pauses pauses;
     private final ReentrantLock lock = new ReentrantLock();
     private final Map<Long, PluginRecord> plugins = new HashMap<>();
     private final List<PluginRecord> opened = new ArrayList<>();
@@ -86,7 +88,6 @@ public final class Host implements AutoCloseable {
     private final List<Long> releasedByTheDestroy = new ArrayList<>();
     private final CompletableFuture<DestroyResult> destruction = new CompletableFuture<>();
     private int opensUnderWay;
-    private int settlingsUnderWay;
     private int releasesUnderWay;
     private boolean destroyCalled;
     private boolean destroyWalked;
@@ -94,12 +95,13 @@ public final class Host implements AutoCloseable {
     private boolean closed;
 
     private Host(Core core, CoreTimer timer, PluginContexts contexts, Optional<SystemScheduler> ownScheduler,
-                 Opening opening) {
+                 Opening opening, Pauses pauses) {
         this.core = core;
         this.timer = timer;
         this.contexts = contexts;
         this.ownScheduler = ownScheduler;
         this.opening = opening;
+        this.pauses = pauses;
     }
 
     /**
@@ -110,10 +112,10 @@ public final class Host implements AutoCloseable {
      * @return the host; the core's refusal of its options, or the timer's refusal of the scheduler
      */
     public static Answer<Host> create(CoreBinary binary, HostOptions options) {
-        return create(binary, options, Opening.THROUGH_THE_CONTEXTS);
+        return create(binary, options, Opening.THROUGH_THE_CONTEXTS, Pauses.NONE);
     }
 
-    static Answer<Host> create(CoreBinary binary, HostOptions options, Opening opening) {
+    static Answer<Host> create(CoreBinary binary, HostOptions options, Opening opening, Pauses pauses) {
         Objects.requireNonNull(binary, "binary");
         Objects.requireNonNull(options, "options");
         Answer<Core> created = Core.create(binary, options.core(), Optional.empty(), options.sink());
@@ -134,7 +136,7 @@ public final class Host implements AutoCloseable {
         }
         CoreTimer timer = ((Answer.Ok<CoreTimer>) started).value();
         PluginContexts contexts = PluginContexts.create(core, new Handles(), timer, options.log());
-        return new Answer.Ok<>(new Host(core, timer, contexts, own, opening));
+        return new Answer.Ok<>(new Host(core, timer, contexts, own, opening, pauses));
     }
 
     /**
@@ -199,13 +201,24 @@ public final class Host implements AutoCloseable {
         if (isDestroyCalled()) {
             return new Answer.Destroyed<>();
         }
-        Answer<ServiceRegistration> registered = contexts.registerHostService(id, service);
+        Answer<ServiceRegistration> registered = contexts.registerHostService(id, service,
+                () -> countHostService(id, 1));
         if (!(registered instanceof Answer.Ok)) {
             return Answer.retyped(registered);
         }
-        countHostService(id, 1);
-        return new Answer.Ok<>(new HostService(id, ((Answer.Ok<ServiceRegistration>) registered).value(),
-                unregistered -> countHostService(unregistered, -1)));
+        pauses.afterAHostServiceIsRegistered(id);
+        ServiceRegistration registration = ((Answer.Ok<ServiceRegistration>) registered).value();
+        return new Answer.Ok<>(new HostService(id, () -> contexts.unregisterHostService(registration,
+                () -> countHostService(id, -1))));
+    }
+
+    private List<String> hostProvided() {
+        lock.lock();
+        try {
+            return new ArrayList<>(hostServices.keySet());
+        } finally {
+            lock.unlock();
+        }
     }
 
     private void countHostService(String id, int change) {
@@ -245,7 +258,7 @@ public final class Host implements AutoCloseable {
             if (destroyCalled) {
                 return new Answer.Destroyed<>();
             }
-            loader = new URLClassLoader(new URL[] {location}, Entry.class.getClassLoader());
+            loader = Entries.jarLoader(location);
             loaders.add(loader);
         } finally {
             lock.unlock();
@@ -266,17 +279,10 @@ public final class Host implements AutoCloseable {
     public Answer<Activation> activate(List<Long> plugins, EdgeSource source) {
         Objects.requireNonNull(plugins, "plugins");
         Objects.requireNonNull(source, "source");
-        List<String> provided;
-        lock.lock();
-        try {
-            if (destroyCalled) {
-                return new Answer.Destroyed<>();
-            }
-            provided = new ArrayList<>(hostServices.keySet());
-        } finally {
-            lock.unlock();
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
         }
-        Answer<ActivationPlan> planned = core.call(CoreCalls.planActivation(plugins, source, provided));
+        Answer<ActivationPlan> planned = core.call(CoreCalls.planActivation(plugins, source, this::hostProvided));
         if (!(planned instanceof Answer.Ok)) {
             return Answer.retyped(planned);
         }
@@ -297,6 +303,9 @@ public final class Host implements AutoCloseable {
             }
             record = plugins.get(plugin);
             opensUnderWay++;
+            if (record != null) {
+                record.opening = true;
+            }
         } finally {
             lock.unlock();
         }
@@ -311,7 +320,7 @@ public final class Host implements AutoCloseable {
         try {
             context = record.contextIn(contexts);
         } catch (RuntimeException unmade) {
-            return failedOpen(record.plugin, "the host could not build a plugin's context: " + unmade);
+            return failedOpen(record, "the host could not build a plugin's context: " + unmade);
         }
         AtomicBoolean heldOpen = new AtomicBoolean();
         Answer<Void> answer = opening.open(contexts, context, () -> heldOpen.set(true));
@@ -319,12 +328,12 @@ public final class Host implements AutoCloseable {
             return activated(record, context);
         }
         if (isTheCoresRefusal(answer)) {
-            endOpen();
+            endOpen(record);
             return CompletableFuture.completedFuture(new Outcome(record.plugin, ActivationState.REFUSED,
                     ((Answer.Refused<Void>) answer).refusal()));
         }
         String detail = "a plugin's open failed for a reason other than the core's refusal: " + answer;
-        return heldOpen.get() ? releasedAfterAFailedOpen(record, detail) : failedOpen(record.plugin, detail);
+        return heldOpen.get() ? releasedAfterAFailedOpen(record, detail) : failedOpen(record, detail);
     }
 
     private static boolean isTheCoresRefusal(Answer<?> answer) {
@@ -333,8 +342,14 @@ public final class Host implements AutoCloseable {
 
     private CompletableFuture<Outcome> failedOpen(long plugin, String detail) {
         report(FailureKind.LAYER_DEFECT, detail, Optional.<Throwable>empty());
-        endOpen();
+        endOpen(null);
         return answered(plugin, ActivationState.FAILED);
+    }
+
+    private CompletableFuture<Outcome> failedOpen(PluginRecord record, String detail) {
+        report(FailureKind.LAYER_DEFECT, detail, Optional.<Throwable>empty());
+        endOpen(record);
+        return answered(record.plugin, ActivationState.FAILED);
     }
 
     /**
@@ -347,72 +362,127 @@ public final class Host implements AutoCloseable {
     private CompletableFuture<Outcome> releasedAfterAFailedOpen(PluginRecord record, String detail) {
         report(FailureKind.LAYER_DEFECT, detail, Optional.<Throwable>empty());
         ReleaseStart start;
+        CompletableFuture<Answer<Boolean>> asked;
         lock.lock();
         try {
             opensUnderWay--;
+            asked = openEnded(record);
             start = beginRelease(record);
         } finally {
             lock.unlock();
         }
         CompletableFuture<Void> released = start != null ? goOnReleasing(start) : record.release;
+        answerAskedRelease(asked, released);
         return released.thenApply(nothing -> new Outcome(record.plugin, ActivationState.FAILED,
                 Optional.empty()));
     }
 
-    private void endOpen() {
+    /** Ends an open that left the core holding nothing of the plugin open, so a release asked meanwhile had nothing. */
+    private void endOpen(PluginRecord record) {
         boolean ending;
+        CompletableFuture<Answer<Boolean>> asked;
         lock.lock();
         try {
             opensUnderWay--;
+            asked = record != null ? openEnded(record) : null;
             ending = destroyMayEnd();
         } finally {
             lock.unlock();
+        }
+        if (asked != null) {
+            asked.complete(new Answer.Ok<>(false));
         }
         if (ending) {
             endTheDestroy();
         }
     }
 
+    /** Under the host's lock: ends the plugin's open, answering the release asked while it was under way, if any. */
+    private static CompletableFuture<Answer<Boolean>> openEnded(PluginRecord record) {
+        record.opening = false;
+        CompletableFuture<Answer<Boolean>> asked = record.releaseAskedWhileOpening;
+        record.releaseAskedWhileOpening = null;
+        return asked;
+    }
+
+    private static void answerAskedRelease(CompletableFuture<Answer<Boolean>> asked,
+                                           CompletableFuture<Void> released) {
+        if (asked != null) {
+            released.thenRun(() -> asked.complete(new Answer.Ok<>(true)));
+        }
+    }
+
     /**
-     * Takes a plugin the core opened as activating and calls its activate, unless the destroy was called while it was
-     * being opened: it is then released at once without its activate being called, and answered released.
+     * Takes a plugin the core opened as activating and calls its activate, unless the destroy was called or a release
+     * asked for while it was being opened: it is then released at once without its activate being called, and
+     * answered released.
      */
     private CompletableFuture<Outcome> activated(PluginRecord record, PluginContext context) {
         CompletableFuture<Outcome> outcome = new CompletableFuture<>();
         ReleaseStart start = null;
+        CompletableFuture<Answer<Boolean>> asked;
         lock.lock();
         try {
             opensUnderWay--;
-            if (destroyCalled) {
+            asked = openEnded(record);
+            if (destroyCalled || asked != null) {
                 start = beginRelease(record);
             } else {
                 opened.remove(record);
                 opened.add(record);
                 record.activation = outcome;
-                record.activateCalled = true;
             }
         } finally {
             lock.unlock();
         }
         if (start != null) {
-            goOnReleasing(start);
+            answerAskedRelease(asked, goOnReleasing(start));
             outcome.complete(new Outcome(record.plugin, ActivationState.RELEASED, Optional.empty()));
             return outcome;
         }
-        callActivate(record, context, outcome);
+        pauses.beforeTheActivateIsClaimed(record.plugin);
+        CompletableFuture<Void> call = claimTheActivate(record, outcome);
+        if (call != null) {
+            pauses.afterTheActivateIsClaimed(record.plugin);
+            callActivate(record, context, outcome, call);
+        }
         return outcome;
     }
 
-    private void callActivate(PluginRecord record, PluginContext context, CompletableFuture<Outcome> outcome) {
+    /**
+     * Under the host's lock, decides the activate is called, unless a release has taken the activation meanwhile:
+     * the release then owes no deactivate and the activate is never called. A release taking it afterwards owes the
+     * deactivate, and waits for the call to have returned before it calls it.
+     *
+     * @return the call to complete once the activate has returned; null when it is not to be called
+     */
+    private CompletableFuture<Void> claimTheActivate(PluginRecord record, CompletableFuture<Outcome> outcome) {
+        lock.lock();
+        try {
+            if (record.activation != outcome) {
+                return null;
+            }
+            record.activateCalled = true;
+            record.activateCall = new CompletableFuture<>();
+            return record.activateCall;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void callActivate(PluginRecord record, PluginContext context, CompletableFuture<Outcome> outcome,
+                              CompletableFuture<Void> call) {
         CompletionStage<?> activating;
         try {
             activating = record.entry.activate(context);
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable thrown) {
+            call.complete(null);
             settle(record, context, outcome, thrown);
             return;
         }
+        call.complete(null);
         if (activating == null) {
             settle(record, context, outcome, new IllegalStateException("its activate answered no stage"));
             return;
@@ -432,7 +502,6 @@ public final class Host implements AutoCloseable {
             if (destroyCalled || record.activation != outcome) {
                 return;
             }
-            settlingsUnderWay++;
             record.settling = settling;
         } finally {
             lock.unlock();
@@ -450,7 +519,6 @@ public final class Host implements AutoCloseable {
         boolean ending;
         lock.lock();
         try {
-            settlingsUnderWay--;
             record.settling = null;
             if (record.activation == outcome) {
                 record.activation = null;
@@ -473,24 +541,23 @@ public final class Host implements AutoCloseable {
                     "its activation could not be verified: " + verification,
                     "release it and activate it again"));
         }
-        Verification answered = ((Answer.Ok<Verification>) verification).value();
-        if (answered.verified()) {
-            return ActivationState.ACTIVE;
-        }
-        if (!answered.quarantinedInTheCore()) {
-            report(FailureKind.LAYER_DEFECT, "the core did not quarantine a plugin whose activation it refused: "
-                    + answered, Optional.<Throwable>empty());
-        }
-        return ActivationState.QUARANTINED;
+        return ((Answer.Ok<Verification>) verification).value().verified()
+                ? ActivationState.ACTIVE
+                : ActivationState.QUARANTINED;
     }
 
+    /**
+     * Quarantines a plugin whose activate settled, which the host holds open while its settling runs, since a release
+     * waits for the settling: the core refusing that quarantine is a defect of the layer, answered failed.
+     */
     private ActivationState quarantined(PluginContext context, QuarantineReason reason) {
         Answer<Void> quarantine = contexts.quarantine(context, Optional.of(reason));
-        if (!(quarantine instanceof Answer.Ok)) {
-            report(FailureKind.LAYER_DEFECT, "the core did not quarantine a plugin whose activate failed: "
-                    + quarantine, Optional.<Throwable>empty());
+        if (quarantine instanceof Answer.Ok) {
+            return ActivationState.QUARANTINED;
         }
-        return ActivationState.QUARANTINED;
+        report(FailureKind.LAYER_DEFECT, "the core did not quarantine a plugin the host holds open: " + quarantine,
+                Optional.<Throwable>empty());
+        return ActivationState.FAILED;
     }
 
     private static QuarantineReason reasonFor(Throwable failure) {
@@ -510,7 +577,8 @@ public final class Host implements AutoCloseable {
      *
      * @param plugin the plugin's handle
      * @return {@link ActivationState#ACTIVE} or {@link ActivationState#QUARANTINED}; the core's refusal for a plugin
-     *     the host holds nothing of open; {@link Answer.Destroyed} once the destroy has been called
+     *     the host holds nothing of open, or one released meanwhile, whose quarantine the core refuses too;
+     *     {@link Answer.Destroyed} once the destroy has been called
      */
     public Answer<ActivationState> verify(long plugin) {
         PluginRecord record;
@@ -531,6 +599,7 @@ public final class Host implements AutoCloseable {
                     ? new Answer.Ok<>(ActivationState.ACTIVE)
                     : Answer.<ActivationState>retyped(verified);
         }
+        pauses.beforeTheVerification(plugin);
         Answer<Verification> verification = contexts.verify(record.context());
         if (!(verification instanceof Answer.Ok)) {
             return Answer.retyped(verification);
@@ -545,10 +614,13 @@ public final class Host implements AutoCloseable {
      * every event that release queued reach it, then ends its entries, forgets it and drops it from every table. One
      * whose activate is still running is released the same way, its outcome answered released as the release begins.
      *
+     * <p>A plugin whose open is under way is released once the core has opened it, without its activate being
+     * called, as one opened as the destroy began is; an open the core refuses leaves nothing to release.
+     *
      * @param plugin the plugin's handle
-     * @return a stage completing once the release has run: true; false at once, doing nothing, for a plugin the host
-     *     has not opened, registered only or already forgotten; {@link Answer.Destroyed} once the destroy has been
-     *     called
+     * @return a stage completing once the release has run: true; false, doing nothing, for a plugin the host has not
+     *     opened, registered only, already forgotten, or whose open left the core holding nothing;
+     *     {@link Answer.Destroyed} once the destroy has been called
      */
     public CompletionStage<Answer<Boolean>> release(long plugin) {
         ReleaseStart start = null;
@@ -559,6 +631,12 @@ public final class Host implements AutoCloseable {
                 return CompletableFuture.completedFuture(new Answer.Destroyed<>());
             }
             PluginRecord record = plugins.get(plugin);
+            if (record != null && record.release == null && record.opening) {
+                if (record.releaseAskedWhileOpening == null) {
+                    record.releaseAskedWhileOpening = new CompletableFuture<>();
+                }
+                return record.releaseAskedWhileOpening;
+            }
             if (record == null || record.release == null && !opened.contains(record)) {
                 return CompletableFuture.completedFuture(new Answer.Ok<>(false));
             }
@@ -589,21 +667,26 @@ public final class Host implements AutoCloseable {
         releasesUnderWay++;
         opened.remove(record);
         CompletableFuture<Outcome> inFlight = record.settling == null ? record.activation : null;
-        ReleaseStart start = new ReleaseStart(record, inFlight, record.activateCalled, record.settling);
+        ReleaseStart start = new ReleaseStart(record, inFlight, record.activateCalled,
+                CompletableFuture.allOf(orDone(record.settling), orDone(record.activateCall)));
         record.activation = null;
         record.activateCalled = false;
         return start;
     }
 
-    /** Answers an activation in flight released, then deactivates once a settling under way has ended. */
+    private static CompletableFuture<Void> orDone(CompletableFuture<Void> step) {
+        return step != null ? step : CompletableFuture.<Void>completedFuture(null);
+    }
+
+    /**
+     * Answers an activation in flight released, then deactivates once the call to its activate has returned and a
+     * settling under way has ended.
+     */
     private CompletableFuture<Void> goOnReleasing(ReleaseStart start) {
         if (start.inFlight != null) {
             start.inFlight.complete(new Outcome(start.record.plugin, ActivationState.RELEASED, Optional.empty()));
         }
-        CompletableFuture<Void> settled = start.settling != null
-                ? start.settling
-                : CompletableFuture.<Void>completedFuture(null);
-        settled.whenComplete((nothing, unused) -> deactivateThenRelease(start));
+        start.waitedFor.whenComplete((nothing, unused) -> deactivateThenRelease(start));
         return start.record.release;
     }
 
@@ -750,7 +833,7 @@ public final class Host implements AutoCloseable {
 
     /** Under the host's lock: whether the destroy may now take its last steps, which only one caller is told. */
     private boolean destroyMayEnd() {
-        if (!destroyWalked || destroyEnding || opensUnderWay > 0 || settlingsUnderWay > 0 || releasesUnderWay > 0) {
+        if (!destroyWalked || destroyEnding || opensUnderWay > 0 || releasesUnderWay > 0) {
             return false;
         }
         destroyEnding = true;
@@ -788,6 +871,10 @@ public final class Host implements AutoCloseable {
      * Frees what the host holds: the core, the contexts, a scheduler it made itself, and every class loader it
      * opened. A plugin's code may run until then, so its loader stays open until then.
      *
+     * <p>Close once the destroy's stage has completed and the dispatch it finished in has returned: a destroy that
+     * finishes inside a dispatch completes its stage on the dispatching thread, so a close chained to that stage, as
+     * {@code destroy().thenRun(host::close)}, runs while that dispatch is still under way and is refused.
+     *
      * @throws IllegalStateException when the destroy has not finished, or the thread that finished it is still
      *     dispatching; nothing is freed then, and the close may be made again
      * @throws UncheckedIOException when a class loader failed to close, once every other has been closed
@@ -798,9 +885,6 @@ public final class Host implements AutoCloseable {
         try {
             if (closed) {
                 return;
-            }
-            if (!destruction.isDone()) {
-                throw new IllegalStateException("the host's destroy has not finished; wait for it before closing");
             }
         } finally {
             lock.unlock();
@@ -869,14 +953,14 @@ public final class Host implements AutoCloseable {
         private final PluginRecord record;
         private final CompletableFuture<Outcome> inFlight;
         private final boolean owesDeactivate;
-        private final CompletableFuture<Void> settling;
+        private final CompletableFuture<Void> waitedFor;
 
         private ReleaseStart(PluginRecord record, CompletableFuture<Outcome> inFlight, boolean owesDeactivate,
-                             CompletableFuture<Void> settling) {
+                             CompletableFuture<Void> waitedFor) {
             this.record = record;
             this.inFlight = inFlight;
             this.owesDeactivate = owesDeactivate;
-            this.settling = settling;
+            this.waitedFor = waitedFor;
         }
     }
 }

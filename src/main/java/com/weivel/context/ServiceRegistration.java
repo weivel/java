@@ -23,7 +23,14 @@ public final class ServiceRegistration {
      * dispatched, so a want the core settled with it, or a watch it reached, still finds the provider's object.
      */
     public Answer<Void> unregister() {
-        return state.callThenDefer(context, CoreCalls.unregister(registration), Answer.Ok::new,
-                () -> state.handles.end(registration));
+        return unregister(() -> { });
+    }
+
+    /** Unregisters as {@link #unregister()} does, running {@code unregistered} under the layer lock once it took. */
+    Answer<Void> unregister(Runnable unregistered) {
+        return state.callThenDefer(context, CoreCalls.unregister(registration), nothing -> {
+            unregistered.run();
+            return new Answer.Ok<>(nothing);
+        }, () -> state.handles.end(registration));
     }
 }

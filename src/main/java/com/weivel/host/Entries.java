@@ -2,6 +2,8 @@ package com.weivel.host;
 
 import com.weivel.core.Answer;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.Objects;
 
 /** Loads a plugin's {@link Entry} by its class name, never by a name the layer assumes. */
@@ -31,6 +33,11 @@ public final class Entries {
             return new Answer.Mistake<>(className + " is no " + Entry.class.getName());
         }
         return made(type.asSubclass(Entry.class));
+    }
+
+    /** A class loader of its own for a JAR, whose parent is the loader of {@link Entry}, whatever that is. */
+    static URLClassLoader jarLoader(URL location) {
+        return new URLClassLoader(new URL[] {location}, Entry.class.getClassLoader());
     }
 
     private static Answer<Entry> made(Class<? extends Entry> type) {
