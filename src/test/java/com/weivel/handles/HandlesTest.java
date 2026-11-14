@@ -83,27 +83,34 @@ class HandlesTest {
         assertEquals(registration, entry.handle());
     }
 
+    /**
+     * Making an entry in room already taken allocates nothing.
+     *
+     * @implNote Every core call is made first and every entry is then made between two reads of the allocation
+     *     counter, so any allocation per entry is multiplied by the count while the counter's own cost, which varies
+     *     by platform, is paid once; measuring each entry alone made that cost the subject.
+     */
     @Test
     void makingAnEntryAllocatesNothingOnceItsRoomIsTaken() {
-        long leastAllocated = Long.MAX_VALUE;
-        for (int round = 0; round < 300; round++) {
-            Handles.Reservation room = handles.reserve();
-            Object provider = new Object();
-            long[] allocated = new long[1];
-            ok(CoreInternals.call(core, CoreCalls.registerService(HOST, "room-" + round), new CallSteps<>(
-                    () -> Optional.empty(), handle -> {
-                        long first = allocatedBytes();
-                        long second = allocatedBytes();
-                        room.add(HandleKind.SERVICE_REGISTRATION, handle, HOST, provider);
-                        long third = allocatedBytes();
-                        allocated[0] = (third - second) - (second - first);
-                        return new Answer.Ok<>(handle);
-                    })));
-            leastAllocated = Math.min(leastAllocated, allocated[0]);
+        int count = 300;
+        List<Handles.Reservation> rooms = new ArrayList<>(count);
+        long[] answeredHandles = new long[count];
+        Object[] providers = new Object[count];
+        for (int index = 0; index < count; index++) {
+            rooms.add(handles.reserve());
+            providers[index] = new Object();
+            answeredHandles[index] = ok(CoreInternals.call(core, CoreCalls.registerService(HOST, "room-" + index),
+                    new CallSteps<>(() -> Optional.empty(), handle -> new Answer.Ok<>(handle))));
         }
 
-        assertEquals(300, handles.entryCount());
-        assertEquals(0, leastAllocated, "every making of an entry allocated at least " + leastAllocated + " bytes");
+        long before = allocatedBytes();
+        for (int index = 0; index < count; index++) {
+            rooms.get(index).add(HandleKind.SERVICE_REGISTRATION, answeredHandles[index], HOST, providers[index]);
+        }
+        long allocated = allocatedBytes() - before;
+
+        assertEquals(count, handles.entryCount());
+        assertTrue(allocated <= COUNTER_READ_BYTES, "making " + count + " entries allocated " + allocated + " bytes");
     }
 
     @Test
@@ -357,10 +364,26 @@ class HandlesTest {
         }
         long[] handlesToFind = registrations.stream().mapToLong(Long::longValue).toArray();
         long[] tokens = registrations.stream().mapToLong(handle -> handles.find(handle).token()).toArray();
-        long found = 0;
+        lookUp(handlesToFind, tokens);
 
         long first = allocatedBytes();
         long second = allocatedBytes();
+        long found = lookUp(handlesToFind, tokens);
+        long third = allocatedBytes();
+
+        assertEquals(200L * 64 * 3, found);
+        long allocated = (third - second) - (second - first);
+        assertTrue(allocated < JIT_NOISE_BYTES, "looking up allocated " + allocated + " bytes");
+    }
+
+    /**
+     * Looks every handle up 200 times by handle, by token and as a holding, answering how many were found.
+     *
+     * @implNote The lookup test runs this once unmeasured: on JDK 8 the first pass, run alone, allocated a fixed 720
+     *     bytes whatever the count, which is the run warming up rather than a lookup allocating.
+     */
+    private long lookUp(long[] handlesToFind, long[] tokens) {
+        long found = 0;
         for (int round = 0; round < 200; round++) {
             for (int index = 0; index < handlesToFind.length; index++) {
                 found += handles.find(handlesToFind[index]).handle() == handlesToFind[index] ? 1 : 0;
@@ -368,11 +391,7 @@ class HandlesTest {
                 found += handles.held(HOST, handlesToFind[index]) == null ? 1 : 0;
             }
         }
-        long third = allocatedBytes();
-
-        assertEquals(200L * 64 * 3, found);
-        long allocated = (third - second) - (second - first);
-        assertTrue(allocated < JIT_NOISE_BYTES, "looking up allocated " + allocated + " bytes");
+        return found;
     }
 
     private long made(CoreCall<Long> call, HandleKind kind, long owner, Object object) {
@@ -422,6 +441,9 @@ class HandlesTest {
             allocatedBytes();
         }
     }
+
+    /** What reading the allocation counter may cost; one escaping object per entry costs 300 times 16 bytes. */
+    private static final long COUNTER_READ_BYTES = 1024;
 
     static long allocatedBytes() {
         return ((com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean())
