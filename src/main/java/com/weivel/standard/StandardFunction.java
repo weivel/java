@@ -16,6 +16,8 @@ enum StandardFunction {
     MANIFEST_VIEW("weivel_standard_manifest_view", ADDRESS, ADDRESS),
     MANIFEST_RELEASE("weivel_standard_manifest_release", VOID, ADDRESS),
     VALIDATION_RELEASE("weivel_standard_validation_release", VOID, ADDRESS),
+    READ_MANIFEST("weivel_standard_read_manifest", INT, ADDRESS, LONG, ADDRESS, ADDRESS),
+    VALIDATE("weivel_standard_validate", INT, ADDRESS, LONG, ADDRESS, ADDRESS),
     LOAD_MANIFEST("weivel_standard_load_manifest", INT, ADDRESS, LONG, ADDRESS, ADDRESS, ADDRESS),
     IDENTITY_PARSE("weivel_standard_identity_parse", INT, ADDRESS, LONG, ADDRESS, ADDRESS),
     IDENTITY_RELEASE("weivel_standard_identity_release", VOID, ADDRESS),

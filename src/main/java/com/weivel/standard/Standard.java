@@ -99,8 +99,64 @@ public final class Standard {
                         StandardReads.refusal(memory, validation + offset(StandardLayouts.VALIDATION, "refusal")),
                         StandardReads.strings(memory, validation + offset(StandardLayouts.VALIDATION, "paths")));
             } finally {
-                binary.call(StandardFunction.MANIFEST_RELEASE, memory.getLong(loaded, 0));
-                binary.call(StandardFunction.VALIDATION_RELEASE, validation);
+                releaseBoth(StandardFunction.MANIFEST_RELEASE, memory.getLong(loaded, 0),
+                        StandardFunction.VALIDATION_RELEASE, validation);
+            }
+        }
+    }
+
+    /**
+     * Reads a JSON manifest into a manifest value WITHOUT validating it, as {@code weivel_standard_read_manifest}
+     * does: a field left out takes the core's default, and a field the core's manifest has no place for is ignored. A
+     * host taking the standard's defaults calls {@link #loadManifest}, which validates first.
+     *
+     * @param json the document
+     * @return the manifest on OK; REFUSED for malformed JSON, a wrong type or an unrepresentable value
+     * @throws IllegalArgumentException for a document the standard read with no {@code importName}, which the
+     *     core's manifest value cannot hold and the core refuses on registration
+     */
+    public StandardAnswer<Manifest> readManifest(String json) {
+        byte[] document = utf8(json);
+        try (ForeignMemory memory = binary.memory()) {
+            long text = memory.bytes(document);
+            long read = memory.allocate(POINTER);
+            long refusal = sized(memory, StandardLayouts.REFUSAL);
+            try {
+                StandardStatus status = status(StandardFunction.READ_MANIFEST, text, document.length, read, refusal);
+                Optional<Manifest> manifest = status == StandardStatus.OK
+                        ? Optional.of(memory.manifest(view(memory.getLong(read, 0))))
+                        : Optional.<Manifest>empty();
+                return StandardAnswer.of(status, manifest, StandardReads.refusal(memory, refusal));
+            } finally {
+                releaseBoth(StandardFunction.MANIFEST_RELEASE, memory.getLong(read, 0),
+                        StandardFunction.REFUSAL_RELEASE, refusal);
+            }
+        }
+    }
+
+    /**
+     * Validates a JSON manifest by the standard's schema and rules V1 and V2, without reading it, as {@code
+     * weivel_standard_validate} does.
+     *
+     * @param json the document
+     * @param options the validation's options
+     * @return OK for a valid manifest; REFUSED with the first wrong field as the refusal, and every one in
+     *     {@code paths}
+     */
+    public StandardAnswer<Void> validate(String json, ValidationOptions options) {
+        byte[] document = utf8(json);
+        try (ForeignMemory memory = binary.memory()) {
+            long text = memory.bytes(document);
+            long optionsStruct = validationOptions(memory, Objects.requireNonNull(options, "options"));
+            long validation = sized(memory, StandardLayouts.VALIDATION);
+            try {
+                StandardStatus status = status(StandardFunction.VALIDATE, text, document.length, optionsStruct,
+                        validation);
+                return new StandardAnswer<>(status, Optional.<Void>empty(),
+                        StandardReads.refusal(memory, validation + offset(StandardLayouts.VALIDATION, "refusal")),
+                        StandardReads.strings(memory, validation + offset(StandardLayouts.VALIDATION, "paths")));
+            } finally {
+                binary.release(StandardFunction.VALIDATION_RELEASE, validation);
             }
         }
     }
@@ -128,7 +184,7 @@ public final class Standard {
                 return StandardAnswer.of(status, found,
                         StandardReads.refusal(memory, discovery + offset(StandardLayouts.DISCOVERY, "refusal")));
             } finally {
-                binary.call(StandardFunction.DISCOVERY_RELEASE, discovery);
+                binary.release(StandardFunction.DISCOVERY_RELEASE, discovery);
             }
         }
     }
@@ -153,8 +209,7 @@ public final class Standard {
                         : Optional.<LibraryDeclaration>empty();
                 return StandardAnswer.of(status, declaration, StandardReads.refusal(memory, refusal));
             } finally {
-                binary.call(StandardFunction.LIBRARY_RELEASE, library);
-                binary.call(StandardFunction.REFUSAL_RELEASE, refusal);
+                releaseBoth(StandardFunction.LIBRARY_RELEASE, library, StandardFunction.REFUSAL_RELEASE, refusal);
             }
         }
     }
@@ -262,8 +317,8 @@ public final class Standard {
                         : Optional.<String>empty();
                 return StandardAnswer.of(status, url, StandardReads.refusal(memory, refusal));
             } finally {
-                binary.call(StandardFunction.TEXT_RELEASE, memory.getLong(expanded, 0));
-                binary.call(StandardFunction.REFUSAL_RELEASE, refusal);
+                releaseBoth(StandardFunction.TEXT_RELEASE, memory.getLong(expanded, 0),
+                        StandardFunction.REFUSAL_RELEASE, refusal);
             }
         }
     }
@@ -329,7 +384,7 @@ public final class Standard {
                         refusal);
                 return StandardAnswer.of(status, Optional.<Void>empty(), StandardReads.refusal(memory, refusal));
             } finally {
-                binary.call(StandardFunction.REFUSAL_RELEASE, refusal);
+                binary.release(StandardFunction.REFUSAL_RELEASE, refusal);
             }
         }
     }
@@ -348,8 +403,7 @@ public final class Standard {
                     : Optional.<List<String>>empty();
             return StandardAnswer.of(status, templates, StandardReads.refusal(memory, refusal));
         } finally {
-            binary.call(StandardFunction.MIRROR_LIST_RELEASE, list);
-            binary.call(StandardFunction.REFUSAL_RELEASE, refusal);
+            releaseBoth(StandardFunction.MIRROR_LIST_RELEASE, list, StandardFunction.REFUSAL_RELEASE, refusal);
         }
     }
 
@@ -366,6 +420,15 @@ public final class Standard {
         } catch (RuntimeException | Error failed) {
             parsed.release();
             throw failed;
+        }
+    }
+
+    /** Runs the second release whatever the first does, so a failing release leaks nothing else of its call. */
+    private void releaseBoth(StandardFunction first, long firstStruct, StandardFunction second, long secondStruct) {
+        try {
+            binary.release(first, firstStruct);
+        } finally {
+            binary.release(second, secondStruct);
         }
     }
 
@@ -424,8 +487,7 @@ public final class Standard {
         }
 
         private void release() {
-            binary.call(StandardFunction.IDENTITY_RELEASE, identity);
-            binary.call(StandardFunction.REFUSAL_RELEASE, refusalStruct);
+            releaseBoth(StandardFunction.IDENTITY_RELEASE, identity, StandardFunction.REFUSAL_RELEASE, refusalStruct);
         }
     }
 }

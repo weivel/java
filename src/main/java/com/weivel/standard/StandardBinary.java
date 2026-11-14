@@ -19,6 +19,7 @@ import java.util.Objects;
 public final class StandardBinary implements AutoCloseable {
     private final ForeignLibrary library;
     private final Map<StandardFunction, ForeignFunction> functions;
+    private volatile ReleaseObserver releaseObserver = ReleaseObserver.NONE;
 
     private StandardBinary(ForeignLibrary library, Map<StandardFunction, ForeignFunction> functions) {
         this.library = library;
@@ -52,6 +53,17 @@ public final class StandardBinary implements AutoCloseable {
 
     long call(StandardFunction function, long... arguments) {
         return functions.get(function).call(arguments);
+    }
+
+    /** Hands a struct the standard filled to the standard's release for its kind, telling the observer first. */
+    void release(StandardFunction release, long struct) {
+        releaseObserver.releasing(release, struct);
+        call(release, struct);
+    }
+
+    /** The seam a test sees every release through, and fails one through. */
+    void observeReleases(ReleaseObserver observer) {
+        releaseObserver = Objects.requireNonNull(observer, "observer");
     }
 
     ForeignMemory memory() {

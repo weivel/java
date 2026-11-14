@@ -4,6 +4,7 @@ import static com.weivel.standard.StandardFixture.refusal;
 import static com.weivel.standard.StandardFixture.standard;
 import static com.weivel.standard.StandardFixture.value;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.weivel.core.Choice;
 import com.weivel.core.CoreProbes;
@@ -86,5 +87,35 @@ class ManifestsTest {
 
         assertEquals(StandardRefusal.MALFORMED_JSON, refused.code());
         assertEquals("", refused.path());
+    }
+
+    @Test
+    void aManifestIsReadWithoutValidationAsTheStandardConvertsIt() {
+        Manifest read = value(standard().readManifest("{\"importName\": \"Bad Name\", \"ui\": {\"screens\": [1]}}"));
+
+        assertEquals(Manifest.named("Bad Name"), read);
+        assertEquals(FULL, value(standard().readManifest(FULL_MANIFEST)));
+    }
+
+    @Test
+    void aManifestReadWithoutValidationIsRefusedForAWrongType() {
+        StandardRefusal refused = refusal(standard().readManifest("{\"importName\": \"a\", \"api\": \"two\"}"));
+
+        assertEquals(StandardRefusal.WRONG_TYPE, refused.code());
+        assertEquals("api", refused.path());
+    }
+
+    @Test
+    void aDocumentReadWithNoImportNameCannotBecomeAManifestValue() {
+        assertThrows(IllegalArgumentException.class, () -> standard().readManifest("{\"api\": 1}"));
+    }
+
+    @Test
+    void aManifestIsValidatedWithoutBeingRead() {
+        assertEquals(StandardStatus.OK, standard().validate(FULL_MANIFEST, ValidationOptions.defaults()).status());
+        StandardAnswer<Void> invalid = standard().validate("{\"importName\": \"Bad Name\", \"api\": \"two\"}",
+                ValidationOptions.defaults());
+        assertEquals("importName", refusal(invalid).path());
+        assertEquals(Arrays.asList("importName", "api"), invalid.paths());
     }
 }
