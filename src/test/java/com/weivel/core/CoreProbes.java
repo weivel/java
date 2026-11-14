@@ -16,6 +16,15 @@ public final class CoreProbes {
     }
 
     /**
+     * The core's binary the tests load once and never close.
+     *
+     * @return the binary
+     */
+    public static CoreBinary binary() {
+        return TestCores.binary();
+    }
+
+    /**
      * A real core with a first listener and a sink.
      *
      * @param listener the first listener

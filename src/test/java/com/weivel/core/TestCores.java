@@ -20,6 +20,10 @@ final class TestCores {
         return assertInstanceOf(CoreLoad.Loaded.class, CoreBinary.load(NativeFiles.coreBinary())).binary();
     }
 
+    static CoreBinary binary() {
+        return BINARY;
+    }
+
     static CoreFunctions functions() {
         return BINARY.functions();
     }
