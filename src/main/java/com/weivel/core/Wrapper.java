@@ -150,7 +150,8 @@ final class Wrapper {
         return new Answer.Defect<>(text);
     }
 
-    <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps) {
+    /** Makes a call; when it is answered OK, {@code after} joins the queue behind its events in the same hold. */
+    <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps, Optional<DeferredStep> after) {
         Optional<String> mistake = call.mistake();
         if (mistake.isPresent()) {
             return new Answer.Mistake<>(mistake.get());
@@ -166,6 +167,9 @@ final class Wrapper {
         try {
             Optional<Answer<T>> cancelled = guarded(steps.guard(), notes);
             answer = cancelled.isPresent() ? cancelled.get() : callHeld(call, steps, notes);
+            if (answer instanceof Answer.Ok<T>) {
+                after.ifPresent(step -> queue.addLast(new QueueEntry.StepEntry(step)));
+            }
         } catch (Throwable thrown) {
             lock.unlock();
             throw rethrown(thrown);
@@ -175,9 +179,19 @@ final class Wrapper {
     }
 
     private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<T> crossed = cross(call.crossing());
+        CoreCalls.Crossed<T> crossed;
+        Optional<Throwable> unread = Optional.empty();
+        try {
+            crossed = cross(call.crossing());
+        } catch (RuntimeException | OutOfMemoryError notCopied) {
+            crossed = null;
+            unread = Optional.of(notCopied);
+        }
         OwnRefusal own = new OwnRefusal();
         drain(waiting(), notes, own);
+        if (unread.isPresent()) {
+            return defect(notes, "the layer could not copy what the core answered a call", unread);
+        }
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
         return answer instanceof Answer.Ok<T> ok ? recorded(steps.answered(), ok.value(), notes) : answer;
     }
@@ -689,6 +703,19 @@ final class Wrapper {
     /** Whether any thread holds the layer lock: what a test reads from code that must run outside it. */
     boolean isLockHeld() {
         return lock.isLocked();
+    }
+
+    boolean isLockHeldByCurrentThread() {
+        return lock.isHeldByCurrentThread();
+    }
+
+    long drainedCount() {
+        hold();
+        try {
+            return sequence;
+        } finally {
+            lock.unlock();
+        }
     }
 
     private boolean enter() {

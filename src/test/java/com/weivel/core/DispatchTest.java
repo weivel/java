@@ -68,6 +68,64 @@ class DispatchTest {
     }
 
     @Test
+    void aStepDeferredWithACallJoinsTheQueueRightBehindThatCallsEventsInTheSameHold() {
+        Core core = TestCores.core(listener, sink);
+        ok(core.call(CoreCalls.watchService(HOST, "between")));
+        List<String> order = new ArrayList<>();
+        core.addListener(event -> order.add(event.getClass().getSimpleName()));
+        AtomicBoolean first = new AtomicBoolean(true);
+        CoreInternals.installDeadlineHooks(core, new DeadlineHooks() {
+            @Override
+            public long now() {
+                return 0;
+            }
+
+            @Override
+            public void follow(long at, boolean set) {
+                if (first.getAndSet(false)) {
+                    ok(core.call(CoreCalls.registerService(HOST, "between")));
+                }
+            }
+        });
+
+        ok(CoreInternals.callThenDefer(core, CoreCalls.wantService(HOST, "timed", WantOptions.timed(0, 100)),
+                CallSteps.none(), () -> step(order, "step")));
+
+        assertEquals(List.of("DeadlineEvent", "step", "WatchEvent"), order);
+        core.destroy();
+    }
+
+    @Test
+    void aStepDeferredWithARefusedCallIsNeverQueued() {
+        Core core = TestCores.core(listener, sink);
+        AtomicBoolean ran = new AtomicBoolean();
+
+        Answer<Void> answer = CoreInternals.callThenDefer(core, CoreCalls.unregister(424242L), CallSteps.none(),
+                () -> {
+                    ran.set(true);
+                    return DeferredStep.Status.DONE;
+                });
+
+        assertInstanceOf(Answer.Refused.class, answer);
+        assertFalse(ran.get());
+        core.destroy();
+    }
+
+    @Test
+    void theDrainedCountIsHowManyEventsTheCoreHasHandedTheLayer() {
+        Core core = TestCores.core(listener, sink);
+        long before = CoreInternals.drainedCount(core);
+        ok(core.call(CoreCalls.watchService(HOST, "counted")));
+        ok(core.call(CoreCalls.watchService(HOST, "counted")));
+
+        ok(core.call(CoreCalls.registerService(HOST, "counted")));
+
+        assertEquals(before + 2, CoreInternals.drainedCount(core));
+        assertEquals(CoreInternals.drainedCount(core), listener.events().getLast().sequence());
+        core.destroy();
+    }
+
+    @Test
     void stepsDeferredInsideADispatchRunInQueueOrderBehindWhatWasQueuedBeforeThem() {
         Core core = TestCores.core(listener, sink);
         ok(core.call(CoreCalls.watchService(HOST, "outer")));

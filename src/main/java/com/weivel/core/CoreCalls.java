@@ -5,8 +5,10 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The core's calls, one typed factory per function of the core's header, each building a {@link CoreCall} that
@@ -22,6 +24,8 @@ import java.util.Optional;
  * @implNote This class and the wrapper are the only places a downcall handle of the core is invoked.
  */
 public final class CoreCalls {
+    private static final int STATUS_OK = 0;
+
     private CoreCalls() {
     }
 
@@ -220,6 +224,101 @@ public final class CoreCalls {
     }
 
     /**
+     * {@code weivel_quarantine_plugin}.
+     *
+     * @param plugin the plugin's handle
+     * @param reason why, as the caller knows it; empty for none, so the plugin's ledger row shows the core's refusal
+     * @return the call, answering nothing beyond its success
+     */
+    public static CoreCall<Void> quarantinePlugin(long plugin, Optional<QuarantineReason> reason) {
+        Objects.requireNonNull(reason, "reason");
+        return unlessMistaken(reason.flatMap(CallerTexts::inReason), (functions, arena, core, pending) ->
+                new Crossed<>((int) functions.handle(CoreFunction.QUARANTINE_PLUGIN)
+                        .invokeExact(core, plugin, Marshal.quarantineReason(arena, reason), pending), null));
+    }
+
+    /**
+     * {@code weivel_verify_activation}.
+     *
+     * @param plugin the plugin's handle
+     * @return the call, answering nothing beyond its success
+     */
+    public static CoreCall<Void> verifyActivation(long plugin) {
+        return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
+                (int) functions.handle(CoreFunction.VERIFY_ACTIVATION).invokeExact(core, plugin, pending), null));
+    }
+
+    /**
+     * {@code weivel_service_ids}, its list copied and released before the call answers.
+     *
+     * @param plugin the plugin asking
+     * @return the call, answering the ids in the core's order
+     */
+    public static CoreCall<List<String>> serviceIds(long plugin) {
+        return builtByTheLayer((functions, arena, core, pending) -> {
+            MemorySegment list = Marshal.emptyAnswer(arena, CoreLayouts.SERVICE_LIST);
+            int status = (int) functions.handle(CoreFunction.SERVICE_IDS).invokeExact(core, plugin, list, pending);
+            return new Crossed<>(status, status == STATUS_OK
+                    ? copiedThenReleased(functions, CoreFunction.SERVICE_LIST_RELEASE, list, AnswerCopy::serviceIds)
+                    : List.of());
+        });
+    }
+
+    /**
+     * {@code weivel_all_capabilities}, its list copied at the stride its first element declares and released before
+     * the call answers.
+     *
+     * @param plugin the plugin asking, or {@link CoreConstants#HOST}
+     * @param id the capability id
+     * @return the call, answering the verified implementations in the core's order
+     */
+    public static CoreCall<List<CapabilityImplementation>> allCapabilities(long plugin, String id) {
+        Objects.requireNonNull(id, "id");
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
+            MemorySegment list = Marshal.emptyAnswer(arena, CoreLayouts.CAPABILITY_LIST);
+            int status = (int) functions.handle(CoreFunction.ALL_CAPABILITIES)
+                    .invokeExact(core, plugin, arena.allocateFrom(id), list, pending);
+            return new Crossed<>(status, status == STATUS_OK
+                    ? copiedThenReleased(functions, CoreFunction.CAPABILITY_LIST_RELEASE, list,
+                            AnswerCopy::capabilities)
+                    : List.of());
+        });
+    }
+
+    /**
+     * {@code weivel_watch_capability}.
+     *
+     * @param plugin the plugin watching, or {@link CoreConstants#HOST}
+     * @param id the capability id
+     * @return the call, answering the watch handle
+     */
+    public static CoreCall<Long> watchCapability(long plugin, String id) {
+        Objects.requireNonNull(id, "id");
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
+            MemorySegment watch = arena.allocate(JAVA_LONG);
+            int status = (int) functions.handle(CoreFunction.WATCH_CAPABILITY)
+                    .invokeExact(core, plugin, arena.allocateFrom(id), watch, pending);
+            return new Crossed<>(status, watch.get(JAVA_LONG, 0));
+        });
+    }
+
+    /**
+     * {@code weivel_report_capacity}; an answer to no open question is {@link Answer.Absent}.
+     *
+     * @param want the want the question named
+     * @param registration the registration the question named
+     * @param answer the provider's answer
+     * @param now the caller's time now
+     * @return the call, answering nothing beyond its success
+     */
+    public static CoreCall<Void> reportCapacity(long want, long registration, CapacityAnswer answer, long now) {
+        Objects.requireNonNull(answer, "answer");
+        return unlessMistaken(CallerTexts.inNumbers("an attribute name of the answer", answer.attributes()),
+                (functions, arena, core, pending) -> new Crossed<>((int) functions.handle(CoreFunction.REPORT_CAPACITY)
+                        .invokeExact(core, want, registration, Marshal.capacity(arena, answer), now, pending), null));
+    }
+
+    /**
      * {@code weivel_next_deadline}; no deadline set is {@link Answer.Absent}.
      *
      * @return the call, answering the deadline in the caller's milliseconds
@@ -245,6 +344,16 @@ public final class CoreCalls {
     static Crossing<Void> advanceCrossing(long now) {
         return (functions, arena, core, pending) -> new Crossed<>(
                 (int) functions.handle(CoreFunction.ADVANCE).invokeExact(core, now, pending), null);
+    }
+
+    /** Copies an answer the core filled, then releases it whatever the copy did. */
+    private static <V> V copiedThenReleased(CoreFunctions functions, CoreFunction release, MemorySegment answer,
+                                            Function<MemorySegment, V> copy) throws Throwable {
+        try {
+            return copy.apply(answer);
+        } finally {
+            int ignored = (int) functions.handle(release).invokeExact(answer);
+        }
     }
 
     private static <T> CoreCall<T> builtByTheLayer(Crossing<T> crossing) {

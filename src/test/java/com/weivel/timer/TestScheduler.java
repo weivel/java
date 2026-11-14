@@ -10,7 +10,7 @@ import java.util.function.LongConsumer;
  * A clock and a scheduler the test owns: time moves only when the test moves it, and a task runs only when the test
  * moves time over its due time, on the test's thread. It counts every clock read and keeps every task it was given.
  */
-final class TestScheduler implements Scheduler {
+public final class TestScheduler implements Scheduler {
     private final Object lock = new Object();
     private final AtomicInteger reads = new AtomicInteger();
     private final List<TestTask> tasks = new ArrayList<>();
@@ -46,7 +46,7 @@ final class TestScheduler implements Scheduler {
         maximumWait = longest;
     }
 
-    void whenRead(Runnable action) {
+    public void whenRead(Runnable action) {
         onRead = action;
     }
 
@@ -55,7 +55,7 @@ final class TestScheduler implements Scheduler {
     }
 
     /** Sets the clock without running any task. */
-    void setClock(long time) {
+    public void setClock(long time) {
         clock = time;
     }
 
@@ -63,7 +63,7 @@ final class TestScheduler implements Scheduler {
      * Runs every task due by {@code time}, earliest first, those scheduled meanwhile included, the clock moved on to
      * each one's due time as it runs unless it is past it already; then sets the clock to {@code time}.
      */
-    void moveTo(long time) {
+    public void moveTo(long time) {
         TestTask due = nextDue(time);
         while (due != null) {
             clock = Math.max(clock, due.at);
@@ -90,7 +90,7 @@ final class TestScheduler implements Scheduler {
     }
 
     /** The due time of every task neither run nor cancelled. */
-    List<Long> live() {
+    public List<Long> live() {
         synchronized (lock) {
             return tasks.stream().filter(TestTask::live).map(task -> task.at).toList();
         }

@@ -111,6 +111,40 @@ final class CoreLayouts {
             MemoryLayout.paddingLayout(4),
             JAVA_LONG.withName("payload")).withName("weivel_plugin_options");
 
+    static final StructLayout QUARANTINE_REASON = MemoryLayout.structLayout(
+            JAVA_INT.withName("size"),
+            JAVA_INT.withName("code"),
+            ADDRESS.withName("detail"),
+            ADDRESS.withName("fix")).withName("weivel_quarantine_reason");
+
+    static final StructLayout CAPACITY = MemoryLayout.structLayout(
+            JAVA_INT.withName("size"),
+            MemoryLayout.paddingLayout(4),
+            JAVA_LONG.withName("request"),
+            NUMBERS.withName("attributes"),
+            JAVA_INT.withName("serves"),
+            MemoryLayout.paddingLayout(4)).withName("weivel_capacity");
+
+    static final StructLayout SERVICE_LIST = MemoryLayout.structLayout(
+            JAVA_INT.withName("size"),
+            MemoryLayout.paddingLayout(4),
+            STRINGS.withName("ids"),
+            ADDRESS.withName("storage")).withName("weivel_service_list");
+
+    static final StructLayout CAPABILITY_IMPLEMENTATION = MemoryLayout.structLayout(
+            JAVA_INT.withName("size"),
+            MemoryLayout.paddingLayout(4),
+            JAVA_LONG.withName("implementation"),
+            JAVA_LONG.withName("provider")).withName("weivel_capability_implementation");
+
+    static final StructLayout CAPABILITY_LIST = MemoryLayout.structLayout(
+            JAVA_INT.withName("size"),
+            MemoryLayout.paddingLayout(4),
+            ADDRESS.withName("items"),
+            JAVA_INT.withName("count"),
+            MemoryLayout.paddingLayout(4),
+            ADDRESS.withName("storage")).withName("weivel_capability_list");
+
     static final StructLayout REFUSAL = MemoryLayout.structLayout(
             JAVA_INT.withName("code"),
             MemoryLayout.paddingLayout(4),
