@@ -126,7 +126,14 @@ lays its plugins out otherwise registers `manifest()` with an entry of its own, 
 `ForeignMemory.manifest` reads a manifest another library laid out up to the size it declares, as the core does. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
 interfaces, a refusal thrown as a `ServiceRefusal`.
 
-The other packages hold only their purpose so far.
+`com.weivel.conformance` is the driver for the layer suite. `LayerDriver` reads the pinned kit's layer vectors
+through the standard's JSON reader, bound through `ForeignLibrary`, and writes no file; it builds each vector's plugins
+as manifest values and entries, drives them through the host's public surface on the real core, a `want` vector on a
+clock and scheduler of the suite's own, and answers a `LayerWitness` in the shape of the vector's `then`. The suite
+has one test per vector, its display name the vector's id, and a coverage test that discovers those names through
+the JUnit Platform Launcher and fails on a vector none names.
+
+`com.weivel.benchmarks` holds only its purpose so far.
 
 ## Using it
 
