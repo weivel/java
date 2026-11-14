@@ -111,9 +111,9 @@ public final class Standard {
      * host taking the standard's defaults calls {@link #loadManifest}, which validates first.
      *
      * @param json the document
-     * @return the manifest on OK; REFUSED for malformed JSON, a wrong type or an unrepresentable value
-     * @throws IllegalArgumentException for a document the standard read with no {@code importName}, which the
-     *     core's manifest value cannot hold and the core refuses on registration
+     * @return the manifest on OK; REFUSED for malformed JSON, a wrong type or an unrepresentable value; the standard's
+     *     OK with a {@link StandardAnswer#mistake()} naming {@code importName} for a document that has none, the
+     *     caller's mistake, since the core's manifest value requires it
      */
     public StandardAnswer<Manifest> readManifest(String json) {
         byte[] document = utf8(json);
@@ -123,10 +123,11 @@ public final class Standard {
             long refusal = sized(memory, StandardLayouts.REFUSAL);
             try {
                 StandardStatus status = status(StandardFunction.READ_MANIFEST, text, document.length, read, refusal);
-                Optional<Manifest> manifest = status == StandardStatus.OK
-                        ? Optional.of(memory.manifest(view(memory.getLong(read, 0))))
-                        : Optional.<Manifest>empty();
-                return StandardAnswer.of(status, manifest, StandardReads.refusal(memory, refusal));
+                if (status != StandardStatus.OK) {
+                    return StandardAnswer.of(status, Optional.<Manifest>empty(),
+                            StandardReads.refusal(memory, refusal));
+                }
+                return readView(memory, memory.getLong(read, 0));
             } finally {
                 releaseBoth(StandardFunction.MANIFEST_RELEASE, memory.getLong(read, 0),
                         StandardFunction.REFUSAL_RELEASE, refusal);
@@ -421,6 +422,16 @@ public final class Standard {
             parsed.release();
             throw failed;
         }
+    }
+
+    private StandardAnswer<Manifest> readView(ForeignMemory memory, long manifest) {
+        Manifest copied;
+        try {
+            copied = memory.manifest(view(manifest));
+        } catch (IllegalArgumentException noManifestValue) {
+            return StandardAnswer.mistaken(StandardStatus.OK, noManifestValue.getMessage());
+        }
+        return StandardAnswer.of(StandardStatus.OK, Optional.of(copied), Optional.<StandardRefusal>empty());
     }
 
     /** Runs the second release whatever the first does, so a failing release leaks nothing else of its call. */

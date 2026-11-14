@@ -4,7 +4,7 @@ import static com.weivel.standard.StandardFixture.refusal;
 import static com.weivel.standard.StandardFixture.standard;
 import static com.weivel.standard.StandardFixture.value;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.core.Choice;
 import com.weivel.core.CoreProbes;
@@ -106,8 +106,13 @@ class ManifestsTest {
     }
 
     @Test
-    void aDocumentReadWithNoImportNameCannotBecomeAManifestValue() {
-        assertThrows(IllegalArgumentException.class, () -> standard().readManifest("{\"api\": 1}"));
+    void aDocumentReadWithNoImportNameIsTheCallersMistakeNamingIt() {
+        StandardAnswer<Manifest> read = standard().readManifest("{\"api\": 1}");
+
+        assertEquals(StandardStatus.OK, read.status());
+        assertEquals(Optional.<Manifest>empty(), read.value());
+        assertEquals(Optional.<StandardRefusal>empty(), read.refusal());
+        assertTrue(read.mistake().isPresent() && read.mistake().get().contains("importName"), read.toString());
     }
 
     @Test

@@ -59,7 +59,7 @@ final class ManifestCopy {
     private static String importName(NativeRegion struct) {
         long pointer = struct.getAddress(MANIFEST.offsetOf("import_name"));
         if (pointer == 0) {
-            throw new IllegalArgumentException("the manifest has no import name, which the core requires");
+            throw new IllegalArgumentException("the manifest has no importName, which the core requires");
         }
         return struct.textAt(pointer);
     }
