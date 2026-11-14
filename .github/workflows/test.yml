@@ -4,16 +4,16 @@ on: [push, pull_request, workflow_dispatch]
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   test:
     uses: intisy/workflows/.github/workflows/test.yml@main
     with:
+      toolchains: gradle cmake
+      runners: '["ubuntu-latest","windows-latest","macos-latest"]'
+      cmake_version: '4.4.4'
+      cmake_configure: ''
+      cmake_build: ''
+      cmake_test: ''
+      java_version: '25'
       gradle_test: check
-      gradle_args: -Dconformance.vectors=conformance/vectors
-      extra_repository: weivel/conformance
-      extra_path: conformance
-      extra_repositories: weivel/model model
-    secrets:
-      envPAT: ${{ secrets.PAT }}

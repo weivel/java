@@ -1,5 +1,2 @@
 kind: generic
-description: Plugin API contract and service registry for the forebay AI-proxy ecosystem.
-badges:
-  - npm-version
-  - npm-downloads
+description: The Java language implementation of weivel, loading the C core its caller names and deciding nothing itself.
