@@ -15,7 +15,17 @@ java {
     }
 }
 
+def jdk25 = { JavaToolchainSpec spec -> spec.languageVersion = JavaLanguageVersion.of(25) }
+
+sourceSets {
+    java22 {
+        java.srcDir 'src/main/java22'
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+    }
+}
+
 dependencies {
+    implementation 'net.java.dev.jna:jna:5.19.1'
     testImplementation platform('org.junit:junit-bom:6.1.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -24,6 +34,20 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
+}
+
+tasks.named('compileJava22Java', JavaCompile) {
+    javaCompiler = javaToolchains.compilerFor(jdk25)
+    options.release = 22
+}
+
+tasks.named('jar', Jar) {
+    into('META-INF/versions/22') {
+        from sourceSets.java22.output
+    }
+    manifest {
+        attributes('Multi-Release': 'true')
+    }
 }
 
 tasks.withType(Javadoc).configureEach {
@@ -38,8 +62,19 @@ tasks.withType(Javadoc).configureEach {
     failOnError = true
 }
 
+def javadocJava22 = tasks.register('javadocJava22', Javadoc) {
+    group = 'documentation'
+    description = 'Checks the documentation of the Java 22 sources the multi-release jar carries.'
+    javadocTool = javaToolchains.javadocToolFor(jdk25)
+    source = sourceSets.java22.allJava
+    classpath = sourceSets.java22.compileClasspath
+    destinationDir = layout.buildDirectory.dir('docs/javadoc-java22').get().asFile
+    options.addStringOption('-release', '22')
+    options.memberLevel = JavadocMemberLevel.PACKAGE
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('javadoc')
+    dependsOn tasks.named('javadoc'), javadocJava22
 }
 
 def operatingSystemName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
@@ -161,10 +196,12 @@ def buildNative = tasks.register('buildNative', Sync) {
     }
 }
 
-tasks.named('test', Test) {
-    useJUnitPlatform()
-    dependsOn buildNative
-    jvmArgs '--enable-native-access=ALL-UNNAMED'
+def runsTheSuiteAgainstTheJar = { Test task, String backend ->
+    task.useJUnitPlatform()
+    task.dependsOn buildNative
+    task.testClassesDirs = sourceSets.test.output.classesDirs
+    task.classpath = files(tasks.named('jar')) + sourceSets.test.output + configurations.testRuntimeClasspath
+    task.systemProperty 'weivel.test.backend', backend
     def testFiles = [
             'weivel.test.coreBinary'     : coreBinary,
             'weivel.test.standardBinary' : standardBinary,
@@ -174,13 +211,24 @@ tasks.named('test', Test) {
             'weivel.test.coreHeader'     : new File(siblingsDirectory, 'core/include/weivel/core.h'),
     ]
     testFiles.each { String property, File location ->
-        inputs.file(location).withPropertyName(property)
-        systemProperty property, location.absolutePath
+        task.inputs.file(location).withPropertyName(property)
+        task.systemProperty property, location.absolutePath
     }
+    def mainSources = file('src/main')
+    task.inputs.dir(mainSources).withPropertyName('weivel.test.mainSources')
+    task.systemProperty 'weivel.test.mainSources', mainSources.absolutePath
     def coreSources = file('src/main/java/com/weivel/core')
-    inputs.dir(coreSources).withPropertyName('weivel.test.coreSources')
-    systemProperty 'weivel.test.coreSources', coreSources.absolutePath
+    task.inputs.dir(coreSources).withPropertyName('weivel.test.coreSources')
+    task.systemProperty 'weivel.test.coreSources', coreSources.absolutePath
     def layerVectors = new File(siblingsDirectory, 'conformance/vectors/layer')
-    inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
-    systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
+    task.inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
+    task.systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
 }
+
+tasks.named('test', Test) {
+    description = 'Runs the suite on Java 25, where the jar reaches the core through the foreign function API.'
+    runsTheSuiteAgainstTheJar(it, 'ffm')
+    javaLauncher = javaToolchains.launcherFor(jdk25)
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+

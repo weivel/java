@@ -1,10 +1,6 @@
 package com.weivel.core;
 
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,7 +17,7 @@ import java.util.function.Function;
  * malformed. A status of {@code WEIVEL_STATUS_NONE} is {@link Answer.Absent}. A text of the caller's holding a NUL
  * character, which C would read cut short, is answered {@link Answer.Mistake} without anything reaching the core.
  *
- * @implNote This class and the wrapper are the only places a downcall handle of the core is invoked.
+ * @implNote This class and the wrapper are the only places a function of the core is called.
  */
 public final class CoreCalls {
     private static final int STATUS_OK = 0;
@@ -35,12 +31,52 @@ public final class CoreCalls {
      */
     @FunctionalInterface
     interface Crossing<T> {
-        Crossed<T> cross(CoreFunctions functions, Arena arena, MemorySegment core, MemorySegment pending)
-                throws Throwable;
+        Crossed<T> cross(CoreFunctions functions, NativeArena arena, long core, long pending) throws Throwable;
     }
 
     /** What a crossing answered: the core's status, and the result it read, meaningful when the status is OK. */
-    record Crossed<T>(int status, T value) {
+    static final class Crossed<T> {
+        private final int status;
+        private final T value;
+
+        Crossed(int status, T value) {
+            this.status = status;
+            this.value = value;
+        }
+
+        public int status() {
+            return status;
+        }
+
+        public T value() {
+            return value;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Crossed)) {
+                return false;
+            }
+            Crossed<?> that = (Crossed<?>) other;
+            return status == that.status
+                    && Objects.equals(value, that.value);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Integer.hashCode(status);
+            hash = 31 * hash + Objects.hashCode(value);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Crossed[status=" + status + ", value=" + value + "]";
+        }
     }
 
     /**
@@ -52,10 +88,10 @@ public final class CoreCalls {
     public static CoreCall<Long> registerManifest(Manifest manifest) {
         Objects.requireNonNull(manifest, "manifest");
         return unlessMistaken(CallerTexts.inManifest(manifest), (functions, arena, core, pending) -> {
-            MemorySegment plugin = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.REGISTER_MANIFEST)
-                    .invokeExact(core, Marshal.manifest(arena, manifest), plugin, pending);
-            return new Crossed<>(status, plugin.get(JAVA_LONG, 0));
+            NativeRegion plugin = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.REGISTER_MANIFEST, core,
+                    Marshal.manifest(arena, manifest).address(), plugin.address(), pending);
+            return new Crossed<>(status, plugin.getLong(0));
         });
     }
 
@@ -68,8 +104,8 @@ public final class CoreCalls {
      */
     public static CoreCall<Void> openPlugin(long plugin, long payload) {
         return carryingCallersParts((functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.OPEN_PLUGIN)
-                        .invokeExact(core, plugin, Marshal.pluginOptions(arena, payload), pending),
+                functions.status(CoreFunction.OPEN_PLUGIN, core, plugin,
+                        Marshal.pluginOptions(arena, payload).address(), pending),
                 null));
     }
 
@@ -81,10 +117,9 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> pluginPayload(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> {
-            MemorySegment payload = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.PLUGIN_PAYLOAD).invokeExact(core, plugin, payload,
-                    pending);
-            return new Crossed<>(status, payload.get(JAVA_LONG, 0));
+            NativeRegion payload = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.PLUGIN_PAYLOAD, core, plugin, payload.address(), pending);
+            return new Crossed<>(status, payload.getLong(0));
         });
     }
 
@@ -96,7 +131,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Void> releasePlugin(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.RELEASE_PLUGIN).invokeExact(core, plugin, pending), null));
+                functions.status(CoreFunction.RELEASE_PLUGIN, core, plugin, pending), null));
     }
 
     /**
@@ -107,7 +142,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Void> forgetPlugin(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.FORGET_PLUGIN).invokeExact(core, plugin, pending), null));
+                functions.status(CoreFunction.FORGET_PLUGIN, core, plugin, pending), null));
     }
 
     /**
@@ -120,10 +155,10 @@ public final class CoreCalls {
     public static CoreCall<Long> registerService(long owner, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment registration = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.REGISTER_SERVICE)
-                    .invokeExact(core, owner, arena.allocateFrom(id), registration, pending);
-            return new Crossed<>(status, registration.get(JAVA_LONG, 0));
+            NativeRegion registration = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.REGISTER_SERVICE, core, owner, arena.text(id).address(),
+                    registration.address(), pending);
+            return new Crossed<>(status, registration.getLong(0));
         });
     }
 
@@ -135,7 +170,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Void> unregister(long handle) {
         return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.UNREGISTER).invokeExact(core, handle, pending), null));
+                functions.status(CoreFunction.UNREGISTER, core, handle, pending), null));
     }
 
     /**
@@ -146,10 +181,9 @@ public final class CoreCalls {
      */
     public static CoreCall<Integer> handleState(long handle) {
         return builtByTheLayer((functions, arena, core, pending) -> {
-            MemorySegment condition = arena.allocate(JAVA_INT);
-            int status = (int) functions.handle(CoreFunction.HANDLE_STATE).invokeExact(core, handle, condition,
-                    pending);
-            return new Crossed<>(status, condition.get(JAVA_INT, 0));
+            NativeRegion condition = arena.allocate(Layout.INT);
+            int status = functions.status(CoreFunction.HANDLE_STATE, core, handle, condition.address(), pending);
+            return new Crossed<>(status, condition.getInt(0));
         });
     }
 
@@ -163,10 +197,10 @@ public final class CoreCalls {
     public static CoreCall<Long> getService(long plugin, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment implementation = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.GET_SERVICE)
-                    .invokeExact(core, plugin, arena.allocateFrom(id), implementation, pending);
-            return new Crossed<>(status, implementation.get(JAVA_LONG, 0));
+            NativeRegion implementation = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.GET_SERVICE, core, plugin, arena.text(id).address(),
+                    implementation.address(), pending);
+            return new Crossed<>(status, implementation.getLong(0));
         });
     }
 
@@ -182,10 +216,10 @@ public final class CoreCalls {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(options, "options");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment want = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.WANT_SERVICE).invokeExact(core, plugin,
-                    arena.allocateFrom(id), Marshal.wantOptions(arena, options), want, pending);
-            return new Crossed<>(status, want.get(JAVA_LONG, 0));
+            NativeRegion want = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.WANT_SERVICE, core, plugin, arena.text(id).address(),
+                    Marshal.wantOptions(arena, options).address(), want.address(), pending);
+            return new Crossed<>(status, want.getLong(0));
         });
     }
 
@@ -199,10 +233,10 @@ public final class CoreCalls {
     public static CoreCall<Long> watchService(long plugin, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment watch = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.WATCH_SERVICE)
-                    .invokeExact(core, plugin, arena.allocateFrom(id), watch, pending);
-            return new Crossed<>(status, watch.get(JAVA_LONG, 0));
+            NativeRegion watch = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.WATCH_SERVICE, core, plugin, arena.text(id).address(),
+                    watch.address(), pending);
+            return new Crossed<>(status, watch.getLong(0));
         });
     }
 
@@ -216,10 +250,10 @@ public final class CoreCalls {
     public static CoreCall<Long> provideCapability(long plugin, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment implementation = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.PROVIDE_CAPABILITY)
-                    .invokeExact(core, plugin, arena.allocateFrom(id), implementation, pending);
-            return new Crossed<>(status, implementation.get(JAVA_LONG, 0));
+            NativeRegion implementation = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.PROVIDE_CAPABILITY, core, plugin, arena.text(id).address(),
+                    implementation.address(), pending);
+            return new Crossed<>(status, implementation.getLong(0));
         });
     }
 
@@ -233,8 +267,8 @@ public final class CoreCalls {
     public static CoreCall<Void> quarantinePlugin(long plugin, Optional<QuarantineReason> reason) {
         Objects.requireNonNull(reason, "reason");
         return unlessMistaken(reason.flatMap(CallerTexts::inReason), (functions, arena, core, pending) ->
-                new Crossed<>((int) functions.handle(CoreFunction.QUARANTINE_PLUGIN)
-                        .invokeExact(core, plugin, Marshal.quarantineReason(arena, reason), pending), null));
+                new Crossed<>(functions.status(CoreFunction.QUARANTINE_PLUGIN, core, plugin,
+                        Marshal.quarantineReason(arena, reason), pending), null));
     }
 
     /**
@@ -245,7 +279,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Void> verifyActivation(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.VERIFY_ACTIVATION).invokeExact(core, plugin, pending), null));
+                functions.status(CoreFunction.VERIFY_ACTIVATION, core, plugin, pending), null));
     }
 
     /**
@@ -256,11 +290,11 @@ public final class CoreCalls {
      */
     public static CoreCall<List<String>> serviceIds(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> {
-            MemorySegment list = Marshal.emptyAnswer(arena, CoreLayouts.SERVICE_LIST);
-            int status = (int) functions.handle(CoreFunction.SERVICE_IDS).invokeExact(core, plugin, list, pending);
+            NativeRegion list = Marshal.emptyAnswer(arena, CoreLayouts.SERVICE_LIST);
+            int status = functions.status(CoreFunction.SERVICE_IDS, core, plugin, list.address(), pending);
             return new Crossed<>(status, status == STATUS_OK
                     ? copiedThenReleased(functions, CoreFunction.SERVICE_LIST_RELEASE, list, AnswerCopy::serviceIds)
-                    : List.of());
+                    : Collections.<String>emptyList());
         });
     }
 
@@ -275,13 +309,13 @@ public final class CoreCalls {
     public static CoreCall<List<CapabilityImplementation>> allCapabilities(long plugin, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment list = Marshal.emptyAnswer(arena, CoreLayouts.CAPABILITY_LIST);
-            int status = (int) functions.handle(CoreFunction.ALL_CAPABILITIES)
-                    .invokeExact(core, plugin, arena.allocateFrom(id), list, pending);
+            NativeRegion list = Marshal.emptyAnswer(arena, CoreLayouts.CAPABILITY_LIST);
+            int status = functions.status(CoreFunction.ALL_CAPABILITIES, core, plugin, arena.text(id).address(),
+                    list.address(), pending);
             return new Crossed<>(status, status == STATUS_OK
                     ? copiedThenReleased(functions, CoreFunction.CAPABILITY_LIST_RELEASE, list,
                             AnswerCopy::capabilities)
-                    : List.of());
+                    : Collections.<CapabilityImplementation>emptyList());
         });
     }
 
@@ -295,10 +329,10 @@ public final class CoreCalls {
     public static CoreCall<Long> watchCapability(long plugin, String id) {
         Objects.requireNonNull(id, "id");
         return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
-            MemorySegment watch = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.WATCH_CAPABILITY)
-                    .invokeExact(core, plugin, arena.allocateFrom(id), watch, pending);
-            return new Crossed<>(status, watch.get(JAVA_LONG, 0));
+            NativeRegion watch = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.WATCH_CAPABILITY, core, plugin, arena.text(id).address(),
+                    watch.address(), pending);
+            return new Crossed<>(status, watch.getLong(0));
         });
     }
 
@@ -314,8 +348,8 @@ public final class CoreCalls {
     public static CoreCall<Void> reportCapacity(long want, long registration, CapacityAnswer answer, long now) {
         Objects.requireNonNull(answer, "answer");
         return unlessMistaken(CallerTexts.inNumbers("an attribute name of the answer", answer.attributes()),
-                (functions, arena, core, pending) -> new Crossed<>((int) functions.handle(CoreFunction.REPORT_CAPACITY)
-                        .invokeExact(core, want, registration, Marshal.capacity(arena, answer), now, pending), null));
+                (functions, arena, core, pending) -> new Crossed<>(functions.status(CoreFunction.REPORT_CAPACITY,
+                        core, want, registration, Marshal.capacity(arena, answer).address(), now, pending), null));
     }
 
     /**
@@ -325,9 +359,9 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> nextDeadline() {
         return builtByTheLayer((functions, arena, core, pending) -> {
-            MemorySegment deadline = arena.allocate(JAVA_LONG);
-            int status = (int) functions.handle(CoreFunction.NEXT_DEADLINE).invokeExact(core, deadline, pending);
-            return new Crossed<>(status, deadline.get(JAVA_LONG, 0));
+            NativeRegion deadline = arena.allocate(Layout.LONG);
+            int status = functions.status(CoreFunction.NEXT_DEADLINE, core, deadline.address(), pending);
+            return new Crossed<>(status, deadline.getLong(0));
         });
     }
 
@@ -343,16 +377,16 @@ public final class CoreCalls {
 
     static Crossing<Void> advanceCrossing(long now) {
         return (functions, arena, core, pending) -> new Crossed<>(
-                (int) functions.handle(CoreFunction.ADVANCE).invokeExact(core, now, pending), null);
+                functions.status(CoreFunction.ADVANCE, core, now, pending), null);
     }
 
     /** Copies an answer the core filled, then releases it whatever the copy did. */
-    private static <V> V copiedThenReleased(CoreFunctions functions, CoreFunction release, MemorySegment answer,
-                                            Function<MemorySegment, V> copy) throws Throwable {
+    private static <V> V copiedThenReleased(CoreFunctions functions, CoreFunction release, NativeRegion answer,
+                                            Function<NativeRegion, V> copy) {
         try {
             return copy.apply(answer);
         } finally {
-            int ignored = (int) functions.handle(release).invokeExact(answer);
+            functions.status(release, answer.address());
         }
     }
 

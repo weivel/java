@@ -2,20 +2,14 @@ package com.weivel.core;
 
 import static com.weivel.core.CoreConstants.HOST;
 import static com.weivel.core.TestCores.ok;
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.LongPredicate;
@@ -34,10 +28,10 @@ class EventCopyTest {
 
         long want = ok(core.call(CoreCalls.wantService(consumer, "measured", polled())));
 
-        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).getFirst();
+        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).get(0);
         assertEquals(want, question.want());
         assertEquals(consumer, question.plugin());
-        assertEquals(List.of(new NamedNumber("latency", 10.0)), question.constraints());
+        assertEquals(Collections.singletonList(new NamedNumber("latency", 10.0)), question.constraints());
         assertFalse(question.incomplete());
         core.destroy();
     }
@@ -51,8 +45,8 @@ class EventCopyTest {
 
         ok(core.call(CoreCalls.wantService(consumer, "measured", polled())));
 
-        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).getFirst();
-        assertEquals(List.of(new NamedNumber("latency", 10.0), new NamedNumber("latency", 10.0)),
+        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).get(0);
+        assertEquals(Arrays.asList(new NamedNumber("latency", 10.0), new NamedNumber("latency", 10.0)),
                 question.constraints());
         core.destroy();
     }
@@ -67,12 +61,12 @@ class EventCopyTest {
 
         ok(core.call(CoreCalls.advance(10)));
 
-        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).getFirst();
+        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).get(0);
         assertTrue(settled.incomplete());
         assertEquals(want, settled.want());
         assertEquals(HOST, settled.plugin());
         assertEquals(0, settled.implementation());
-        Refusal refusal = settled.refusal().orElseThrow();
+        Refusal refusal = settled.refusal().get();
         assertEquals(CoreConstants.REFUSAL_TIMED_OUT, refusal.code());
         assertEquals(CoreEvent.TEXT_NOT_COPIED, refusal.detail());
         assertEquals(CoreEvent.TEXT_NOT_COPIED, refusal.fix());
@@ -80,7 +74,7 @@ class EventCopyTest {
         assertTrue(refusal.hasFix());
         List<Failure> told = sink.failures().subList(toldBefore, sink.failures().size());
         assertEquals(1, told.stream().filter(failure -> failure.sequence() == settled.sequence()).count());
-        assertEquals(FailureKind.EVENT_INCOMPLETE, told.getFirst().kind());
+        assertEquals(FailureKind.EVENT_INCOMPLETE, told.get(0).kind());
         core.destroy();
     }
 
@@ -91,8 +85,8 @@ class EventCopyTest {
 
         ok(core.call(CoreCalls.advance(10)));
 
-        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).getFirst();
-        Refusal refusal = settled.refusal().orElseThrow();
+        CoreEvent.WantSettledEvent settled = listener.of(CoreEvent.WantSettledEvent.class).get(0);
+        Refusal refusal = settled.refusal().get();
         assertEquals(CoreConstants.REFUSAL_TIMED_OUT, refusal.code());
         assertEquals(Optional.of("awaited"), refusal.subject());
         assertEquals(Optional.empty(), settled.unmetConstraint());
@@ -108,10 +102,10 @@ class EventCopyTest {
 
         assertEquals(CoreConstants.REFUSAL_STALE_HANDLE, refusal.code());
         assertEquals(CoreEvent.TEXT_NOT_COPIED, refusal.detail());
-        assertTrue(listener.of(CoreEvent.RefusalEvent.class).getFirst().incomplete());
+        assertTrue(listener.of(CoreEvent.RefusalEvent.class).get(0).incomplete());
         assertEquals(1, sink.of(FailureKind.EVENT_INCOMPLETE).size());
-        assertInstanceOf(OutOfMemoryError.class, sink.of(FailureKind.EVENT_INCOMPLETE).getFirst().cause()
-                .orElseThrow());
+        assertInstanceOf(OutOfMemoryError.class, sink.of(FailureKind.EVENT_INCOMPLETE).get(0).cause()
+                .get());
         core.destroy();
     }
 
@@ -137,9 +131,9 @@ class EventCopyTest {
 
         ok(core.call(CoreCalls.wantService(consumer, "measured", polled())));
 
-        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).getFirst();
+        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).get(0);
         assertTrue(question.incomplete());
-        assertEquals(List.of(), question.constraints());
+        assertEquals(Collections.emptyList(), question.constraints());
         core.destroy();
     }
 
@@ -159,7 +153,7 @@ class EventCopyTest {
         assertEquals(2, log.count(CoreFunction.EVENT_RELEASE));
         List<Failure> dropped = sink.of(FailureKind.EVENT_DROPPED);
         assertEquals(1, dropped.size());
-        assertEquals(CoreConstants.EVENT_WATCH, dropped.getFirst().eventKind());
+        assertEquals(CoreConstants.EVENT_WATCH, dropped.get(0).eventKind());
         assertEquals(1, sink.failures().size());
         core.destroy();
     }
@@ -175,9 +169,9 @@ class EventCopyTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "unknown")));
 
-        assertEquals(List.of(), listener.events());
+        assertEquals(Collections.emptyList(), listener.events());
         assertEquals(1, log.count(CoreFunction.EVENT_RELEASE));
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
         core.destroy();
     }
 
@@ -186,16 +180,17 @@ class EventCopyTest {
     }
 
     private Core constrainedCore(EventCopying copying, CoreFunctions functions) {
-        CoreOptions vocabulary = new CoreOptions(0, 0, 0, List.of(), List.of(),
-                List.of(new CoreOptions.ConstraintEntry("latency", "latency", 2)));
+        CoreOptions vocabulary = new CoreOptions(0, 0, 0, Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(new CoreOptions.ConstraintEntry("latency", "latency", 2)));
         return TestCores.created(functions, copying, vocabulary, listener, sink);
     }
 
     private static long constrainedConsumer(Core core) {
         Manifest.ServiceWant measured = new Manifest.ServiceWant("measured", Optional.empty(), Choice.YES, Choice.NO,
-                List.of(new NamedNumber("latency", 10.0)));
-        Manifest manifest = new Manifest("consumer", 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(measured), List.of(), Optional.empty());
+                Collections.singletonList(new NamedNumber("latency", 10.0)));
+        Manifest manifest = new Manifest("consumer", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(measured), Collections.emptyList(), Optional.empty());
         return WrapperCallTest.openedPlugin(core, manifest);
     }
 
@@ -206,12 +201,12 @@ class EventCopyTest {
     /** A copy whose every whole copy runs out of memory, as a copy of a large text could. */
     static final class StarvedCopy implements EventCopying {
         @Override
-        public CoreEvent whole(MemorySegment event, long sequence) {
+        public CoreEvent whole(NativeRegion event, long sequence) {
             throw new OutOfMemoryError("a copy ran out of memory on purpose");
         }
 
         @Override
-        public CoreEvent fixedPart(MemorySegment event, long sequence) {
+        public CoreEvent fixedPart(NativeRegion event, long sequence) {
             return EventCopy.INSTANCE.fixedPart(event, sequence);
         }
     }
@@ -232,7 +227,7 @@ class EventCopyTest {
         }
 
         @Override
-        public CoreEvent whole(MemorySegment event, long sequence) {
+        public CoreEvent whole(NativeRegion event, long sequence) {
             if (failingSequence == -2) {
                 failingSequence = sequence;
             }
@@ -243,7 +238,7 @@ class EventCopyTest {
         }
 
         @Override
-        public CoreEvent fixedPart(MemorySegment event, long sequence) {
+        public CoreEvent fixedPart(NativeRegion event, long sequence) {
             if (failsFixedPart.test(sequence) || sequence == failingSequence) {
                 throw new OutOfMemoryError("a copy failed on purpose");
             }
@@ -261,72 +256,66 @@ class EventCopyTest {
         private static final long WIDER = CoreLayouts.NUMBER.byteSize() * 2;
         private static final long CONSTRAINTS = CoreLayouts.offsetOf(CoreLayouts.EVENT, "data")
                 + CoreLayouts.offsetOf(CoreLayouts.CAPACITY_EVENT, "constraints");
-        private final MethodHandle original;
 
-        private WiderNumbers(MethodHandle original) {
-            this.original = original;
+        private WiderNumbers() {
         }
 
-        static MethodHandle around(MethodHandle original) {
-            try {
-                return MethodHandles.lookup().findVirtual(WiderNumbers.class, "call", MethodType.methodType(
-                                int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
-                        .bindTo(new WiderNumbers(original));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
+        static NativeFunction around(NativeFunction original) {
+            return arguments -> {
+                long status = original.call(arguments);
+                NativeRegion event = eventAt(arguments[1]);
+                if (status == 0 && event.getInt(4) == CoreConstants.EVENT_CAPACITY_WANTED) {
+                    widen(event);
+                }
+                return status;
+            };
         }
 
-        int call(MemorySegment core, MemorySegment event, MemorySegment pending) throws Throwable {
-            int status = (int) original.invokeExact(core, event, pending);
-            if (status == 0 && event.get(JAVA_INT, 4) == CoreConstants.EVENT_CAPACITY_WANTED) {
-                widen(event);
-            }
-            return status;
-        }
-
-        private static void widen(MemorySegment event) {
-            MemorySegment first = event.get(ADDRESS, CONSTRAINTS).reinterpret(CoreLayouts.NUMBER.byteSize());
-            MemorySegment wider = Arena.global().allocate(WIDER * 2, 8);
+        private static void widen(NativeRegion event) {
+            NativeAccess access = NativeBackends.current();
+            NativeRegion first = event.at(event.getAddress(CONSTRAINTS), CoreLayouts.NUMBER.byteSize());
+            NativeRegion wider = event.at(access.allocate(WIDER * 2), WIDER * 2);
             for (int index = 0; index < 2; index++) {
-                MemorySegment element = wider.asSlice(index * WIDER, WIDER);
-                element.set(JAVA_INT, 0, (int) WIDER);
-                element.set(ADDRESS, 8, first.get(ADDRESS, 8));
-                element.set(JAVA_DOUBLE, 16, first.get(JAVA_DOUBLE, 16));
-                element.set(JAVA_LONG, 24, -1L);
-                element.set(ADDRESS, 32, Arena.global().allocateFrom(MISREAD));
-                element.set(JAVA_DOUBLE, 40, 99.0);
+                NativeRegion element = wider.slice(index * WIDER, WIDER);
+                element.putInt(0, (int) WIDER);
+                element.putAddress(8, first.getAddress(8));
+                element.putDouble(16, first.getDouble(16));
+                element.putLong(24, -1L);
+                element.putAddress(32, globalText(access, MISREAD));
+                element.putDouble(40, 99.0);
             }
-            event.set(ADDRESS, CONSTRAINTS, wider);
-            event.set(JAVA_INT, CONSTRAINTS + 8, 2);
+            event.putAddress(CONSTRAINTS, wider.address());
+            event.putInt(CONSTRAINTS + 8, 2);
+        }
+
+        private static long globalText(NativeAccess access, String text) {
+            byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
+            long address = access.allocate(encoded.length + 1L);
+            access.writeBytes(address, 0, encoded);
+            return address;
         }
     }
 
     /** A {@code weivel_next_event} that hands every watch event over as a kind the layer does not know. */
     static final class UnknownWatches {
         private static final int UNKNOWN_KIND = 99;
-        private final MethodHandle original;
 
-        private UnknownWatches(MethodHandle original) {
-            this.original = original;
+        private UnknownWatches() {
         }
 
-        static MethodHandle around(MethodHandle original) {
-            try {
-                return MethodHandles.lookup().findVirtual(UnknownWatches.class, "call", MethodType.methodType(
-                                int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
-                        .bindTo(new UnknownWatches(original));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
+        static NativeFunction around(NativeFunction original) {
+            return arguments -> {
+                long status = original.call(arguments);
+                NativeRegion event = eventAt(arguments[1]);
+                if (status == 0 && event.getInt(4) == CoreConstants.EVENT_WATCH) {
+                    event.putInt(4, UNKNOWN_KIND);
+                }
+                return status;
+            };
         }
+    }
 
-        int call(MemorySegment core, MemorySegment event, MemorySegment pending) throws Throwable {
-            int status = (int) original.invokeExact(core, event, pending);
-            if (status == 0 && event.get(JAVA_INT, 4) == CoreConstants.EVENT_WATCH) {
-                event.set(JAVA_INT, 4, UNKNOWN_KIND);
-            }
-            return status;
-        }
+    private static NativeRegion eventAt(long address) {
+        return new NativeRegion(NativeBackends.current(), address, CoreLayouts.EVENT.byteSize(), null);
     }
 }

@@ -1,10 +1,5 @@
 package com.weivel.core;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,15 +36,15 @@ final class Wrapper {
 
     private final CoreFunctions functions;
     private final EventCopying copying;
-    private final Arena arena = Arena.ofShared();
-    private final MemorySegment buffer = arena.allocate(CoreLayouts.EVENT);
-    private final MemorySegment pending = arena.allocate(JAVA_INT);
+    private final NativeArena arena;
+    private final NativeRegion buffer;
+    private final NativeRegion pending;
     private final CopyOnWriteArrayList<CoreListener> listeners = new CopyOnWriteArrayList<>();
     private final ReentrantLock lock = new ReentrantLock();
     private volatile ErrorSink sink;
     private volatile boolean destroyed;
 
-    private MemorySegment core = MemorySegment.NULL;
+    private long core;
     private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
     private boolean dispatching;
     private boolean closed;
@@ -65,6 +60,9 @@ final class Wrapper {
         this.functions = functions;
         this.copying = copying;
         this.sink = sink;
+        this.arena = new NativeArena(functions.access());
+        this.buffer = arena.allocate(CoreLayouts.EVENT);
+        this.pending = arena.allocate(Layout.INT);
     }
 
     static Answer<Wrapper> start(CoreBinary binary, CoreOptions options, Optional<CoreListener> listener,
@@ -79,7 +77,7 @@ final class Wrapper {
         Objects.requireNonNull(sink, "sink");
         Optional<String> mistake = CallerTexts.inOptions(options);
         if (mistake.isPresent()) {
-            return new Answer.Mistake<>(mistake.get());
+            return new Answer.Mistake<Wrapper>(mistake.get());
         }
         Wrapper wrapper = new Wrapper(functions, copying, sink);
         listener.ifPresent(wrapper.listeners::add);
@@ -108,12 +106,12 @@ final class Wrapper {
     }
 
     private int createCore(CoreOptions options) throws Throwable {
-        try (Arena callArena = Arena.ofConfined()) {
-            MemorySegment slot = callArena.allocate(ADDRESS);
-            pending.set(JAVA_INT, 0, 0);
-            int status = (int) functions.handle(CoreFunction.CORE_CREATE)
-                    .invokeExact(Marshal.coreOptions(callArena, options), slot, pending);
-            core = status == STATUS_OK ? slot.get(ADDRESS, 0) : MemorySegment.NULL;
+        try (NativeArena callArena = new NativeArena(functions.access())) {
+            NativeRegion slot = callArena.allocate(Layout.ADDRESS);
+            pending.putInt(0, 0);
+            int status = functions.status(CoreFunction.CORE_CREATE,
+                    Marshal.coreOptions(callArena, options).address(), slot.address(), pending.address());
+            core = status == STATUS_OK ? slot.getAddress(0) : 0;
             return status;
         }
     }
@@ -121,7 +119,7 @@ final class Wrapper {
     /** Entered with the lock held and left without it: destroys a core created before the creation failed. */
     private void abandonCreation() {
         try {
-            if (!core.equals(MemorySegment.NULL)) {
+            if (core != 0) {
                 destroyCore();
             }
         } finally {
@@ -137,11 +135,14 @@ final class Wrapper {
     }
 
     private Answer<Wrapper> creationRefused(int status) {
-        return switch (status) {
-            case STATUS_MALFORMED -> new Answer.Refused<>(RefusalStatus.MALFORMED, Optional.empty());
-            case STATUS_OUT_OF_MEMORY -> new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.empty());
-            default -> unknownStatus(status);
-        };
+        switch (status) {
+            case STATUS_MALFORMED:
+                return new Answer.Refused<>(RefusalStatus.MALFORMED, Optional.<Refusal>empty());
+            case STATUS_OUT_OF_MEMORY:
+                return new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty());
+            default:
+                return unknownStatus(status);
+        }
     }
 
     private <T> Answer<T> unknownStatus(int status) {
@@ -167,7 +168,7 @@ final class Wrapper {
         try {
             Optional<Answer<T>> cancelled = guarded(steps.guard(), notes);
             answer = cancelled.isPresent() ? cancelled.get() : callHeld(call, steps, notes);
-            if (answer instanceof Answer.Ok<T>) {
+            if (answer instanceof Answer.Ok) {
                 after.ifPresent(step -> queue.addLast(new QueueEntry.StepEntry(step)));
             }
         } catch (Throwable thrown) {
@@ -193,7 +194,9 @@ final class Wrapper {
             return defect(notes, "the layer could not copy what the core answered a call", unread);
         }
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
-        return answer instanceof Answer.Ok<T> ok ? recorded(steps.answered(), ok.value(), notes) : answer;
+        return answer instanceof Answer.Ok
+                ? recorded(steps.answered(), ((Answer.Ok<T>) answer).value(), notes)
+                : answer;
     }
 
     /**
@@ -201,9 +204,9 @@ final class Wrapper {
      * made, so nothing else in the package needs the table of the core's functions.
      */
     <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
-        try (Arena callArena = Arena.ofConfined()) {
-            pending.set(JAVA_INT, 0, 0);
-            return crossing.cross(functions, callArena, core, pending);
+        try (NativeArena callArena = new NativeArena(functions.access())) {
+            pending.putInt(0, 0);
+            return crossing.cross(functions, callArena, core, pending.address());
         }
     }
 
@@ -232,18 +235,25 @@ final class Wrapper {
 
     private <T> Answer<T> answerOf(CoreCalls.Crossed<T> crossed, boolean carriesCallersParts, OwnRefusal own,
                                    CallNotes notes) {
-        return switch (crossed.status()) {
-            case STATUS_OK -> new Answer.Ok<>(crossed.value());
-            case STATUS_NONE -> new Answer.Absent<>();
-            case STATUS_REFUSED -> new Answer.Refused<>(RefusalStatus.REFUSED, own.refusal());
-            case STATUS_OUT_OF_MEMORY -> new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, own.refusal());
-            case STATUS_MALFORMED -> carriesCallersParts
-                    ? new Answer.Refused<>(RefusalStatus.MALFORMED, own.refusal())
-                    : defect(notes, "the core called a call the layer built malformed: " + own.refusal()
-                            .map(Refusal::detail).orElse("the core queued no refusal saying why"), Optional.empty());
-            default -> defect(notes, "the core answered a status the layer does not know: " + crossed.status(),
-                    Optional.empty());
-        };
+        switch (crossed.status()) {
+            case STATUS_OK:
+                return new Answer.Ok<>(crossed.value());
+            case STATUS_NONE:
+                return new Answer.Absent<>();
+            case STATUS_REFUSED:
+                return new Answer.Refused<>(RefusalStatus.REFUSED, own.refusal());
+            case STATUS_OUT_OF_MEMORY:
+                return new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, own.refusal());
+            case STATUS_MALFORMED:
+                return carriesCallersParts
+                        ? new Answer.Refused<T>(RefusalStatus.MALFORMED, own.refusal())
+                        : Wrapper.<T>defect(notes, "the core called a call the layer built malformed: "
+                                + own.refusal().map(Refusal::detail).orElse("the core queued no refusal saying why"),
+                                Optional.<Throwable>empty());
+            default:
+                return defect(notes, "the core answered a status the layer does not know: " + crossed.status(),
+                        Optional.<Throwable>empty());
+        }
     }
 
     private static <T> Answer<T> defect(CallNotes notes, String text, Optional<Throwable> cause) {
@@ -252,7 +262,7 @@ final class Wrapper {
     }
 
     private int waiting() {
-        return pending.get(JAVA_INT, 0);
+        return pending.getInt(0);
     }
 
     /** Drains a call's events onto the queue, fencing them all when one of them is an announcement. */
@@ -274,9 +284,9 @@ final class Wrapper {
 
     /** Drains one event: copied, recorded when it is an announcement, and released whatever the copy did. */
     private int drainOne(CallNotes notes, OwnRefusal own, List<QueueEntry.EventEntry> drained) {
-        buffer.fill((byte) 0);
-        buffer.set(JAVA_INT, 0, (int) CoreLayouts.EVENT.byteSize());
-        pending.set(JAVA_INT, 0, 0);
+        buffer.clear();
+        buffer.putInt(0, (int) CoreLayouts.EVENT.byteSize());
+        pending.putInt(0, 0);
         int status = nextEvent();
         if (status == STATUS_NONE) {
             return 0;
@@ -304,20 +314,11 @@ final class Wrapper {
     }
 
     private int nextEvent() {
-        try {
-            return (int) functions.handle(CoreFunction.NEXT_EVENT).invokeExact(core, buffer, pending);
-        } catch (Throwable thrown) {
-            throw rethrown(thrown);
-        }
+        return functions.status(CoreFunction.NEXT_EVENT, core, buffer.address(), pending.address());
     }
 
     private void releaseEvent(CallNotes notes) {
-        int status;
-        try {
-            status = (int) functions.handle(CoreFunction.EVENT_RELEASE).invokeExact(buffer);
-        } catch (Throwable thrown) {
-            throw rethrown(thrown);
-        }
+        int status = functions.status(CoreFunction.EVENT_RELEASE, buffer.address());
         if (status != STATUS_OK) {
             notes.noteDefect("the core refused to release an event the layer drained", Optional.empty());
         }
@@ -385,7 +386,48 @@ final class Wrapper {
         return enter();
     }
 
-    private record OptionalTime(boolean unread, long time) {
+    private static final class OptionalTime {
+        private final boolean unread;
+        private final long time;
+
+        private OptionalTime(boolean unread, long time) {
+            this.unread = unread;
+            this.time = time;
+        }
+
+        public boolean unread() {
+            return unread;
+        }
+
+        public long time() {
+            return time;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof OptionalTime)) {
+                return false;
+            }
+            OptionalTime that = (OptionalTime) other;
+            return unread == that.unread
+                    && time == that.time;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Boolean.hashCode(unread);
+            hash = 31 * hash + Long.hashCode(time);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "OptionalTime[unread=" + unread + ", time=" + time + "]";
+        }
     }
 
     private OptionalTime readClock(DeadlineHooks clock) {
@@ -437,7 +479,64 @@ final class Wrapper {
         return claimed && dispatch(watched);
     }
 
-    private record FollowTurn(DeadlineHooks hooks, long at, boolean set, long serial) {
+    private static final class FollowTurn {
+        private final DeadlineHooks hooks;
+        private final long at;
+        private final boolean set;
+        private final long serial;
+
+        private FollowTurn(DeadlineHooks hooks, long at, boolean set, long serial) {
+            this.hooks = hooks;
+            this.at = at;
+            this.set = set;
+            this.serial = serial;
+        }
+
+        public DeadlineHooks hooks() {
+            return hooks;
+        }
+
+        public long at() {
+            return at;
+        }
+
+        public boolean set() {
+            return set;
+        }
+
+        public long serial() {
+            return serial;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof FollowTurn)) {
+                return false;
+            }
+            FollowTurn that = (FollowTurn) other;
+            return Objects.equals(hooks, that.hooks)
+                    && at == that.at
+                    && set == that.set
+                    && serial == that.serial;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(hooks);
+            hash = 31 * hash + Long.hashCode(at);
+            hash = 31 * hash + Boolean.hashCode(set);
+            hash = 31 * hash + Long.hashCode(serial);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "FollowTurn[hooks=" + hooks + ", at=" + at + ", set=" + set + ", serial=" + serial + "]";
+        }
     }
 
     /**
@@ -491,10 +590,52 @@ final class Wrapper {
     }
 
     private boolean firstIsFenced() {
-        return queue.peekFirst() instanceof QueueEntry.EventEntry first && first.fence() > followedSerial;
+        QueueEntry first = queue.peekFirst();
+        return first instanceof QueueEntry.EventEntry && ((QueueEntry.EventEntry) first).fence() > followedSerial;
     }
 
-    private record Taken(QueueEntry entry, boolean fenced) {
+    private static final class Taken {
+        private final QueueEntry entry;
+        private final boolean fenced;
+
+        private Taken(QueueEntry entry, boolean fenced) {
+            this.entry = entry;
+            this.fenced = fenced;
+        }
+
+        public QueueEntry entry() {
+            return entry;
+        }
+
+        public boolean fenced() {
+            return fenced;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Taken)) {
+                return false;
+            }
+            Taken that = (Taken) other;
+            return Objects.equals(entry, that.entry)
+                    && fenced == that.fenced;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(entry);
+            hash = 31 * hash + Boolean.hashCode(fenced);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Taken[entry=" + entry + ", fenced=" + fenced + "]";
+        }
     }
 
     /**
@@ -542,9 +683,10 @@ final class Wrapper {
     }
 
     private void deliver(QueueEntry entry) {
-        switch (entry) {
-            case QueueEntry.EventEntry event -> hear(event.event());
-            case QueueEntry.StepEntry step -> run(step.step());
+        if (entry instanceof QueueEntry.EventEntry) {
+            hear(((QueueEntry.EventEntry) entry).event());
+        } else {
+            run(((QueueEntry.StepEntry) entry).step());
         }
     }
 
@@ -658,7 +800,7 @@ final class Wrapper {
     void destroy() {
         hold();
         try {
-            if (!core.equals(MemorySegment.NULL)) {
+            if (core != 0) {
                 destroyCore();
             }
         } finally {
@@ -667,18 +809,14 @@ final class Wrapper {
     }
 
     private void destroyCore() {
-        MemorySegment destroying = core;
-        core = MemorySegment.NULL;
+        long destroying = core;
+        core = 0;
         destroyed = true;
         queue.clear();
         listeners.clear();
         hooks = null;
         deadlineSet = false;
-        try {
-            int ignored = (int) functions.handle(CoreFunction.CORE_DESTROY).invokeExact(destroying);
-        } catch (Throwable thrown) {
-            throw rethrown(thrown);
-        }
+        functions.status(CoreFunction.CORE_DESTROY, destroying);
     }
 
     void close() {
@@ -687,7 +825,7 @@ final class Wrapper {
             if (closed) {
                 return;
             }
-            if (!core.equals(MemorySegment.NULL)) {
+            if (core != 0) {
                 throw new IllegalStateException("the core is not destroyed; destroy it before closing it");
             }
             if (dispatching || following) {
@@ -720,7 +858,7 @@ final class Wrapper {
 
     private boolean enter() {
         hold();
-        if (!core.equals(MemorySegment.NULL)) {
+        if (core != 0) {
             return true;
         }
         lock.unlock();
@@ -736,11 +874,11 @@ final class Wrapper {
     }
 
     private static RuntimeException rethrown(Throwable thrown) {
-        if (thrown instanceof RuntimeException runtime) {
-            return runtime;
+        if (thrown instanceof RuntimeException) {
+            return (RuntimeException) thrown;
         }
-        if (thrown instanceof Error error) {
-            throw error;
+        if (thrown instanceof Error) {
+            throw (Error) thrown;
         }
         return new IllegalStateException(thrown);
     }
@@ -753,10 +891,10 @@ final class Wrapper {
             if (refusal.isPresent()) {
                 return;
             }
-            if (event instanceof CoreEvent.RefusalEvent refused) {
-                refusal = Optional.of(refused.refusal());
-            } else if (event instanceof CoreEvent.ReachRefusedEvent reach) {
-                refusal = Optional.of(reach.refusal());
+            if (event instanceof CoreEvent.RefusalEvent) {
+                refusal = Optional.of(((CoreEvent.RefusalEvent) event).refusal());
+            } else if (event instanceof CoreEvent.ReachRefusedEvent) {
+                refusal = Optional.of(((CoreEvent.ReachRefusedEvent) event).refusal());
             }
         }
 

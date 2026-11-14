@@ -1,0 +1,54 @@
+package com.weivel.core;
+
+import java.nio.file.Path;
+
+/**
+ * The one seam through which the layer reaches native code: opening a library, and reading and writing native memory
+ * by address. {@link NativeBackends#current()} answers the one this Java runs on, and nothing outside this package
+ * reaches native code another way.
+ *
+ * @implNote Memory is read and written without alignment checks, as C reads it, so both backends answer alike.
+ */
+interface NativeAccess {
+    /** The backend's name, {@code ffm} or {@code jna}. */
+    String name();
+
+    /**
+     * Opens the shared library at {@code path}, a path its caller chose.
+     *
+     * @throws IllegalArgumentException with the platform loader's reason, when the path names no library it could open
+     */
+    OpenLibrary open(Path path);
+
+    /**
+     * Allocates {@code size} bytes of native memory, zeroed, aligned for any primitive.
+     *
+     * @throws OutOfMemoryError when the platform has none to give
+     */
+    long allocate(long size);
+
+    /** Frees memory {@link #allocate} answered. */
+    void free(long address);
+
+    int getInt(long address, long offset);
+
+    void putInt(long address, long offset, int value);
+
+    long getLong(long address, long offset);
+
+    void putLong(long address, long offset, long value);
+
+    double getDouble(long address, long offset);
+
+    void putDouble(long address, long offset, double value);
+
+    byte[] readBytes(long address, long offset, int length);
+
+    void writeBytes(long address, long offset, byte[] bytes);
+
+    /** Sets {@code length} bytes from {@code address} plus {@code offset} to zero. */
+    void clear(long address, long offset, long length);
+
+    /** Reads the UTF-8 text starting at {@code address}, up to its terminating zero byte. */
+    String readText(long address);
+}

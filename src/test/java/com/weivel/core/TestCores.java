@@ -2,13 +2,12 @@ package com.weivel.core;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Cores for the tests, made through the wrapper's seams over the real core. */
 final class TestCores {
@@ -45,28 +44,33 @@ final class TestCores {
         return ok.value();
     }
 
+    static <T> T last(List<T> list) {
+        return list.get(list.size() - 1);
+    }
+
     static Refusal refusalOf(Answer<?> answer) {
-        return (Refusal) assertInstanceOf(Answer.Refused.class, answer).refusal().orElseThrow();
+        return (Refusal) assertInstanceOf(Answer.Refused.class, answer).refusal().get();
     }
 
     /** Every core function the wrapper called, in the order they returned. */
     static final class CallLog {
-        private static final MethodHandle RECORD = recordHandle();
         private final List<CoreFunction> calls = Collections.synchronizedList(new ArrayList<>());
 
         CoreFunctions around(CoreFunctions table) {
-            return table.mapped((function, handle) ->
-                    MethodHandles.filterReturnValue(handle, MethodHandles.insertArguments(RECORD, 0, this, function)));
+            return table.mapped((function, original) -> arguments -> {
+                long status = original.call(arguments);
+                record(function);
+                return status;
+            });
         }
 
-        int record(CoreFunction function, int status) {
+        void record(CoreFunction function) {
             calls.add(function);
-            return status;
         }
 
         List<CoreFunction> calls() {
             synchronized (calls) {
-                return List.copyOf(calls);
+                return Collections.unmodifiableList(new ArrayList<>(calls));
             }
         }
 
@@ -76,15 +80,6 @@ final class TestCores {
 
         void clear() {
             calls.clear();
-        }
-
-        private static MethodHandle recordHandle() {
-            try {
-                return MethodHandles.lookup().findVirtual(CallLog.class, "record",
-                        MethodType.methodType(int.class, CoreFunction.class, int.class));
-            } catch (ReflectiveOperationException unreachable) {
-                throw new AssertionError(unreachable);
-            }
         }
     }
 
@@ -99,18 +94,59 @@ final class TestCores {
 
         List<Failure> failures() {
             synchronized (failures) {
-                return List.copyOf(failures);
+                return Collections.unmodifiableList(new ArrayList<>(failures));
             }
         }
 
         List<Failure> of(FailureKind kind) {
-            return failures().stream().filter(failure -> failure.kind() == kind).toList();
+            return failures().stream().filter(failure -> failure.kind() == kind).collect(Collectors.toList());
         }
     }
 
     /** A listener that keeps every event it hears and the thread it heard it on. */
     static final class RecordingListener implements CoreListener {
-        record Heard(CoreEvent event, Thread thread) {
+        static final class Heard {
+            private final CoreEvent event;
+            private final Thread thread;
+
+            Heard(CoreEvent event, Thread thread) {
+                this.event = event;
+                this.thread = thread;
+            }
+
+            public CoreEvent event() {
+                return event;
+            }
+
+            public Thread thread() {
+                return thread;
+            }
+
+            @Override
+            public boolean equals(Object other) {
+                if (this == other) {
+                    return true;
+                }
+                if (!(other instanceof Heard)) {
+                    return false;
+                }
+                Heard that = (Heard) other;
+                return Objects.equals(event, that.event)
+                        && Objects.equals(thread, that.thread);
+            }
+
+            @Override
+            public int hashCode() {
+                int hash = 0;
+                hash = 31 * hash + Objects.hashCode(event);
+                hash = 31 * hash + Objects.hashCode(thread);
+                return hash;
+            }
+
+            @Override
+            public String toString() {
+                return "Heard[event=" + event + ", thread=" + thread + "]";
+            }
         }
 
         private final List<Heard> heard = Collections.synchronizedList(new ArrayList<>());
@@ -122,18 +158,18 @@ final class TestCores {
 
         List<CoreEvent> events() {
             synchronized (heard) {
-                return heard.stream().map(Heard::event).toList();
+                return heard.stream().map(Heard::event).collect(Collectors.toList());
             }
         }
 
         List<Heard> heard() {
             synchronized (heard) {
-                return List.copyOf(heard);
+                return Collections.unmodifiableList(new ArrayList<>(heard));
             }
         }
 
         <E extends CoreEvent> List<E> of(Class<E> kind) {
-            return events().stream().filter(kind::isInstance).map(kind::cast).toList();
+            return events().stream().filter(kind::isInstance).map(kind::cast).collect(Collectors.toList());
         }
 
         void clear() {
