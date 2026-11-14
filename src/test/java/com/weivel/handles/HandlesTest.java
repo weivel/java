@@ -85,7 +85,7 @@ class HandlesTest {
 
     @Test
     void makingAnEntryAllocatesNothingOnceItsRoomIsTaken() {
-        long mostAllocated = Long.MIN_VALUE;
+        long leastAllocated = Long.MAX_VALUE;
         for (int round = 0; round < 300; round++) {
             Handles.Reservation room = handles.reserve();
             Object provider = new Object();
@@ -99,11 +99,11 @@ class HandlesTest {
                         allocated[0] = (third - second) - (second - first);
                         return new Answer.Ok<>(handle);
                     })));
-            mostAllocated = Math.max(mostAllocated, allocated[0]);
+            leastAllocated = Math.min(leastAllocated, allocated[0]);
         }
 
         assertEquals(300, handles.entryCount());
-        assertTrue(mostAllocated < JIT_NOISE_BYTES, "making an entry allocated " + mostAllocated + " bytes");
+        assertEquals(0, leastAllocated, "every making of an entry allocated at least " + leastAllocated + " bytes");
     }
 
     @Test

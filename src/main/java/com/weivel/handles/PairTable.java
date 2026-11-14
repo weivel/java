@@ -13,20 +13,40 @@ import java.util.List;
  */
 final class PairTable<V> {
     private static final int SMALLEST_CAPACITY = 16;
+    private static final int LARGEST_COUNT = 1 << 29;
 
-    private long[] firsts = new long[SMALLEST_CAPACITY];
-    private long[] seconds = new long[SMALLEST_CAPACITY];
-    private Object[] values = new Object[SMALLEST_CAPACITY];
+    private final TableMemory memory;
+    private long[] firsts;
+    private long[] seconds;
+    private Object[] values;
     private int size;
+
+    PairTable() {
+        this(TableMemory.HEAP);
+    }
+
+    PairTable(TableMemory memory) {
+        this.memory = memory;
+        firsts = memory.longs(SMALLEST_CAPACITY);
+        seconds = memory.longs(SMALLEST_CAPACITY);
+        values = memory.objects(SMALLEST_CAPACITY);
+    }
 
     int size() {
         return size;
     }
 
-    /** Grows the table now when holding {@code count} values would fill it past half. */
+    /**
+     * Grows the table now when holding {@code count} values would fill it past half.
+     *
+     * @throws OutOfMemoryError when the room cannot be had, the table left as it was
+     */
     void ensureRoom(int count) {
         if ((long) count * 2 <= values.length) {
             return;
+        }
+        if (count > LARGEST_COUNT) {
+            throw new OutOfMemoryError("a table of the layer cannot hold " + count + " values");
         }
         int capacity = values.length;
         while ((long) count * 2 > capacity) {
@@ -134,25 +154,41 @@ final class PairTable<V> {
         seconds[gap] = 0;
     }
 
+    /**
+     * Moves every value into arrays of {@code capacity}.
+     *
+     * @implNote All three arrays are had before any field changes, so an {@link OutOfMemoryError} leaves the table as
+     * it was.
+     */
     private void rehash(int capacity) {
-        long[] oldFirsts = firsts;
-        long[] oldSeconds = seconds;
-        Object[] oldValues = values;
-        firsts = new long[capacity];
-        seconds = new long[capacity];
-        values = new Object[capacity];
-        size = 0;
-        for (int slot = 0; slot < oldValues.length; slot++) {
-            if (oldValues[slot] != null) {
-                @SuppressWarnings("unchecked")
-                V value = (V) oldValues[slot];
-                put(oldFirsts[slot], oldSeconds[slot], value);
+        long[] grownFirsts = memory.longs(capacity);
+        long[] grownSeconds = memory.longs(capacity);
+        Object[] grownValues = memory.objects(capacity);
+        for (int slot = 0; slot < values.length; slot++) {
+            if (values[slot] != null) {
+                place(grownFirsts, grownSeconds, grownValues, firsts[slot], seconds[slot], values[slot]);
             }
         }
+        firsts = grownFirsts;
+        seconds = grownSeconds;
+        values = grownValues;
     }
 
-    private static int hash(long first, long second) {
-        long mixed = mix(first) ^ Long.rotateLeft(mix(second), 32);
+    private static void place(long[] firsts, long[] seconds, Object[] values, long first, long second,
+                              Object value) {
+        int mask = values.length - 1;
+        int slot = hash(first, second) & mask;
+        while (values[slot] != null) {
+            slot = (slot + 1) & mask;
+        }
+        firsts[slot] = first;
+        seconds[slot] = second;
+        values[slot] = value;
+    }
+
+    /** Mixes the first before the second joins it, so a pair and the same pair swapped hash apart. */
+    static int hash(long first, long second) {
+        long mixed = mix(mix(first) + second);
         return (int) (mixed ^ (mixed >>> 32));
     }
 
