@@ -7,11 +7,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
@@ -25,13 +30,16 @@ import org.junit.jupiter.api.Test;
  * plain mistake of calling the table from the wrong class.
  */
 class WrapperBoundaryTest {
-    private static final Set<String> WRAPPER_SOURCES = Set.of("CoreFunction.java", "CoreFunctions.java",
-            "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java");
-    private static final Set<String> FORBIDDEN = Set.of("CoreFunction", "CoreFunctions", "MethodHandle",
-            "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle", "functions",
-            "crossing", "cross");
+    private static final Set<String> WRAPPER_SOURCES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "CoreFunction.java", "CoreFunctions.java", "CoreBinary.java", "Wrapper.java", "CoreCalls.java",
+                    "CoreCall.java")));
+    private static final Set<String> FORBIDDEN = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "CoreFunction", "CoreFunctions", "MethodHandle", "MethodHandles", "invoke", "invokeExact",
+                    "invokeWithArguments",
+            "downcallHandle", "functions", "crossing", "cross")));
     private static final Pattern COMMENTS_AND_LITERALS = Pattern.compile(
-            "/\\*.*?\\*/|//[^\\n]*|\"\"\"(?s:.*?)\"\"\"|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", Pattern.DOTALL);
+            "/\\*.*?\\*/|//[^\\n]*|\"\"\"(?s:.*?)\"\"\"|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'",
+                    Pattern.DOTALL);
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*");
 
     @Test
@@ -46,7 +54,7 @@ class WrapperBoundaryTest {
         }
 
         assertTrue(sources.stream().anyMatch(source -> source.endsWith("Core.java")), "no source was read");
-        assertEquals(List.of(), offences);
+        assertEquals(Collections.emptyList(), offences);
     }
 
     @Test
@@ -58,7 +66,7 @@ class WrapperBoundaryTest {
                 + "return call.crossing().cross(binary.functions(), null, null, null); } }";
 
         assertTrue(identifiersIn(offending).contains("invokeExact"));
-        assertTrue(identifiersIn(bypassing).containsAll(List.of("crossing", "cross", "functions")));
+        assertTrue(identifiersIn(bypassing).containsAll(Arrays.asList("crossing", "cross", "functions")));
         assertTrue(identifiersIn("/* invokeExact */ String text = \"invokeExact\";").stream()
                 .noneMatch(FORBIDDEN::contains));
     }
@@ -68,13 +76,13 @@ class WrapperBoundaryTest {
         if (location == null) {
             throw new IllegalStateException("weivel.test.coreSources is not set. Run the tests through Gradle.");
         }
-        try (Stream<Path> files = Files.list(Path.of(location))) {
-            return files.filter(file -> file.toString().endsWith(".java")).sorted().toList();
+        try (Stream<Path> files = Files.list(Paths.get(location))) {
+            return files.filter(file -> file.toString().endsWith(".java")).sorted().collect(Collectors.toList());
         }
     }
 
     private static List<String> identifiersOf(Path source) throws IOException {
-        return identifiersIn(Files.readString(source, StandardCharsets.UTF_8));
+        return identifiersIn(new String(Files.readAllBytes(source), StandardCharsets.UTF_8));
     }
 
     private static List<String> identifiersIn(String text) {

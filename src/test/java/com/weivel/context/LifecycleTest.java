@@ -5,6 +5,7 @@ import static com.weivel.context.ContextFixture.providing;
 import static com.weivel.context.ContextFixture.value;
 import static com.weivel.core.CoreProbes.ok;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -16,6 +17,8 @@ import com.weivel.core.CoreConstants;
 import com.weivel.core.Manifest;
 import com.weivel.core.WantOptions;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -50,7 +53,7 @@ class LifecycleTest {
             value(registration.unregister());
 
             assertEquals(1, heard.size());
-            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, heard.getFirst()).object());
+            assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, heard.get(0)).object());
         }
     }
 
@@ -73,7 +76,7 @@ class LifecycleTest {
             fixture.core.call(CoreCalls.unregister(424242L));
 
             assertEquals(1, heard.size());
-            assertInstanceOf(PluginEvent.Revoked.class, heard.getFirst());
+            assertInstanceOf(PluginEvent.Revoked.class, heard.get(0));
         }
     }
 
@@ -94,7 +97,7 @@ class LifecycleTest {
 
             fixture.core.call(CoreCalls.unregister(424242L));
 
-            assertEquals(List.of(), heard);
+            assertEquals(Collections.emptyList(), heard);
         }
     }
 
@@ -129,7 +132,7 @@ class LifecycleTest {
             Object reopened = new Object();
             value(provider.register(GREETER, reopened));
 
-            assertSame(provider, fixture.contexts.byPayload(payload).orElseThrow());
+            assertSame(provider, fixture.contexts.byPayload(payload).get());
             assertEquals(payload, fixture.contexts.payloadOf(provider));
             assertSame(reopened, value(consumer.get(GREETER)));
         }
@@ -153,7 +156,7 @@ class LifecycleTest {
             assertInstanceOf(Answer.Ok.class, fixture.contexts.forget(consumer));
             long before = fixture.crossings.total();
 
-            List<Answer<?>> answers = List.of(consumer.get(GREETER), consumer.ids(),
+            List<Answer<?>> answers = Arrays.asList(consumer.get(GREETER), consumer.ids(),
                     consumer.watch(GREETER, ServicesTest.recording(new ArrayList<>())),
                     consumer.register("consumer:own", new Object()), consumer.provide("screens", new Object()),
                     consumer.implementations("screens"),
@@ -163,7 +166,7 @@ class LifecycleTest {
 
             answers.forEach(answer -> assertInstanceOf(Answer.Detached.class, answer, answer.toString()));
             assertEquals(before, fixture.crossings.total());
-            assertTrue(fixture.contexts.byPayload(fixture.contexts.payloadOf(consumer)).isEmpty());
+            assertFalse(fixture.contexts.byPayload(fixture.contexts.payloadOf(consumer)).isPresent());
         }
     }
 

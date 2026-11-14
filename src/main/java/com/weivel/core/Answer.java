@@ -9,17 +9,59 @@ import java.util.Optional;
  *
  * @param <T> the result of a call that succeeded
  */
-public sealed interface Answer<T>
-        permits Answer.Ok, Answer.Absent, Answer.Refused, Answer.Detached, Answer.Destroyed, Answer.Defect,
-        Answer.Mistake {
+public abstract class Answer<T> {
+    private Answer() {
+    }
 
     /**
      * The core did what it was asked.
      *
-     * @param value the call's result; {@code null} for a call that answers nothing beyond its success
      * @param <T> the result's type
      */
-    record Ok<T>(T value) implements Answer<T> {
+    public static final class Ok<T> extends Answer<T> {
+        private final T value;
+
+        /**
+         * Makes the value.
+         *
+         * @param value the call's result; {@code null} for a call that answers nothing beyond its success
+         */
+        public Ok(T value) {
+            this.value = value;
+        }
+
+        /**
+         * Answers {@code value}.
+         *
+         * @return the call's result; {@code null} for a call that answers nothing beyond its success
+         */
+        public T value() {
+            return value;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Ok)) {
+                return false;
+            }
+            Ok<?> that = (Ok<?>) other;
+            return Objects.equals(value, that.value);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(value);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Ok[value=" + value + "]";
+        }
     }
 
     /**
@@ -27,27 +69,94 @@ public sealed interface Answer<T>
      *
      * @param <T> the result a success would have carried
      */
-    record Absent<T>() implements Answer<T> {
+    public static final class Absent<T> extends Answer<T> {
+        /**
+         * Makes the value.
+         */
+        public Absent() {
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Absent;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+
+        @Override
+        public String toString() {
+            return "Absent[]";
+        }
     }
 
     /**
      * The core declined the call.
      *
-     * @param status how the core declined it
-     * @param refusal the refusal the core queued for this call, read from the events its drain held; empty where the
-     *     core queued none, because the layer never invents one
      * @param <T> the result a success would have carried
      */
-    record Refused<T>(RefusalStatus status, Optional<Refusal> refusal) implements Answer<T> {
+    public static final class Refused<T> extends Answer<T> {
+        private final RefusalStatus status;
+        private final Optional<Refusal> refusal;
+
         /**
          * Checks that both parts are present.
          *
          * @param status how the core declined it
          * @param refusal the refusal, or empty
          */
-        public Refused {
+        public Refused(RefusalStatus status, Optional<Refusal> refusal) {
             Objects.requireNonNull(status, "status");
             Objects.requireNonNull(refusal, "refusal");
+            this.status = status;
+            this.refusal = refusal;
+        }
+
+        /**
+         * Answers {@code status}.
+         *
+         * @return how the core declined it
+         */
+        public RefusalStatus status() {
+            return status;
+        }
+
+        /**
+         * Answers {@code refusal}.
+         *
+         * @return the refusal the core queued for this call, read from the events its drain held; empty where the core
+         *     queued none, because the layer never invents one
+         */
+        public Optional<Refusal> refusal() {
+            return refusal;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Refused)) {
+                return false;
+            }
+            Refused<?> that = (Refused<?>) other;
+            return Objects.equals(status, that.status)
+                    && Objects.equals(refusal, that.refusal);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(status);
+            hash = 31 * hash + Objects.hashCode(refusal);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Refused[status=" + status + ", refusal=" + refusal + "]";
         }
     }
 
@@ -57,7 +166,27 @@ public sealed interface Answer<T>
      *
      * @param <T> the result a success would have carried
      */
-    record Detached<T>() implements Answer<T> {
+    public static final class Detached<T> extends Answer<T> {
+        /**
+         * Makes the value.
+         */
+        public Detached() {
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Detached;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+
+        @Override
+        public String toString() {
+            return "Detached[]";
+        }
     }
 
     /**
@@ -65,24 +194,79 @@ public sealed interface Answer<T>
      *
      * @param <T> the result a success would have carried
      */
-    record Destroyed<T>() implements Answer<T> {
+    public static final class Destroyed<T> extends Answer<T> {
+        /**
+         * Makes the value.
+         */
+        public Destroyed() {
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Destroyed;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+
+        @Override
+        public String toString() {
+            return "Destroyed[]";
+        }
     }
 
     /**
      * A defect of the layer: the core called a call the layer built whole malformed, or the layer failed in its own
      * code. It is also reported to the error sink.
      *
-     * @param detail what went wrong, in English
      * @param <T> the result a success would have carried
      */
-    record Defect<T>(String detail) implements Answer<T> {
+    public static final class Defect<T> extends Answer<T> {
+        private final String detail;
+
         /**
          * Checks that the detail is present.
          *
          * @param detail what went wrong
          */
-        public Defect {
+        public Defect(String detail) {
             Objects.requireNonNull(detail, "detail");
+            this.detail = detail;
+        }
+
+        /**
+         * Answers {@code detail}.
+         *
+         * @return what went wrong, in English
+         */
+        public String detail() {
+            return detail;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Defect)) {
+                return false;
+            }
+            Defect<?> that = (Defect<?>) other;
+            return Objects.equals(detail, that.detail);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(detail);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Defect[detail=" + detail + "]";
         }
     }
 
@@ -90,17 +274,52 @@ public sealed interface Answer<T>
      * The caller's mistake, found by the layer before anything reached the core: the call was not made, and no sink
      * was told, since it is the caller's to correct.
      *
-     * @param detail what was wrong with the call, in English
      * @param <T> the result a success would have carried
      */
-    record Mistake<T>(String detail) implements Answer<T> {
+    public static final class Mistake<T> extends Answer<T> {
+        private final String detail;
+
         /**
          * Checks that the detail is present.
          *
          * @param detail what was wrong
          */
-        public Mistake {
+        public Mistake(String detail) {
             Objects.requireNonNull(detail, "detail");
+            this.detail = detail;
+        }
+
+        /**
+         * Answers {@code detail}.
+         *
+         * @return what was wrong with the call, in English
+         */
+        public String detail() {
+            return detail;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Mistake)) {
+                return false;
+            }
+            Mistake<?> that = (Mistake<?>) other;
+            return Objects.equals(detail, that.detail);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Objects.hashCode(detail);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "Mistake[detail=" + detail + "]";
         }
     }
 }

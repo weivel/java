@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -114,7 +116,7 @@ class ThreadsTest {
             releaseFollow.countDown();
             threadB.get(GATE_SECONDS, TimeUnit.SECONDS);
             assertEquals(2, listener.events().size());
-            assertTrue(listener.events().getLast() instanceof CoreEvent.DeadlineEvent);
+            assertTrue(TestCores.last(listener.events()) instanceof CoreEvent.DeadlineEvent);
         } finally {
             releaseListener.countDown();
             releaseFollow.countDown();
@@ -138,14 +140,14 @@ class ThreadsTest {
             threads.submit(() -> ok(core.call(CoreCalls.wantService(HOST, "from-b", WantOptions.timed(0, 50)))))
                     .get(GATE_SECONDS, TimeUnit.SECONDS);
 
-            assertEquals(List.of(), listener.events(), "an event was heard while follow still ran");
+            assertEquals(Collections.emptyList(), listener.events(), "an event was heard while follow still ran");
             follow.releaseFirst.countDown();
             threadA.get(GATE_SECONDS, TimeUnit.SECONDS);
 
-            assertEquals(List.of(new DeadlineHooksTest.Follow(100, true), new DeadlineHooksTest.Follow(50, true)),
+            assertEquals(Arrays.asList(new DeadlineHooksTest.Follow(100, true), new DeadlineHooksTest.Follow(50, true)),
                     follow.follows());
             assertEquals(2, listener.events().size());
-            assertEquals(List.of(2, 2), returnedWhenHeard);
+            assertEquals(Arrays.asList(2, 2), returnedWhenHeard);
             assertEquals(1, follow.mostAtOnce.get());
         } finally {
             follow.releaseFirst.countDown();
@@ -174,7 +176,7 @@ class ThreadsTest {
             threadA.get(GATE_SECONDS, TimeUnit.SECONDS);
 
             assertEquals(1, follow.mostAtOnce.get());
-            assertEquals(new DeadlineHooksTest.Follow(20, true), follow.follows().getLast());
+            assertEquals(new DeadlineHooksTest.Follow(20, true), TestCores.last(follow.follows()));
         } finally {
             follow.releaseFirst.countDown();
             threads.shutdownNow();
@@ -214,7 +216,7 @@ class ThreadsTest {
 
         List<DeadlineHooksTest.Follow> follows() {
             synchronized (follows) {
-                return List.copyOf(follows);
+                return Collections.unmodifiableList(new ArrayList<>(follows));
             }
         }
     }
@@ -261,7 +263,7 @@ class ThreadsTest {
         AtomicInteger mostAtOnce = new AtomicInteger();
         core.addListener(event -> {
             mostAtOnce.accumulateAndGet(dispatchers.incrementAndGet(), Math::max);
-            Thread.onSpinWait();
+            Thread.yield();
             dispatchers.decrementAndGet();
         });
         CyclicBarrier start = new CyclicBarrier(threadCount);
@@ -273,17 +275,17 @@ class ThreadsTest {
                 running.add(CompletableFuture.runAsync(() -> registerAndUnregister(core, start, id, callsEach),
                         threads));
             }
-            CompletableFuture.allOf(running.toArray(CompletableFuture[]::new)).get(100, TimeUnit.SECONDS);
+            CompletableFuture.allOf(running.toArray(new CompletableFuture[0])).get(100, TimeUnit.SECONDS);
             assertEquals(new Answer.Absent<Long>(), core.call(CoreCalls.getService(HOST, "settled")));
         } finally {
             threads.shutdownNow();
         }
 
-        List<Long> sequences = listener.events().stream().map(CoreEvent::sequence).toList();
+        List<Long> sequences = listener.events().stream().map(CoreEvent::sequence).collect(Collectors.toList());
         long expected = (long) threadCount * callsEach * 3;
-        assertEquals(LongStream.rangeClosed(1, expected).boxed().toList(), sequences);
+        assertEquals(LongStream.rangeClosed(1, expected).boxed().collect(Collectors.toList()), sequences);
         assertEquals(1, mostAtOnce.get());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), sink.failures());
         assertEachWatchAlternates();
         core.destroy();
     }

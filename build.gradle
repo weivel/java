@@ -11,7 +11,7 @@ repositories {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(8)
     }
 }
 
@@ -26,13 +26,12 @@ sourceSets {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.19.1'
-    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation platform('org.junit:junit-bom:5.14.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 25
     options.encoding = 'UTF-8'
 }
 
@@ -60,6 +59,11 @@ tasks.withType(Javadoc).configureEach {
     options.addBooleanOption('Xdoclint:all', true)
     options.addBooleanOption('Werror', true)
     failOnError = true
+}
+
+tasks.named('javadoc', Javadoc) {
+    javadocTool = javaToolchains.javadocToolFor(jdk25)
+    options.addStringOption('-release', '8')
 }
 
 def javadocJava22 = tasks.register('javadocJava22', Javadoc) {
@@ -232,3 +236,15 @@ tasks.named('test', Test) {
     jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
 
+def testJava8 = tasks.register('testJava8', Test) {
+    group = 'verification'
+    description = 'Runs the suite on Java 8, where the jar reaches the core through JNA.'
+    runsTheSuiteAgainstTheJar(it, 'jna')
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+tasks.named('check') {
+    dependsOn testJava8
+}

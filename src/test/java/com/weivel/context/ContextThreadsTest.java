@@ -13,6 +13,7 @@ import com.weivel.core.Manifest;
 import com.weivel.core.NamedNumber;
 import com.weivel.handles.HandlesProbes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -44,13 +46,18 @@ class ContextThreadsTest {
             Runnable noting = () -> { };
             fixture.onReport = () -> note(fixture, "sink", called, locked);
             fixture.onLog = () -> note(fixture, "log", called, locked);
-            PluginContext provider = fixture.opened(new Manifest("provider", 0, Optional.empty(), List.of(),
-                    List.of("screens"), List.of(), List.of(new Manifest.ServiceOffer("provider:measured",
-                    List.of(new NamedNumber("latency", 50)))), List.of(), List.of(), Optional.empty()));
+            PluginContext provider = fixture.opened(new Manifest("provider", 0, Optional.empty(),
+                    Collections.emptyList(),
+                    Collections.singletonList("screens"), Collections.emptyList(),
+                            Collections.singletonList(new Manifest.ServiceOffer("provider:measured",
+                    Collections.singletonList(new NamedNumber("latency", 50)))), Collections.emptyList(),
+                            Collections.emptyList(), Optional.empty()));
             Manifest.ServiceWant measured = new Manifest.ServiceWant("provider:measured", Optional.empty(),
-                    Choice.YES, Choice.NO, List.of(new NamedNumber("latency", 10)));
-            PluginContext consumer = fixture.opened(new Manifest("consumer", 0, Optional.empty(), List.of(),
-                    List.of(), List.of("screens"), List.of(), List.of(measured), List.of(), Optional.empty()));
+                    Choice.YES, Choice.NO, Collections.singletonList(new NamedNumber("latency", 10)));
+            PluginContext consumer = fixture.opened(new Manifest("consumer", 0, Optional.empty(),
+                    Collections.emptyList(),
+                    Collections.emptyList(), Collections.singletonList("screens"), Collections.emptyList(),
+                            Collections.singletonList(measured), Collections.emptyList(), Optional.empty()));
             consumer.listen(event -> note(fixture, "listener", called, locked));
             value(consumer.watch("provider:measured", new ServiceWatcher() {
                 @Override
@@ -79,7 +86,7 @@ class ContextThreadsTest {
                 @Override
                 public List<NamedNumber> attributes() {
                     note(fixture, "attributes", called, locked);
-                    return List.of(new NamedNumber("latency", 5));
+                    return Collections.singletonList(new NamedNumber("latency", 5));
                 }
 
                 @Override
@@ -97,9 +104,9 @@ class ContextThreadsTest {
             fixture.release(provider);
             noting.run();
 
-            assertTrue(called.containsAll(List.of("sink", "log", "listener", "registered", "unregistered",
+            assertTrue(called.containsAll(Arrays.asList("sink", "log", "listener", "registered", "unregistered",
                     "provided", "withdrawn", "attributes", "serves", "settled")), called.toString());
-            assertEquals(List.of(), locked);
+            assertEquals(Collections.emptyList(), locked);
         }
     }
 
@@ -110,12 +117,15 @@ class ContextThreadsTest {
         int pluginCount = 6;
         try (ContextFixture fixture = new ContextFixture()) {
             List<String> ids = IntStream.range(0, pluginCount).mapToObj(index -> "plugin" + index + ":service")
-                    .toList();
+                    .collect(Collectors.toList());
             List<PluginContext> plugins = new ArrayList<>();
             for (int index = 0; index < pluginCount; index++) {
-                plugins.add(fixture.opened(new Manifest("plugin" + index, 0, Optional.empty(), List.of(), List.of(),
-                        List.of(), List.of(new Manifest.ServiceOffer(ids.get(index), List.of())),
-                        ids.stream().map(ContextFixture::wanted).toList(), List.of(), Optional.empty())));
+                plugins.add(fixture.opened(new Manifest("plugin" + index, 0, Optional.empty(),
+                        Collections.emptyList(), Collections.emptyList(),
+                        Collections.emptyList(), Collections.singletonList(new Manifest.ServiceOffer(ids.get(index),
+                                Collections.emptyList())),
+                        ids.stream().map(ContextFixture::wanted).collect(Collectors.toList()),
+                                Collections.emptyList(), Optional.empty())));
             }
             Map<String, Object> objects = new ConcurrentHashMap<>();
             Map<String, CompletableFuture<Answer<Object>>> settlements = new ConcurrentHashMap<>();
@@ -147,7 +157,7 @@ class ContextThreadsTest {
                         value(context.register(ids.get(own), object));
                     }, threads));
                 }
-                CompletableFuture.allOf(running.toArray(CompletableFuture[]::new)).get(100, TimeUnit.SECONDS);
+                CompletableFuture.allOf(running.toArray(new CompletableFuture[0])).get(100, TimeUnit.SECONDS);
             } finally {
                 threads.shutdownNow();
             }
@@ -158,7 +168,7 @@ class ContextThreadsTest {
                 assertSame(objects.get(ids.get(other)), value(settlement.getNow(null)), key);
                 assertEquals(1, completions.get(key).get(), key);
             });
-            assertEquals(List.of(), fixture.failures);
+            assertEquals(Collections.emptyList(), fixture.failures);
         }
     }
 

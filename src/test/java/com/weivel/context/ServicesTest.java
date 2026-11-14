@@ -13,6 +13,7 @@ import com.weivel.core.CoreConstants;
 import com.weivel.core.Manifest;
 import com.weivel.core.RefusalStatus;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -32,7 +33,7 @@ class ServicesTest {
     @AfterEach
     void close() {
         fixture.close();
-        assertEquals(List.of(), fixture.failures);
+        assertEquals(Collections.emptyList(), fixture.failures);
     }
 
     @Test
@@ -52,15 +53,15 @@ class ServicesTest {
     void aGetTheCoreRefusesAnswersThatRefusalNeverAnAbsence() {
         Answer.Refused<Object> refused = assertInstanceOf(Answer.Refused.class, consumer.get("undeclared"));
 
-        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().orElseThrow().code());
-        assertEquals(Optional.of("undeclared"), refused.refusal().orElseThrow().subject());
+        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().get().code());
+        assertEquals(Optional.of("undeclared"), refused.refusal().get().subject());
     }
 
     @Test
     void theIdsAreTheReachableIdsRegisteredNow() {
         value(provider.register(GREETER, new Object()));
 
-        assertEquals(List.of(GREETER), value(consumer.ids()));
+        assertEquals(Collections.singletonList(GREETER), value(consumer.ids()));
     }
 
     @Test
@@ -94,7 +95,7 @@ class ServicesTest {
         Answer.Refused<Watching> refused = assertInstanceOf(Answer.Refused.class,
                 consumer.watch("undeclared", recording(new ArrayList<>())));
 
-        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().orElseThrow().code());
+        assertEquals(CoreConstants.REFUSAL_UNDECLARED, refused.refusal().get().code());
     }
 
     @Test

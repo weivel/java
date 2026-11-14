@@ -23,16 +23,19 @@ import com.weivel.timer.CoreTimer;
 import com.weivel.timer.Scheduler;
 import com.weivel.timer.TestScheduler;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** A real core with its handles, its timer on a scheduler the test owns, and the contexts made over them. */
 final class ContextFixture implements AutoCloseable {
-    static final CoreOptions LATENCY_VOCABULARY = new CoreOptions(0, 0, 0, List.of(), List.of(),
-            List.of(new CoreOptions.ConstraintEntry("latency", "latency", 2)));
+    static final CoreOptions LATENCY_VOCABULARY = new CoreOptions(0, 0, 0, Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.singletonList(new CoreOptions.ConstraintEntry("latency", "latency", 2)));
 
     final List<Failure> failures = Collections.synchronizedList(new ArrayList<>());
     final List<LogRecord> logs = Collections.synchronizedList(new ArrayList<>());
@@ -119,7 +122,7 @@ final class ContextFixture implements AutoCloseable {
 
     List<Failure> failuresOf(FailureKind kind) {
         synchronized (failures) {
-            return failures.stream().filter(failure -> failure.kind() == kind).toList();
+            return failures.stream().filter(failure -> failure.kind() == kind).collect(Collectors.toList());
         }
     }
 
@@ -132,31 +135,37 @@ final class ContextFixture implements AutoCloseable {
     }
 
     static Manifest providing(String importName, String... serviceIds) {
-        return new Manifest(importName, 0, Optional.empty(), List.of(), List.of(), List.of(),
-                java.util.Arrays.stream(serviceIds).map(id -> new Manifest.ServiceOffer(id, List.of())).toList(),
-                List.of(), List.of(), Optional.empty());
+        return new Manifest(importName, 0, Optional.empty(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(),
+                java.util.Arrays.stream(serviceIds).map(id -> new Manifest.ServiceOffer(id,
+                        Collections.emptyList())).collect(Collectors.toList()),
+                Collections.emptyList(), Collections.emptyList(), Optional.empty());
     }
 
     static Manifest consuming(String importName, String... serviceIds) {
-        return new Manifest(importName, 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                java.util.Arrays.stream(serviceIds).map(ContextFixture::wanted).toList(), List.of(),
+        return new Manifest(importName, 0, Optional.empty(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                java.util.Arrays.stream(serviceIds).map(ContextFixture::wanted).collect(Collectors.toList()),
+                        Collections.emptyList(),
                 Optional.empty());
     }
 
     static Manifest constrained(String importName, String serviceId, double latency, Choice degradable) {
         Manifest.ServiceWant want = new Manifest.ServiceWant(serviceId, Optional.empty(), Choice.YES, degradable,
-                List.of(new NamedNumber("latency", latency)));
-        return new Manifest(importName, 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(want), List.of(), Optional.empty());
+                Collections.singletonList(new NamedNumber("latency", latency)));
+        return new Manifest(importName, 0, Optional.empty(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(want), Collections.emptyList(), Optional.empty());
     }
 
     static Manifest capabilities(String importName, List<String> provides, List<String> consumes) {
-        return new Manifest(importName, 0, Optional.empty(), List.of(), provides, consumes, List.of(), List.of(),
-                List.of(), Optional.empty());
+        return new Manifest(importName, 0, Optional.empty(), Collections.emptyList(), provides, consumes,
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Optional.empty());
     }
 
     static Manifest.ServiceWant wanted(String id) {
-        return new Manifest.ServiceWant(id, Optional.empty(), Choice.YES, Choice.NO, List.of());
+        return new Manifest.ServiceWant(id, Optional.empty(), Choice.YES, Choice.NO, Collections.emptyList());
     }
 
     static <T> T value(Answer<T> answer) {

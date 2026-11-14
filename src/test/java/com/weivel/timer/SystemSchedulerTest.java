@@ -34,7 +34,8 @@ class SystemSchedulerTest {
         CompletableFuture<String> heardOn = new CompletableFuture<>();
         List<Failure> failures = Collections.synchronizedList(new ArrayList<>());
         Core core = CoreProbes.core(event -> {
-            if (event instanceof CoreEvent.WantSettledEvent want) {
+            if (event instanceof CoreEvent.WantSettledEvent) {
+                CoreEvent.WantSettledEvent want = (CoreEvent.WantSettledEvent) event;
                 heardOn.complete(Thread.currentThread().getName());
                 settled.complete(want);
             }
@@ -43,19 +44,19 @@ class SystemSchedulerTest {
             Scheduler system = Schedulers.system();
             CoreTimer timer = ok(CoreTimer.start(core, system));
             long want = ok(core.call(CoreCalls.wantService(HOST, "never-registered",
-                    WantOptions.timed(timer.time().orElseThrow(), 50))));
+                    WantOptions.timed(timer.time().getAsLong(), 50))));
 
             CoreEvent.WantSettledEvent heard = settled.get(WAIT_SECONDS, TimeUnit.SECONDS);
 
             assertEquals(want, heard.want());
-            assertEquals(CoreConstants.REFUSAL_TIMED_OUT, heard.refusal().orElseThrow().code());
+            assertEquals(CoreConstants.REFUSAL_TIMED_OUT, heard.refusal().get().code());
             assertEquals("weivel-timer", heardOn.get());
             timer.destroy();
         } finally {
             core.destroy();
             closeOnceTheTimersDispatchEnds(core);
         }
-        assertEquals(List.of(), failures);
+        assertEquals(Collections.emptyList(), failures);
     }
 
     /** The timer's thread may still be leaving the dispatch that delivered the settlement. */
@@ -87,7 +88,7 @@ class SystemSchedulerTest {
         assertTrue(cancelled.cancel());
         assertTrue(ran.await(WAIT_SECONDS, TimeUnit.SECONDS));
         assertFalse(due.cancel());
-        assertEquals(List.of(), late);
+        assertEquals(Collections.emptyList(), late);
         assertSame(system, Schedulers.system());
     }
 }

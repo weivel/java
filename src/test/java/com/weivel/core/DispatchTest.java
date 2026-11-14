@@ -11,13 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /** Dispatch on one thread: first in, first out, never re-entered, with failures going to the sink. */
@@ -45,9 +49,9 @@ class DispatchTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "first")));
 
-        List<Long> sequences = listener.events().stream().map(CoreEvent::sequence).toList();
+        List<Long> sequences = listener.events().stream().map(CoreEvent::sequence).collect(Collectors.toList());
         assertEquals(3, sequences.size());
-        assertEquals(sequences.stream().sorted().toList(), sequences);
+        assertEquals(sequences.stream().sorted().collect(Collectors.toList()), sequences);
         assertEquals(1, deepest.get());
         core.destroy();
     }
@@ -91,7 +95,7 @@ class DispatchTest {
         ok(CoreInternals.callThenDefer(core, CoreCalls.wantService(HOST, "timed", WantOptions.timed(0, 100)),
                 CallSteps.none(), () -> step(order, "step")));
 
-        assertEquals(List.of("DeadlineEvent", "step", "WatchEvent"), order);
+        assertEquals(Arrays.asList("DeadlineEvent", "step", "WatchEvent"), order);
         core.destroy();
     }
 
@@ -121,7 +125,7 @@ class DispatchTest {
         ok(core.call(CoreCalls.registerService(HOST, "counted")));
 
         assertEquals(before + 2, CoreInternals.drainedCount(core));
-        assertEquals(CoreInternals.drainedCount(core), listener.events().getLast().sequence());
+        assertEquals(CoreInternals.drainedCount(core), TestCores.last(listener.events()).sequence());
         core.destroy();
     }
 
@@ -144,8 +148,9 @@ class DispatchTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "outer")));
 
-        assertEquals(List.of("event 1", "step one", "event 2", "step two"), order);
-        assertEquals(List.of(DeferredStep.Deferral.LEFT_TO_THE_DISPATCH, DeferredStep.Deferral.LEFT_TO_THE_DISPATCH),
+        assertEquals(Arrays.asList("event 1", "step one", "event 2", "step two"), order);
+        assertEquals(Arrays.asList(DeferredStep.Deferral.LEFT_TO_THE_DISPATCH,
+                DeferredStep.Deferral.LEFT_TO_THE_DISPATCH),
                 deferrals);
         core.destroy();
     }
@@ -164,8 +169,8 @@ class DispatchTest {
         assertEquals(2, listener.events().size());
         List<Failure> told = sink.of(FailureKind.LISTENER);
         assertEquals(2, told.size());
-        assertEquals(listener.events().getFirst().sequence(), told.getFirst().sequence());
-        assertInstanceOf(IllegalStateException.class, told.getFirst().cause().orElseThrow());
+        assertEquals(listener.events().get(0).sequence(), told.get(0).sequence());
+        assertInstanceOf(IllegalStateException.class, told.get(0).cause().get());
         core.destroy();
     }
 
@@ -193,7 +198,7 @@ class DispatchTest {
     }
 
     @Test
-    void aSinkThatThrowsIsWrittenToStandardError() {
+    void aSinkThatThrowsIsWrittenToStandardError() throws UnsupportedEncodingException {
         Core core = TestCores.core(event -> {
             throw new IllegalStateException("a listener failing on purpose");
         }, failure -> {
@@ -202,14 +207,14 @@ class DispatchTest {
         ok(core.call(CoreCalls.watchService(HOST, "unheard")));
         ByteArrayOutputStream written = new ByteArrayOutputStream();
         PrintStream standardError = System.err;
-        System.setErr(new PrintStream(written, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(written, true, StandardCharsets.UTF_8.name()));
         try {
             ok(core.call(CoreCalls.registerService(HOST, "unheard")));
         } finally {
             System.setErr(standardError);
         }
 
-        String text = written.toString(StandardCharsets.UTF_8);
+        String text = written.toString(StandardCharsets.UTF_8.name());
         assertTrue(text.contains("a sink failing on purpose"), text);
         assertTrue(text.contains("a listener threw while it heard an event"), text);
         core.destroy();
@@ -228,11 +233,11 @@ class DispatchTest {
         ok(core.call(CoreCalls.watchService(HOST, "overflowing")));
 
         assertThrows(StackOverflowError.class, () -> core.call(CoreCalls.registerService(HOST, "overflowing")));
-        assertEquals(List.of(), listener.events());
+        assertEquals(Collections.emptyList(), listener.events());
         ok(core.call(CoreCalls.getService(HOST, "overflowing")));
 
         assertEquals(1, listener.events().size());
-        assertSame(Thread.currentThread(), listener.heard().getFirst().thread());
+        assertSame(Thread.currentThread(), listener.heard().get(0).thread());
         core.destroy();
     }
 
@@ -243,17 +248,18 @@ class DispatchTest {
         AtomicLong recorded = new AtomicLong();
         List<Boolean> heardAfterRecording = new ArrayList<>();
         core.addListener(event -> heardAfterRecording.add(
-                event instanceof CoreEvent.WatchEvent watch && watch.implementation() == recorded.get()));
+                event instanceof CoreEvent.WatchEvent
+                        && ((CoreEvent.WatchEvent) event).implementation() == recorded.get()));
 
         Answer<Long> answer = CoreInternals.call(core, CoreCalls.registerService(HOST, "recorded"),
-                new CallSteps<>(Optional::empty, registration -> {
+                new CallSteps<>(() -> Optional.empty(), registration -> {
                     assertTrue(core.isLockHeld());
                     recorded.set(registration);
                     return new Answer.Ok<>(registration);
                 }));
 
         assertEquals(recorded.get(), ok(answer));
-        assertEquals(List.of(true), heardAfterRecording);
+        assertEquals(Collections.singletonList(true), heardAfterRecording);
         core.destroy();
     }
 
@@ -270,7 +276,7 @@ class DispatchTest {
                 }, Answer.Ok::new));
 
         assertEquals(new Answer.Detached<Long>(), answer);
-        assertEquals(List.of(), log.calls());
+        assertEquals(Collections.emptyList(), log.calls());
         core.destroy();
     }
 
@@ -279,11 +285,12 @@ class DispatchTest {
         Core core = TestCores.core(listener, sink);
 
         Answer<Long> answer = CoreInternals.call(core, CoreCalls.registerService(HOST, "again"),
-                new CallSteps<>(Optional::empty, registration -> core.call(CoreCalls.getService(HOST, "again"))));
+                new CallSteps<>(() -> Optional.empty(), registration -> core.call(CoreCalls.getService(HOST,
+                        "again"))));
 
         assertInstanceOf(Answer.Defect.class, answer);
-        Failure defect = sink.of(FailureKind.LAYER_DEFECT).getFirst();
-        assertTrue(defect.cause().orElseThrow().getMessage().contains("taken again"), defect.toString());
+        Failure defect = sink.of(FailureKind.LAYER_DEFECT).get(0);
+        assertTrue(defect.cause().get().getMessage().contains("taken again"), defect.toString());
         assertFalse(core.isLockHeld());
         core.destroy();
     }
@@ -306,10 +313,10 @@ class DispatchTest {
                 }, Answer.Ok::new));
 
         assertInstanceOf(Answer.Defect.class, answer);
-        assertEquals(List.of(), sink.of(FailureKind.STEP));
-        Failure defect = sink.of(FailureKind.LAYER_DEFECT).getFirst();
-        assertTrue(defect.cause().orElseThrow().getMessage().contains("under the layer lock"), defect.toString());
-        assertEquals(List.of(false), lockSeen);
+        assertEquals(Collections.emptyList(), sink.of(FailureKind.STEP));
+        Failure defect = sink.of(FailureKind.LAYER_DEFECT).get(0);
+        assertTrue(defect.cause().get().getMessage().contains("under the layer lock"), defect.toString());
+        assertEquals(Collections.singletonList(false), lockSeen);
         core.destroy();
     }
 
@@ -324,7 +331,7 @@ class DispatchTest {
         ok(core.call(CoreCalls.registerService(HOST, "ended")));
 
         assertTrue(core.isDestroyed());
-        assertEquals(List.of(), listener.events());
+        assertEquals(Collections.emptyList(), listener.events());
         core.close();
     }
 

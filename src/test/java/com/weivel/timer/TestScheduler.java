@@ -1,10 +1,12 @@
 package com.weivel.timer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongConsumer;
+import java.util.stream.Collectors;
 
 /**
  * A clock and a scheduler the test owns: time moves only when the test moves it, and a task runs only when the test
@@ -92,27 +94,27 @@ public final class TestScheduler implements Scheduler {
     /** The due time of every task neither run nor cancelled. */
     public List<Long> live() {
         synchronized (lock) {
-            return tasks.stream().filter(TestTask::live).map(task -> task.at).toList();
+            return tasks.stream().filter(TestTask::live).map(task -> task.at).collect(Collectors.toList());
         }
     }
 
     /** The due time of every task given, in the order given. */
     List<Long> scheduled() {
         synchronized (lock) {
-            return tasks.stream().map(task -> task.at).toList();
+            return tasks.stream().map(task -> task.at).collect(Collectors.toList());
         }
     }
 
     /** The due time of every task run, in the order run. */
     List<Long> fired() {
         synchronized (lock) {
-            return List.copyOf(fired);
+            return Collections.unmodifiableList(new ArrayList<>(fired));
         }
     }
 
     TestTask last() {
         synchronized (lock) {
-            return tasks.getLast();
+            return tasks.get(tasks.size() - 1);
         }
     }
 

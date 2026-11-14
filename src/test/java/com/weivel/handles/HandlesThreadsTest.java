@@ -43,7 +43,7 @@ class HandlesThreadsTest {
     void destroy() {
         core.destroy();
         core.close();
-        assertEquals(List.of(), failures);
+        assertEquals(Collections.emptyList(), failures);
     }
 
     @Test
@@ -58,7 +58,7 @@ class HandlesThreadsTest {
         ExecutorService threads = Executors.newSingleThreadExecutor();
         try {
             Future<Answer<Long>> holding = threads.submit(() -> CoreInternals.call(core,
-                    CoreCalls.registerService(HOST, "gated"), new CallSteps<>(Optional::empty, handle -> {
+                    CoreCalls.registerService(HOST, "gated"), new CallSteps<>(() -> Optional.empty(), handle -> {
                         room.add(HandleKind.SERVICE_REGISTRATION, handle, HOST, provider);
                         madeHandle.set(handle);
                         made.countDown();

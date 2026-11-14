@@ -25,8 +25,10 @@ import com.weivel.core.Manifest;
 import com.weivel.core.WantOptions;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -52,7 +54,7 @@ class HandlesTest {
     void destroy() {
         core.destroy();
         core.close();
-        assertEquals(List.of(), failures);
+        assertEquals(Collections.emptyList(), failures);
     }
 
     @Test
@@ -61,7 +63,8 @@ class HandlesTest {
         Object provider = new Object();
         List<Object> foundWhenHeard = new ArrayList<>();
         core.addListener(event -> {
-            if (event instanceof CoreEvent.WatchEvent watch) {
+            if (event instanceof CoreEvent.WatchEvent) {
+                CoreEvent.WatchEvent watch = (CoreEvent.WatchEvent) event;
                 HandleEntry entry = handles.find(watch.implementation());
                 foundWhenHeard.add(entry == null ? "nothing" : entry.object());
             }
@@ -72,7 +75,7 @@ class HandlesTest {
         long registration = ok(CoreInternals.call(core, CoreCalls.registerService(HOST, "made"),
                 room.making(HandleKind.SERVICE_REGISTRATION, HOST, provider)));
 
-        assertEquals(List.of(provider), foundWhenHeard);
+        assertEquals(Collections.singletonList(provider), foundWhenHeard);
         HandleEntry entry = handles.find(registration);
         assertSame(provider, entry.object());
         assertEquals(HandleKind.SERVICE_REGISTRATION, entry.kind());
@@ -88,7 +91,7 @@ class HandlesTest {
             Object provider = new Object();
             long[] allocated = new long[1];
             ok(CoreInternals.call(core, CoreCalls.registerService(HOST, "room-" + round), new CallSteps<>(
-                    Optional::empty, handle -> {
+                    () -> Optional.empty(), handle -> {
                         long first = allocatedBytes();
                         long second = allocatedBytes();
                         room.add(HandleKind.SERVICE_REGISTRATION, handle, HOST, provider);
@@ -159,7 +162,8 @@ class HandlesTest {
         Object waiter = new Object();
         List<Object> settledWith = new ArrayList<>();
         core.addListener(event -> {
-            if (event instanceof CoreEvent.WantSettledEvent settled) {
+            if (event instanceof CoreEvent.WantSettledEvent) {
+                CoreEvent.WantSettledEvent settled = (CoreEvent.WantSettledEvent) event;
                 settledWith.add(handles.end(settled.want()).object());
             }
         });
@@ -168,7 +172,7 @@ class HandlesTest {
 
         ok(core.call(CoreCalls.registerService(HOST, "settling")));
 
-        assertEquals(List.of(waiter), settledWith);
+        assertEquals(Collections.singletonList(waiter), settledWith);
         assertNull(handles.find(want));
     }
 
@@ -185,8 +189,10 @@ class HandlesTest {
 
     @Test
     void aReleasedPluginsEntriesEndAndItsOwnEndsWhenItIsForgotten() {
-        Manifest manifest = new Manifest("released", 0, Optional.empty(), List.of(), List.of("released:capability"),
-                List.of(), List.of(), List.of(consumed("released:service"), consumed("released:awaited")), List.of(),
+        Manifest manifest = new Manifest("released", 0, Optional.empty(), Collections.emptyList(),
+                Collections.singletonList("released:capability"),
+                Collections.emptyList(), Collections.emptyList(), Arrays.asList(consumed("released:service"),
+                        consumed("released:awaited")), Collections.emptyList(),
                 Optional.empty());
         Object record = new Object();
         long plugin = made(CoreCalls.registerManifest(manifest), HandleKind.PLUGIN, Handles.NO_OWNER, record);
@@ -203,7 +209,7 @@ class HandlesTest {
         ok(core.call(CoreCalls.releasePlugin(plugin)));
         Set<Long> ended = handles.endOwned(plugin).stream().map(HandleEntry::handle).collect(Collectors.toSet());
 
-        assertEquals(Set.of(registration, implementation, watch, want), ended);
+        assertEquals(new HashSet<>(Arrays.asList(registration, implementation, watch, want)), ended);
         assertSame(record, handles.find(plugin).object());
         assertEquals(1, handles.entryCount());
 
@@ -215,8 +221,10 @@ class HandlesTest {
 
     @Test
     void endingAnOwnersEntriesOfSomeKindsLeavesItsOthers() {
-        Manifest manifest = new Manifest("kinds", 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(consumed("kinds:service"), consumed("kinds:awaited")), List.of(), Optional.empty());
+        Manifest manifest = new Manifest("kinds", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Arrays.asList(consumed("kinds:service"), consumed("kinds:awaited")), Collections.emptyList(),
+                        Optional.empty());
         long plugin = made(CoreCalls.registerManifest(manifest), HandleKind.PLUGIN, Handles.NO_OWNER, new Object());
         ok(core.call(CoreCalls.openPlugin(plugin, handles.find(plugin).token())));
         long registration = made(CoreCalls.registerService(plugin, "kinds:service"),
@@ -226,7 +234,8 @@ class HandlesTest {
 
         List<HandleEntry> ended = handles.endOwned(plugin, EnumSet.of(HandleKind.SERVICE_REGISTRATION));
 
-        assertEquals(List.of(registration), ended.stream().map(HandleEntry::handle).toList());
+        assertEquals(Collections.singletonList(registration),
+                ended.stream().map(HandleEntry::handle).collect(Collectors.toList()));
         assertNull(handles.find(registration));
         assertEquals(HandleKind.WANT, handles.find(want).kind());
         assertEquals(HandleKind.PLUGIN, handles.find(plugin).kind());
@@ -280,7 +289,7 @@ class HandlesTest {
         ok(core.call(CoreCalls.unregister(registration)));
         List<CoreEvent.RevokedEvent> revocations = revocations();
         CoreEvent.RevokedEvent ofFirst = revocations.stream().filter(revoked -> revoked.plugin() == first)
-                .findFirst().orElseThrow();
+                .findFirst().get();
 
         assertSame(firstHeld, handles.revoke(ofFirst));
         assertNull(handles.held(first, registration));
@@ -299,7 +308,7 @@ class HandlesTest {
 
         ok(core.call(CoreCalls.forgetPlugin(plugin)));
         handles.end(plugin);
-        CoreEvent.RevokedEvent revoked = revocations().getFirst();
+        CoreEvent.RevokedEvent revoked = revocations().get(0);
 
         assertEquals(plugin, revoked.plugin());
         assertEquals(registration, revoked.implementation());
@@ -376,21 +385,23 @@ class HandlesTest {
     }
 
     private long openConsumer(String name, String serviceId) {
-        Manifest manifest = new Manifest(name, 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(consumed(serviceId)), List.of(), Optional.empty());
+        Manifest manifest = new Manifest(name, 0, Optional.empty(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(consumed(serviceId)), Collections.emptyList(), Optional.empty());
         long plugin = made(CoreCalls.registerManifest(manifest), HandleKind.PLUGIN, Handles.NO_OWNER, new Object());
         ok(core.call(CoreCalls.openPlugin(plugin, handles.find(plugin).token())));
         return plugin;
     }
 
     private static Manifest.ServiceWant consumed(String serviceId) {
-        return new Manifest.ServiceWant(serviceId, Optional.empty(), Choice.DEFAULT, Choice.DEFAULT, List.of());
+        return new Manifest.ServiceWant(serviceId, Optional.empty(), Choice.DEFAULT, Choice.DEFAULT,
+                Collections.emptyList());
     }
 
     private Object holdGot(long plugin, String serviceId) {
         Handles.Reservation room = handles.reserve();
         Object handedOver = new Object();
-        ok(CoreInternals.call(core, CoreCalls.getService(plugin, serviceId), new CallSteps<>(Optional::empty,
+        ok(CoreInternals.call(core, CoreCalls.getService(plugin, serviceId), new CallSteps<>(() -> Optional.empty(),
                 registration -> {
                     room.hold(plugin, registration, handedOver);
                     return new Answer.Ok<>(registration);
@@ -401,7 +412,7 @@ class HandlesTest {
     private List<CoreEvent.RevokedEvent> revocations() {
         synchronized (heard) {
             return heard.stream().filter(CoreEvent.RevokedEvent.class::isInstance)
-                    .map(CoreEvent.RevokedEvent.class::cast).toList();
+                    .map(CoreEvent.RevokedEvent.class::cast).collect(Collectors.toList());
         }
     }
 

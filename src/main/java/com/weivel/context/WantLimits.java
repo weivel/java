@@ -7,12 +7,12 @@ import java.util.OptionalLong;
  * How long a plugin's want may wait, each limit handed to the core unchanged, with the timer's time as its
  * {@code now}. A want with none waits for as long as it takes. A want with any of them needs the time, so on a host
  * whose scheduler has no clock it is the caller's mistake, answered before anything is asked of the core.
- *
- * @param timeoutMillis how long after now the want gives up; empty for no deadline
- * @param budgetMillis how long a constrained want polls before it degrades or is refused; empty for no budget
- * @param pollMillis how often a constrained want polls, which the core requires of one; empty to give none
  */
-public record WantLimits(OptionalLong timeoutMillis, OptionalLong budgetMillis, OptionalLong pollMillis) {
+public final class WantLimits {
+    private final OptionalLong timeoutMillis;
+    private final OptionalLong budgetMillis;
+    private final OptionalLong pollMillis;
+
     /**
      * Checks that every limit is present, if only as empty.
      *
@@ -20,10 +20,40 @@ public record WantLimits(OptionalLong timeoutMillis, OptionalLong budgetMillis, 
      * @param budgetMillis the budget, or empty
      * @param pollMillis the poll interval, or empty
      */
-    public WantLimits {
+    public WantLimits(OptionalLong timeoutMillis, OptionalLong budgetMillis, OptionalLong pollMillis) {
         Objects.requireNonNull(timeoutMillis, "timeoutMillis");
         Objects.requireNonNull(budgetMillis, "budgetMillis");
         Objects.requireNonNull(pollMillis, "pollMillis");
+        this.timeoutMillis = timeoutMillis;
+        this.budgetMillis = budgetMillis;
+        this.pollMillis = pollMillis;
+    }
+
+    /**
+     * Answers {@code timeoutMillis}.
+     *
+     * @return how long after now the want gives up; empty for no deadline
+     */
+    public OptionalLong timeoutMillis() {
+        return timeoutMillis;
+    }
+
+    /**
+     * Answers {@code budgetMillis}.
+     *
+     * @return how long a constrained want polls before it degrades or is refused; empty for no budget
+     */
+    public OptionalLong budgetMillis() {
+        return budgetMillis;
+    }
+
+    /**
+     * Answers {@code pollMillis}.
+     *
+     * @return how often a constrained want polls, which the core requires of one; empty to give none
+     */
+    public OptionalLong pollMillis() {
+        return pollMillis;
     }
 
     /**
@@ -69,5 +99,34 @@ public record WantLimits(OptionalLong timeoutMillis, OptionalLong budgetMillis, 
     /** Whether the core reads the want's {@code now}: for a timeout, and for a constrained want. */
     boolean needsTheTime() {
         return timeoutMillis.isPresent() || budgetMillis.isPresent() || pollMillis.isPresent();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof WantLimits)) {
+            return false;
+        }
+        WantLimits that = (WantLimits) other;
+        return Objects.equals(timeoutMillis, that.timeoutMillis)
+                && Objects.equals(budgetMillis, that.budgetMillis)
+                && Objects.equals(pollMillis, that.pollMillis);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 0;
+        hash = 31 * hash + Objects.hashCode(timeoutMillis);
+        hash = 31 * hash + Objects.hashCode(budgetMillis);
+        hash = 31 * hash + Objects.hashCode(pollMillis);
+        return hash;
+    }
+
+    @Override
+    public String toString() {
+        return "WantLimits[timeoutMillis=" + timeoutMillis + ", budgetMillis=" + budgetMillis + ", pollMillis="
+                + pollMillis + "]";
     }
 }

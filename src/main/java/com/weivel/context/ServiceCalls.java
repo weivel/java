@@ -30,10 +30,10 @@ final class ServiceCalls {
             return new Answer.Ok<>(registration);
         });
         room.cancel();
-        if (!(answer instanceof Answer.Ok<Long>)) {
+        if (!(answer instanceof Answer.Ok)) {
             return Answers.retyped(answer);
         }
-        if (resolution.found.isEmpty()) {
+        if (!resolution.found.isPresent()) {
             String detail = "the core answered a get with a registration the layer holds no object for";
             state.report(FailureKind.OBJECT_UNKNOWN, detail, Optional.empty(), Optional.empty());
             return new Answer.Defect<>(detail);
@@ -48,7 +48,7 @@ final class ServiceCalls {
     static PendingWant want(ContextState state, PluginContext context, String id, WantLimits limits) {
         CompletableFuture<Answer<Object>> settlement = new CompletableFuture<>();
         Optional<WantOptions> options = optionsFor(state, limits);
-        if (options.isEmpty()) {
+        if (!options.isPresent()) {
             state.settleLater(settlement, new Answer.Mistake<>("a want with a timeout, a budget or a poll interval "
                     + "needs the time, and the host's scheduler has no clock"));
             return new PendingWant(state, context, 0, settlement);
@@ -60,7 +60,8 @@ final class ServiceCalls {
             entryRoom.add(HandleKind.WANT, want, context.plugin(), record);
             return new Answer.Ok<>(want);
         });
-        if (answer instanceof Answer.Ok<Long> made) {
+        if (answer instanceof Answer.Ok) {
+            Answer.Ok<Long> made = (Answer.Ok<Long>) answer;
             return new PendingWant(state, context, made.value(), settlement);
         }
         entryRoom.cancel();
@@ -76,8 +77,8 @@ final class ServiceCalls {
             return new Answer.Ok<>(watch);
         });
         room.cancel();
-        return answer instanceof Answer.Ok<Long> made
-                ? new Answer.Ok<>(new Watching(state, context, made.value()))
+        return answer instanceof Answer.Ok
+                ? new Answer.Ok<>(new Watching(state, context, ((Answer.Ok<Long>) answer).value()))
                 : Answers.retyped(answer);
     }
 
@@ -90,8 +91,8 @@ final class ServiceCalls {
             return new Answer.Ok<>(registration);
         });
         room.cancel();
-        return answer instanceof Answer.Ok<Long> made
-                ? new Answer.Ok<>(new ServiceRegistration(state, context, made.value()))
+        return answer instanceof Answer.Ok
+                ? new Answer.Ok<>(new ServiceRegistration(state, context, ((Answer.Ok<Long>) answer).value()))
                 : Answers.retyped(answer);
     }
 
@@ -101,7 +102,7 @@ final class ServiceCalls {
             return Optional.of(WantOptions.unbounded());
         }
         OptionalLong now = state.timer.time();
-        if (now.isEmpty()) {
+        if (!now.isPresent()) {
             return Optional.empty();
         }
         return Optional.of(new WantOptions(chosen(limits.timeoutMillis()), now.getAsLong(),

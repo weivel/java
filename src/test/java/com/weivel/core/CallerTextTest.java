@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -70,31 +71,34 @@ class CallerTextTest {
     @Test
     void aTextDeepInAManifestHoldingANulIsFound() {
         Manifest.ServiceWant want = new Manifest.ServiceWant("wanted", Optional.empty(), Choice.YES, Choice.NO,
-                List.of(new NamedNumber(CUT, 1.0)));
-        Manifest manifest = new Manifest("deep", 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(want), List.of(), Optional.empty());
+                Collections.singletonList(new NamedNumber(CUT, 1.0)));
+        Manifest manifest = new Manifest("deep", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.singletonList(want), Collections.emptyList(), Optional.empty());
 
         assertMistake(coreUnderLog().call(CoreCalls.registerManifest(manifest)));
     }
 
     @Test
     void anIdentityHoldingANulIsFound() {
-        Manifest manifest = new Manifest("identified", 0, Optional.empty(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), Optional.of(CUT));
+        Manifest manifest = new Manifest("identified", 0, Optional.empty(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Optional.of(CUT));
 
         assertMistake(coreUnderLog().call(CoreCalls.registerManifest(manifest)));
     }
 
     @Test
     void coreOptionsHoldingANulCreateNoCore() {
-        CoreOptions options = new CoreOptions(0, 0, 0, List.of(), List.of(CUT), List.of());
+        CoreOptions options = new CoreOptions(0, 0, 0, Collections.emptyList(), Collections.singletonList(CUT),
+                Collections.emptyList());
 
         Answer<Core> created = Core.wrapped(Wrapper.start(log.around(TestCores.functions()), EventCopy.INSTANCE,
                 options, Optional.of(listener), sink));
 
         assertInstanceOf(Answer.Mistake.class, created);
-        assertEquals(List.of(), log.calls());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), log.calls());
+        assertEquals(Collections.emptyList(), sink.failures());
     }
 
     private Core coreUnderLog() {
@@ -106,7 +110,7 @@ class CallerTextTest {
     private void assertMistake(Answer<?> answer) {
         Answer.Mistake<?> mistake = assertInstanceOf(Answer.Mistake.class, answer);
         assertTrue(mistake.detail().contains("NUL"), mistake.detail());
-        assertEquals(List.of(), log.calls());
-        assertEquals(List.of(), sink.failures());
+        assertEquals(Collections.emptyList(), log.calls());
+        assertEquals(Collections.emptyList(), sink.failures());
     }
 }

@@ -75,12 +75,15 @@ public final class CoreTimer {
         boolean following = !(scheduler instanceof NoScheduler);
         CoreTimer timer = new CoreTimer(core, scheduler, following);
         if (following) {
-            return switch (CoreInternals.installDeadlineHooks(core, timer.hooks)) {
-                case Answer.Ok<Void> installed -> new Answer.Ok<>(timer);
-                case Answer.Mistake<Void> taken -> new Answer.Mistake<>(
+            Answer<Void> installed = CoreInternals.installDeadlineHooks(core, timer.hooks);
+            if (installed instanceof Answer.Ok) {
+                return new Answer.Ok<>(timer);
+            }
+            if (installed instanceof Answer.Mistake) {
+                return new Answer.Mistake<>(
                         "another timer follows this core already; destroy it before starting another");
-                default -> new Answer.Destroyed<>();
-            };
+            }
+            return new Answer.Destroyed<>();
         }
         if (core.isDestroyed()) {
             return new Answer.Destroyed<>();
@@ -163,7 +166,7 @@ public final class CoreTimer {
     /** Schedules the wait for {@code at} under {@code arming}, reading the clock only when the scheduler is bounded. */
     private void arm(long arming, long at, OptionalLong knownNow) {
         Optional<Scheduler.Task> scheduled = scheduled(arming, waitEnd(at, knownNow));
-        if (scheduled.isEmpty()) {
+        if (!scheduled.isPresent()) {
             return;
         }
         boolean current;

@@ -11,6 +11,7 @@ import com.weivel.core.FailureKind;
 import com.weivel.core.Manifest;
 import com.weivel.core.NamedNumber;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -32,7 +33,7 @@ class CapacityTest {
             value(provider.register(MEASURED, measured, new CapacityAnswerer() {
                 @Override
                 public List<NamedNumber> attributes() {
-                    return List.of(new NamedNumber("latency", 5));
+                    return Collections.singletonList(new NamedNumber("latency", 5));
                 }
 
                 @Override
@@ -46,8 +47,9 @@ class CapacityTest {
                     .settlement();
 
             assertSame(measured, value(settlement.join()));
-            assertEquals(List.of(List.of(new NamedNumber("latency", 10))), askedToServe);
-            assertEquals(List.of(), fixture.failures);
+            assertEquals(Collections.singletonList(Collections.singletonList(new NamedNumber("latency", 10))),
+                    askedToServe);
+            assertEquals(Collections.emptyList(), fixture.failures);
         }
     }
 
@@ -119,7 +121,7 @@ class CapacityTest {
                 @Override
                 public List<NamedNumber> attributes() {
                     asked.add("attributes");
-                    return List.of();
+                    return Collections.emptyList();
                 }
 
                 @Override
@@ -131,7 +133,7 @@ class CapacityTest {
 
             consumer.want(MEASURED, WantLimits.polled(100));
 
-            assertEquals(List.of(), asked);
+            assertEquals(Collections.emptyList(), asked);
             assertEquals(0, fixture.crossings.count("weivel_report_capacity"));
             assertEquals(1, fixture.failuresOf(FailureKind.EVENT_INCOMPLETE).size());
             assertEquals(1, fixture.failures.size());
@@ -140,8 +142,10 @@ class CapacityTest {
     }
 
     private static Manifest advertising(double latency) {
-        return new Manifest("provider", 0, Optional.empty(), List.of(), List.of(), List.of(),
-                List.of(new Manifest.ServiceOffer(MEASURED, List.of(new NamedNumber("latency", latency)))),
-                List.of(), List.of(), Optional.empty());
+        return new Manifest("provider", 0, Optional.empty(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.singletonList(new Manifest.ServiceOffer(MEASURED,
+                        Collections.singletonList(new NamedNumber("latency", latency)))),
+                Collections.emptyList(), Collections.emptyList(), Optional.empty());
     }
 }

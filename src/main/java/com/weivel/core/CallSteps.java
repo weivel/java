@@ -11,23 +11,44 @@ import java.util.Optional;
  * {@link Answer.Defect}. Like {@link CoreInternals}, through which alone a call takes them, they are for the layer's
  * own packages.
  *
- * @param guard checked under the lock once a due deadline was handed over and before the call is made: an answer it
- *     gives is the call's answer, the core not called and nothing drained
- * @param answered run under the lock after the core answered OK and the call's events were drained, and before any of
- *     them is dispatched, on this thread or another, so an entry it makes for the handle the core answered is there
- *     when a listener hears of that handle; what it answers is the call's answer
  * @param <T> the result of the call
  */
-public record CallSteps<T>(CallGuard<T> guard, AnsweredStep<T> answered) {
+public final class CallSteps<T> {
+    private final CallGuard<T> guard;
+    private final AnsweredStep<T> answered;
+
     /**
      * Checks that both steps are present.
      *
      * @param guard the guard
      * @param answered the answered step
      */
-    public CallSteps {
+    public CallSteps(CallGuard<T> guard, AnsweredStep<T> answered) {
         Objects.requireNonNull(guard, "guard");
         Objects.requireNonNull(answered, "answered");
+        this.guard = guard;
+        this.answered = answered;
+    }
+
+    /**
+     * Answers {@code guard}.
+     *
+     * @return checked under the lock once a due deadline was handed over and before the call is made: an answer it
+     *     gives is the call's answer, the core not called and nothing drained
+     */
+    public CallGuard<T> guard() {
+        return guard;
+    }
+
+    /**
+     * Answers {@code answered}.
+     *
+     * @return run under the lock after the core answered OK and the call's events were drained, and before any of them
+     *     is dispatched, on this thread or another, so an entry it makes for the handle the core answered is there when
+     *     a listener hears of that handle; what it answers is the call's answer
+     */
+    public AnsweredStep<T> answered() {
+        return answered;
     }
 
     /**
@@ -37,7 +58,7 @@ public record CallSteps<T>(CallGuard<T> guard, AnsweredStep<T> answered) {
      * @return the steps
      */
     public static <T> CallSteps<T> none() {
-        return new CallSteps<>(Optional::empty, Answer.Ok::new);
+        return new CallSteps<T>(() -> Optional.<Answer<T>>empty(), Answer.Ok::new);
     }
 
     /**
@@ -69,5 +90,31 @@ public record CallSteps<T>(CallGuard<T> guard, AnsweredStep<T> answered) {
          * @return the call's answer, ordinarily the result as an {@link Answer.Ok}
          */
         Answer<T> record(T value);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof CallSteps)) {
+            return false;
+        }
+        CallSteps<?> that = (CallSteps<?>) other;
+        return Objects.equals(guard, that.guard)
+                && Objects.equals(answered, that.answered);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 0;
+        hash = 31 * hash + Objects.hashCode(guard);
+        hash = 31 * hash + Objects.hashCode(answered);
+        return hash;
+    }
+
+    @Override
+    public String toString() {
+        return "CallSteps[guard=" + guard + ", answered=" + answered + "]";
     }
 }

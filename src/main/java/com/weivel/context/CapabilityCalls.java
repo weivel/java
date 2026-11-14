@@ -7,6 +7,7 @@ import com.weivel.core.FailureKind;
 import com.weivel.handles.HandleKind;
 import com.weivel.handles.Handles;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,7 +26,7 @@ final class CapabilityCalls {
             return new Answer.Ok<>(provided);
         });
         room.cancel();
-        return answer instanceof Answer.Ok<Long> ? new Answer.Ok<>(null) : Answers.retyped(answer);
+        return answer instanceof Answer.Ok ? new Answer.Ok<>(null) : Answers.retyped(answer);
     }
 
     /**
@@ -45,7 +46,7 @@ final class CapabilityCalls {
                         return new Answer.Ok<>(listed);
                     });
             listing.giveBackUnusedRoom();
-            if (!(answer instanceof Answer.Ok<List<CapabilityImplementation>>)) {
+            if (!(answer instanceof Answer.Ok)) {
                 return Answers.retyped(answer);
             }
             if (listing.shortOf > 0) {
@@ -56,7 +57,7 @@ final class CapabilityCalls {
                 state.report(FailureKind.OBJECT_UNKNOWN, "the core listed an implementation the layer holds no "
                         + "object for, which was left out", Optional.empty(), Optional.empty());
             }
-            return new Answer.Ok<>(List.copyOf(listing.found));
+            return new Answer.Ok<>(Collections.unmodifiableList(new ArrayList<>(listing.found)));
         }
     }
 
@@ -67,8 +68,8 @@ final class CapabilityCalls {
             return new Answer.Ok<>(watch);
         });
         room.cancel();
-        return answer instanceof Answer.Ok<Long> made
-                ? new Answer.Ok<>(new Watching(state, context, made.value()))
+        return answer instanceof Answer.Ok
+                ? new Answer.Ok<>(new Watching(state, context, ((Answer.Ok<Long>) answer).value()))
                 : Answers.retyped(answer);
     }
 
@@ -96,7 +97,7 @@ final class CapabilityCalls {
             for (CapabilityImplementation each : listed) {
                 Optional<Records.Implementation> record = state.recordOf(each.implementation(),
                         HandleKind.CAPABILITY_IMPLEMENTATION, Records.Implementation.class);
-                if (record.isEmpty()) {
+                if (!record.isPresent()) {
                     unknown++;
                     continue;
                 }

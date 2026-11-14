@@ -350,7 +350,7 @@ public final class Handles {
         public CallSteps<Long> making(HandleKind kind, long owner, Object object) {
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(object, "object");
-            return new CallSteps<>(Optional::empty, handle -> {
+            return new CallSteps<Long>(() -> Optional.<Answer<Long>>empty(), handle -> {
                 add(kind, handle, owner, object);
                 return new Answer.Ok<>(handle);
             });

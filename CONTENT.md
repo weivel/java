@@ -7,9 +7,12 @@ core's answers.
 
 ## What it is not
 
-It is not the core, and it carries no C. It reaches the core's binary through Java's foreign function and memory API
-alone, loading it from the path its caller gives, so one build of the layer runs against whichever core binary its
-caller loads. It forces no path, file name, variable or format on its caller.
+It is not the core, and it carries no C. It reaches the core's binary through one native seam in `com.weivel.core`,
+loading it from the path its caller gives, so one build of the layer runs against whichever core binary its caller
+loads. The jar is multi-release: on Java 22 and later the seam is Java's foreign function and memory API, on Java 8 to
+21 it is JNA, chosen by the Java that runs it with no flag. Both read every struct through one table of offsets written
+by hand, which the tests compare field by field with what the C compiler laid out. It forces no path, file name,
+variable or format on its caller.
 
 ## Modules
 
@@ -21,13 +24,13 @@ are in `src/test/java/com/weivel/<module>/`.
 ## What is built
 
 `CoreBinary.load` opens the core's shared binary from the path its caller gives and resolves every function the
-core's header declares into one table of downcall handles. A path that is no library, and a library that lacks one of
+core's header declares into one table of native functions. A path that is no library, and a library that lacks one of
 the core's functions, are each answered as a value, the second naming the first function missing.
 `CoreBinary.close` closes what the load opened.
 
 `Core.create` creates a core through that table, and every call into it goes through one wrapper, which nothing else
 in the layer bypasses: `CoreCalls` builds each call, `Core.call` makes it. A call is made under one `ReentrantLock`
-and its events are drained under the same hold, each copied into a `CoreEvent` record and released in the core
+and its events are drained under the same hold, each copied into a `CoreEvent` value and released in the core
 before the next is drained; an event that cannot be copied whole is still heard, marked incomplete, with fixed
 sentences in place of its texts. The events are dispatched to the listeners first in, first out, outside the lock, by
 one thread at a time: a call made while a dispatch runs, from a listener or another thread, joins the end of the
@@ -83,20 +86,27 @@ The other packages hold only their purpose so far.
 
 ## Using it
 
-The layer needs Java 25 and the core's shared binary. Java refuses, or warns about, native access a launch did not
-grant, so a process using the layer from the class path runs with `--enable-native-access=ALL-UNNAMED`. Any thread
-may call; a call into the core is a short downcall, during which a virtual thread pins its carrier.
+The layer needs Java 8 or later, JNA on the class path below Java 22, and the core's shared binary. Java 22 and later
+refuse, or warn about, native access a launch did not grant, so a process using the layer from the class path there
+runs with `--enable-native-access=ALL-UNNAMED`. Any thread may call; a call into the core is a short downcall, during
+which a virtual thread pins its carrier.
 
 ## Building
 
-`./gradlew check` builds and tests everything. The wrapper fetches its pinned Gradle, and Gradle fetches a Java 25
-toolchain when none is installed; the native build needs CMake 3.15 or later and a C compiler on the `PATH`. The
-build reads the core, the standard and the conformance kit from `siblings/core`, `siblings/standard` and
-`siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links
-or clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts`
-program, and the standard's shared library and `layouts` program, with CMake in Release, and the tests run against
-those binaries. Each native build declares every sibling's sources it compiles as its inputs, the core's among the
-standard's, so a change to either rebuilds it.
+`./gradlew check` builds and tests everything. The wrapper fetches its pinned Gradle, and Gradle fetches the Java 8 and
+Java 25 toolchains when they are not installed; the native build needs CMake 3.15 or later and a C compiler on the
+`PATH`. The build reads the core, the standard and the conformance kit from `siblings/core`, `siblings/standard` and
+`siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links or
+clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts` program, and
+the standard's shared library and `layouts` program, with CMake in Release, and the tests run against those binaries.
+Each native build declares every sibling's sources it compiles as its inputs, the core's among the standard's, so a
+change to either rebuilds it.
+
+Java 8 compiles every source but the foreign function backend, which Java 25 compiles at release 22 into the jar's
+`META-INF/versions/22`. `check` runs the whole suite twice against the built jar, never against the class
+directories, so the multi-release choice is the one a caller gets: `test` on Java 25 through the foreign function
+API, and `testJava8` on Java 8 through JNA, each asserting which backend it ran on. Javadoc runs on Java 25, at
+release 8 for the jar's base and at release 22 for the Java 22 sources.
 
 Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
 symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run

@@ -45,7 +45,8 @@ public final class PendingWant {
             ended[0] = state.handles.end(want);
             return new Answer.Ok<>(withdrawn);
         });
-        if (ended[0] != null && ended[0].object() instanceof Records.Want record) {
+        if (ended[0] != null && ended[0].object() instanceof Records.Want) {
+            Records.Want record = (Records.Want) ended[0].object();
             record.holdingRoom().cancel();
             state.settleLater(record.settlement(), new Answer.Absent<>());
         }

@@ -42,7 +42,7 @@ class TimerThreadsTest {
         threads.shutdownNow();
         core.destroy();
         core.close();
-        assertEquals(List.of(), failures);
+        assertEquals(Collections.emptyList(), failures);
     }
 
     @Test
@@ -64,7 +64,7 @@ class TimerThreadsTest {
         earlier.get(GATE_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(OptionalLong.of(50), timer.armed());
-        assertEquals(List.of(50L), scheduler.live());
+        assertEquals(Collections.singletonList(50L), scheduler.live());
     }
 
     @Test
@@ -79,8 +79,8 @@ class TimerThreadsTest {
         firing.get(GATE_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(OptionalLong.of(150), timer.armed());
-        assertEquals(List.of(150L), scheduler.live());
-        assertEquals(List.of(100L), crossings.advanceTimes());
+        assertEquals(Collections.singletonList(150L), scheduler.live());
+        assertEquals(Collections.singletonList(100L), crossings.advanceTimes());
     }
 
     @Test
@@ -95,7 +95,7 @@ class TimerThreadsTest {
         firing.get(GATE_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(OptionalLong.empty(), timer.armed());
-        assertEquals(List.of(), crossings.advanceTimes());
+        assertEquals(Collections.emptyList(), crossings.advanceTimes());
     }
 
     /** Runs the task due at 100 on the other thread, holding it inside the clock read its callback makes. */

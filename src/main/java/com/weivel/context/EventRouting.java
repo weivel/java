@@ -29,35 +29,40 @@ final class EventRouting implements CoreListener {
 
     @Override
     public void hear(CoreEvent event) {
-        switch (event) {
-            case CoreEvent.WantSettledEvent settled -> settle(settled);
-            case CoreEvent.WatchEvent watch -> watched(watch);
-            case CoreEvent.CapabilityEvent capability -> capabilityChanged(capability);
-            case CoreEvent.RevokedEvent revoked -> revoked(revoked);
-            case CoreEvent.ReachRefusedEvent reach -> contextOf(reach.plugin(), reach).ifPresent(context ->
+        if (event instanceof CoreEvent.WantSettledEvent) {
+            settle((CoreEvent.WantSettledEvent) event);
+        } else if (event instanceof CoreEvent.WatchEvent) {
+            watched((CoreEvent.WatchEvent) event);
+        } else if (event instanceof CoreEvent.CapabilityEvent) {
+            capabilityChanged((CoreEvent.CapabilityEvent) event);
+        } else if (event instanceof CoreEvent.RevokedEvent) {
+            revoked((CoreEvent.RevokedEvent) event);
+        } else if (event instanceof CoreEvent.ReachRefusedEvent) {
+            CoreEvent.ReachRefusedEvent reach = (CoreEvent.ReachRefusedEvent) event;
+            contextOf(reach.plugin(), reach).ifPresent(context ->
                     context.tell(new PluginEvent.ReachRefused(reach.kind(), reach.id(), reach.refusal())));
-            case CoreEvent.CapacityWantedEvent question -> CapacityAnswering.answer(state, question);
-            case CoreEvent.LogEvent log -> state.write(new LogRecord(log.level(), Optional.empty(), log.text()));
-            case CoreEvent.RefusalEvent refusal -> {
-            }
-            case CoreEvent.DeadlineEvent deadline -> {
-            }
+        } else if (event instanceof CoreEvent.CapacityWantedEvent) {
+            CapacityAnswering.answer(state, (CoreEvent.CapacityWantedEvent) event);
+        } else if (event instanceof CoreEvent.LogEvent) {
+            CoreEvent.LogEvent log = (CoreEvent.LogEvent) event;
+            state.write(new LogRecord(log.level(), Optional.<String>empty(), log.text()));
         }
     }
 
     /** Settles a want once: whoever ends its entry, this settlement or its withdrawal, completes it. */
     private void settle(CoreEvent.WantSettledEvent settled) {
         HandleEntry entry = state.handles.end(settled.want());
-        if (entry == null || !(entry.object() instanceof Records.Want want)) {
+        if (entry == null || !(entry.object() instanceof Records.Want)) {
             return;
         }
+        Records.Want want = (Records.Want) entry.object();
         if (settled.implementation() == 0) {
             want.holdingRoom().cancel();
             want.settlement().complete(new Answer.Refused<>(RefusalStatus.REFUSED, settled.refusal()));
             return;
         }
         Optional<Object> service = serviceOf(settled.implementation(), settled);
-        if (service.isEmpty()) {
+        if (!service.isPresent()) {
             want.holdingRoom().cancel();
             want.settlement().complete(new Answer.Defect<>("the core settled a want with a registration the layer "
                     + "holds no object for"));
@@ -74,7 +79,7 @@ final class EventRouting implements CoreListener {
     private void watched(CoreEvent.WatchEvent event) {
         Optional<Records.ServiceWatch> watch = state.recordOf(event.watch(), HandleKind.WATCH,
                 Records.ServiceWatch.class);
-        if (watch.isEmpty()) {
+        if (!watch.isPresent()) {
             return;
         }
         ServiceWatcher watcher = watch.get().watcher();
@@ -93,13 +98,13 @@ final class EventRouting implements CoreListener {
     private void capabilityChanged(CoreEvent.CapabilityEvent event) {
         Optional<Records.CapabilityWatch> watch = state.recordOf(event.watch(), HandleKind.WATCH,
                 Records.CapabilityWatch.class);
-        if (watch.isEmpty()) {
+        if (!watch.isPresent()) {
             return;
         }
         Optional<Object> implementation = state.recordOf(event.implementation(),
                 HandleKind.CAPABILITY_IMPLEMENTATION, Records.Implementation.class)
                 .map(Records.Implementation::implementation);
-        if (implementation.isEmpty()) {
+        if (!implementation.isPresent()) {
             unknown("a capability watch heard of an implementation the layer holds no object for", event);
             return;
         }
@@ -125,7 +130,7 @@ final class EventRouting implements CoreListener {
     private Optional<Object> serviceOf(long registration, CoreEvent event) {
         Optional<Object> service = state.recordOf(registration, HandleKind.SERVICE_REGISTRATION,
                 Records.Service.class).map(Records.Service::service);
-        if (service.isEmpty()) {
+        if (!service.isPresent()) {
             unknown("the core handed a plugin a registration the layer holds no object for", event);
         }
         return service;
