@@ -689,7 +689,9 @@ public final class Host implements AutoCloseable {
      * @implNote {@link #activate} runs it as a step of a dispatch wherever it can, so what an activate's own calls
      * queue is heard once that activate has returned, as everywhere else inside a dispatch, and a plugin waiting on a
      * service another's activate registers is served after that registration returns, never inside it. Where a
-     * dispatch runs already, the calls queue behind it the same way.
+     * dispatch runs already, the calls queue behind it the same way. So an activate runs while its thread is the
+     * dispatcher: one that blocks on an event another thread causes waits for an event only its own thread would
+     * dispatch, and deadlocks, as it does in the C layer. An activate that waits does so through the stage it answers.
      */
     private void startEvery(ActivationPlan plan, List<CompletableFuture<Outcome>> outcomes) {
         for (long plugin : plan.order()) {

@@ -69,14 +69,14 @@ public final class CoreInternals {
     }
 
     /**
-     * Runs a step at once with the calling thread as the dispatcher, so what the step's own calls queue is dispatched
-     * once it returns, as inside any dispatch; but only where no dispatch runs and nothing waits to be dispatched,
-     * since otherwise the step could run only later or on another thread.
+     * Runs a step at once with the calling thread as the dispatcher, behind whatever is queued, so what the step's own
+     * calls queue is dispatched once it returns, as inside any dispatch; but only where no dispatch runs and no event
+     * waits behind a deadline not yet followed, since otherwise the step could run only later or on another thread.
      *
      * @param core the core
      * @param step the step
-     * @return whether the step ran here; false, running and queuing nothing, when a dispatch runs, something is
-     *     queued, or the core is destroyed, so the caller does the step's work itself
+     * @return whether the step ran here, exactly once; false, running and queuing nothing, when a dispatch runs, a
+     *     fenced event waits, or the core is destroyed, so the caller does the step's work itself
      */
     public static boolean runAsTheDispatcher(Core core, DeferredStep step) {
         return core.runAsTheDispatcher(step);

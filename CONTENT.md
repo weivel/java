@@ -93,7 +93,9 @@ loader, and `Host.loadEntry` from a JAR in a class loader of the host's own, who
 the host never assumes a name. `activate` asks the core for the plan and starts each plugin of its order in that order
 on the calling thread, never waiting for an activate, and answers the plan at once with each plugin's outcome as a
 stage: active, quarantined, refused, released or failed. Where no dispatch runs it starts them as one step of a
-dispatch, so what an activate's own calls queue is heard once that activate has returned, as inside any dispatch. A settled activate is verified, and a refused verification
+dispatch, so what an activate's own calls queue is heard once that activate has returned, as inside any dispatch. An
+activate therefore runs while its thread is the dispatcher: one that blocks on an event another thread causes
+deadlocks, so an activate that must wait answers a stage and completes it later. A settled activate is verified, and a refused verification
 quarantined in the same hold of the layer lock; a failed one is quarantined with a reason saying so. `release` calls
 the deactivate while the plugin is whole, releases it in the core, and ends its entries and forgets it only once that
 release's events are dispatched, as a step behind them inside a dispatch. `registerHostService` offers a service of
