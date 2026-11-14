@@ -1,109 +1,177 @@
 plugins {
-    id "io.github.intisy.github-gradle" version "1.10.3" apply false
+    id 'java-library'
 }
 
-subprojects {
-    apply plugin: "java-library"
-    apply plugin: "io.github.intisy.github-gradle"
+group = 'com.weivel'
+version = '0.0.0'
 
-    group = "io.github.intisy"
-    // publishGithub requires a concrete version. Derive it from -Partifact_version=<tag> passed by
-    // CI (stripping a leading "v"), falling back to a local dev version, the ecosystem derivation.
-    version = (project.findProperty("artifact_version") ?: "0.0.0-dev").toString().replaceFirst(/^v/, "")
+repositories {
+    mavenCentral()
+}
 
-    repositories {
-        mavenLocal()
-        mavenCentral()
-    }
-
-    java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
-        }
-    }
-
-    // All Java source, main and test alike, must stay within the JDK 1.8 API surface; javac enforces it.
-    tasks.matching { it.name == "compileJava" || it.name == "compileTestJava" }.configureEach {
-        options.release = 8
-    }
-
-    // `@apiNote`, `@implSpec` and `@implNote` are reserved for the JDK's own build, so the standard
-    // doclet rejects them until a project registers them. CLAUDE.md requires @implNote for internal
-    // rationale, so without this every such comment is a javadoc error rather than documentation.
-    tasks.withType(Javadoc).configureEach {
-        options.addBooleanOption("Xdoclint:all", true)
-        // javadoc stops listing after 100 of each by default, which silently under-reports the gap.
-        options.addStringOption("Xmaxwarns", "10000")
-        options.addStringOption("Xmaxerrs", "10000")
-        // doclint reports a missing comment as a WARNING, and failOnError only fails on errors, so
-        // without this the task passes over an entirely undocumented module.
-        options.addBooleanOption("Werror", true)
-        options.tags = [
-            "apiNote:a:API Note:",
-            "implSpec:a:Implementation Requirements:",
-            "implNote:a:Implementation Note:",
-        ]
-        failOnError = true
-    }
-
-    tasks.named("check") { dependsOn tasks.named("javadoc") }
-
-    dependencies {
-        testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
-    }
-
-    test {
-        useJUnitPlatform()
-    }
-
-    github {
-        accessToken = System.getenv("GITHUB_TOKEN") ?: ""
-    }
-
-    // A consumer resolves each module by its own classifier, because they serve different Gradle
-    // configurations: :processor is an annotationProcessor, :annotations and :contract are
-    // compileOnly, :seam and :js-base are implementation. One shaded jar would put the annotation
-    // processor on every consumer's runtime classpath, which the plugin-weight rule forbids.
-    tasks.matching { it.name == "publishGithub" }.configureEach {
-        onlyIf { project.path in PUBLISHED_MODULES.keySet() }
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
-// The modules a downstream Java repo resolves, mapped to the classifier its coordinate names.
-// :teavm is absent deliberately: it feeds this library's npm package, not any Java consumer.
-// :engine was absent for the same reason until ai-java became a JVM host of the plugin model, which
-// is what it exists to run. It needs nothing beside it: its only dependencies are the annotations
-// and the processor, both SOURCE-retention, so the classifier jar stands alone.
-ext.PUBLISHED_MODULES = [
-    ":annotations": "annotations",
-    ":processor"  : "processor",
-    ":contract"   : "contract",
-    ":engine"     : "engine",
-    ":seam"       : "seam",
-    ":js-base"    : "js-base",
-    ":jvm-seam"   : "jvm-seam",
+dependencies {
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.tags = [
+            'apiNote:a:API Note:',
+            'implSpec:a:Implementation Requirements:',
+            'implNote:a:Implementation Note:'
+    ]
+    options.addBooleanOption('Xdoclint:all', true)
+    options.addBooleanOption('Werror', true)
+    failOnError = true
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('javadoc')
+}
+
+def operatingSystemName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def isWindows = operatingSystemName.contains('windows')
+def isMacOs = operatingSystemName.contains('mac')
+
+def sharedLibraryFileName = { String name ->
+    isWindows ? "${name}.dll" : isMacOs ? "lib${name}.dylib" : "lib${name}.so"
+}
+def executableFileName = { String name ->
+    isWindows ? "${name}.exe" : name
+}
+
+def siblingsDirectory = file('siblings')
+def nativeBuildDirectory = layout.buildDirectory.dir('native-build').get().asFile
+def nativeDirectory = layout.buildDirectory.dir('native').get().asFile
+
+def nativeSiblings = [
+        [name                : 'core',
+         taskSuffix          : 'Core',
+         targets             : ['weivel_core_shared', 'echo', 'layouts'],
+         libraries           : ['weivel_core', 'echo'],
+         configureDefinitions: []],
+        [name                : 'standard',
+         taskSuffix          : 'Standard',
+         targets             : ['weivel_standard_shared', 'layouts'],
+         libraries           : ['weivel_standard'],
+         configureDefinitions: ["-DWEIVEL_CORE_SOURCE_DIR=${new File(siblingsDirectory, 'core').absolutePath}"]],
 ]
 
-configure(subprojects.findAll { PUBLISHED_MODULES.containsKey(it.path) }) {
-    jar {
-        archiveVersion = ""
-    }
+def requiredSiblings = ['core', 'standard', 'conformance']
 
-    publishGithub {
-        // These modules sit inside bayonet's repo with no .git of their own, so the default
-        // git-remote lookup fails; owner/repo also drive the uploaded asset name
-        // (bayonet-<classifier>.jar), which is what a consumer's coordinate resolves.
-        owner = "intisy"
-        repo = "bayonet"
-        releaseName = "bayonet ${project.findProperty('artifact_version') ?: project.version}"
-        artifacts {
-            artifact {
-                classifier = PUBLISHED_MODULES[project.path]
-                jar = file("build/libs/${project.name}.jar")
+def requireSiblings = tasks.register('requireSiblings') {
+    group = 'build'
+    description = 'Fails, saying how to fix it, when a sibling checkout the build reads is missing.'
+    doLast {
+        requiredSiblings.each { String sibling ->
+            if (!new File(siblingsDirectory, "${sibling}/CMakeLists.txt").isFile()) {
+                throw new GradleException("siblings/${sibling} is missing. CI checks it out from .weivel/repo.json; " +
+                        "locally, link or clone the ${sibling} checkout there at the commit .weivel/repo.json pins.")
             }
         }
     }
+}
+
+def siblingSources = { String sibling ->
+    fileTree(new File(siblingsDirectory, sibling)) {
+        exclude '.git', '.git/**', 'build/**', 'build-*/**', 'siblings/**'
+    }
+}
+
+def builtFileCandidates = { String sibling, String fileName ->
+    def binaryDirectory = new File(nativeBuildDirectory, "${sibling}/bin")
+    [new File(binaryDirectory, "Release/${fileName}"), new File(binaryDirectory, fileName)]
+}
+
+def builtFileNames = { Map nativeSibling ->
+    nativeSibling.libraries.collect { sharedLibraryFileName(it) } + [executableFileName('layouts')]
+}
+
+def nativeBuildTasks = nativeSiblings.collect { Map nativeSibling ->
+    def siblingSourceDirectory = new File(siblingsDirectory, nativeSibling.name)
+    def siblingBuildDirectory = new File(nativeBuildDirectory, nativeSibling.name)
+
+    def configureTask = tasks.register("configureNative${nativeSibling.taskSuffix}", Exec) {
+        group = 'build'
+        description = "Configures siblings/${nativeSibling.name} with CMake in Release."
+        dependsOn requireSiblings
+        inputs.files(siblingSources(nativeSibling.name)).withPropertyName('sources')
+        outputs.file(new File(siblingBuildDirectory, 'CMakeCache.txt'))
+        executable 'cmake'
+        args(['-S', siblingSourceDirectory.absolutePath, '-B', siblingBuildDirectory.absolutePath,
+              '-DCMAKE_BUILD_TYPE=Release'] + nativeSibling.configureDefinitions)
+    }
+
+    tasks.register("buildNative${nativeSibling.taskSuffix}", Exec) {
+        group = 'build'
+        description = "Builds ${nativeSibling.targets.join(', ')} of siblings/${nativeSibling.name} with CMake in Release."
+        dependsOn configureTask
+        inputs.files(siblingSources(nativeSibling.name)).withPropertyName('sources')
+        outputs.files(builtFileNames(nativeSibling).collectMany { builtFileCandidates(nativeSibling.name, it) })
+        executable 'cmake'
+        args(['--build', siblingBuildDirectory.absolutePath, '--config', 'Release', '--target'] +
+                nativeSibling.targets + ['--parallel'])
+    }
+}
+
+def coreBinary = new File(nativeDirectory, sharedLibraryFileName('weivel_core'))
+def standardBinary = new File(nativeDirectory, sharedLibraryFileName('weivel_standard'))
+def echoBinary = new File(nativeDirectory, sharedLibraryFileName('echo'))
+def coreLayouts = new File(nativeDirectory, executableFileName('core-layouts'))
+def standardLayouts = new File(nativeDirectory, executableFileName('standard-layouts'))
+def gatheredBinaries = [coreBinary, standardBinary, echoBinary, coreLayouts, standardLayouts]
+
+def buildNative = tasks.register('buildNative', Sync) {
+    group = 'build'
+    description = 'Builds the core, its echo library and the standard from siblings/ and gathers them in build/native.'
+    dependsOn nativeBuildTasks
+    into nativeDirectory
+    nativeSiblings.each { Map nativeSibling ->
+        nativeSibling.libraries.each { String library ->
+            from(builtFileCandidates(nativeSibling.name, sharedLibraryFileName(library)))
+        }
+        from(builtFileCandidates(nativeSibling.name, executableFileName('layouts'))) {
+            rename { "${nativeSibling.name}-${it}" }
+        }
+    }
+    doLast {
+        def missing = gatheredBinaries.findAll { !it.isFile() }
+        if (!missing.isEmpty()) {
+            throw new GradleException("CMake built no ${missing*.name.join(', ')}; looked in ${nativeBuildDirectory}.")
+        }
+    }
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    dependsOn buildNative
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    def testFiles = [
+            'weivel.test.coreBinary'     : coreBinary,
+            'weivel.test.standardBinary' : standardBinary,
+            'weivel.test.echoBinary'     : echoBinary,
+            'weivel.test.coreLayouts'    : coreLayouts,
+            'weivel.test.standardLayouts': standardLayouts,
+            'weivel.test.coreHeader'     : new File(siblingsDirectory, 'core/include/weivel/core.h'),
+    ]
+    testFiles.each { String property, File location ->
+        inputs.file(location).withPropertyName(property)
+        systemProperty property, location.absolutePath
+    }
+    def layerVectors = new File(siblingsDirectory, 'conformance/vectors/layer')
+    inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
+    systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
 }

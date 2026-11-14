@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "importName": "java",
+  "description": "The Java language implementation of weivel: it loads the C core its caller names through the foreign function interface and runs plugins written in Java, deciding nothing itself.",
+  "topics": [
+    "weivel"
+  ],
+  "dependencies": [
+    {
+      "id": "github:1455223370",
+      "importName": "core",
+      "commit": "2521d9dce58191f7d97e82d32592059e8d3fca80"
+    },
+    {
+      "id": "github:1456093642",
+      "importName": "standard",
+      "commit": "4031ff8aa02cc8cb9a3d9ff71ce82c2fc46a8fcb"
+    },
+    {
+      "id": "github:1426141679",
+      "importName": "conformance",
+      "commit": "9a03e312cb500241fc870eec1458acc8fad140ba"
+    }
+  ]
+}
