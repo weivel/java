@@ -72,4 +72,9 @@ build reads the core, the standard and the conformance kit from `siblings/core`,
 `siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links
 or clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts`
 program, and the standard's shared library and `layouts` program, with CMake in Release, and the tests run against
-those binaries.
+those binaries. Each native build declares every sibling's sources it compiles as its inputs, the core's among the
+standard's, so a change to either rebuilds it.
+
+Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
+symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run
+with `--no-watch-fs` to have Gradle read the files again, or `--rerun-tasks` to rebuild everything.
