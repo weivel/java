@@ -13,6 +13,9 @@ interface NativeAccess {
     /** The backend's name, {@code ffm} or {@code jna}. */
     String name();
 
+    /** How many bytes an address takes in this JVM. */
+    long addressSize();
+
     /**
      * Opens the shared library at {@code path}, a path its caller chose.
      *

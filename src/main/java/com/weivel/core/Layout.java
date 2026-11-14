@@ -43,6 +43,19 @@ final class Layout {
                 Collections.<Long>emptyList());
     }
 
+    /**
+     * Answers {@code size} when it is the 8 bytes every pointer of this table is laid out as.
+     *
+     * @throws IllegalStateException when the JVM's addresses are any other size
+     */
+    static long requireAddressSize(long size) {
+        if (size != ADDRESS.byteSize()) {
+            throw new IllegalStateException("weivel/java needs a 64-bit JVM: this one's addresses are " + size
+                    + " bytes, and the core's structs are laid out for 8");
+        }
+        return size;
+    }
+
     static Layout padding(long size) {
         return new Layout(Kind.PADDING, Optional.<String>empty(), size, 1, Collections.<Layout>emptyList(),
                 Collections.<Long>emptyList());

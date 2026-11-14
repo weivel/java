@@ -47,9 +47,32 @@ final class CoreFunctions {
         return functions[function.ordinal()];
     }
 
-    /** Calls {@code function}, answering the status every function of the core answers. */
-    int status(CoreFunction function, long... arguments) {
-        return (int) functions[function.ordinal()].call(arguments);
+    /**
+     * Calls {@code function}, answering the status every function of the core answers. One overload per arity the
+     * core's calls use, so no call allocates an argument array.
+     */
+    int status(CoreFunction function, long first) {
+        return (int) functions[function.ordinal()].call(first);
+    }
+
+    int status(CoreFunction function, long first, long second) {
+        return (int) functions[function.ordinal()].call(first, second);
+    }
+
+    int status(CoreFunction function, long first, long second, long third) {
+        return (int) functions[function.ordinal()].call(first, second, third);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth, long fifth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth);
+    }
+
+    int status(CoreFunction function, long first, long second, long third, long fourth, long fifth, long sixth) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth, sixth);
     }
 
     NativeAccess access() {

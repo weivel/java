@@ -8,7 +8,9 @@ final class NativeBackends {
     private NativeBackends() {
     }
 
+    /** @throws IllegalStateException when the JVM is not 64-bit, which the layer's struct layouts assume */
     static NativeAccess current() {
+        Layout.requireAddressSize(JnaAccess.INSTANCE.addressSize());
         return JnaAccess.INSTANCE;
     }
 }

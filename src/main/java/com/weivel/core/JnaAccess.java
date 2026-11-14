@@ -29,6 +29,11 @@ final class JnaAccess implements NativeAccess {
     }
 
     @Override
+    public long addressSize() {
+        return Native.POINTER_SIZE;
+    }
+
+    @Override
     public String toString() {
         return name();
     }
@@ -42,7 +47,7 @@ final class JnaAccess implements NativeAccess {
         Map<String, Object> options = new HashMap<>();
         options.put(DISTINCT_LOAD_OPTION, loads.incrementAndGet());
         try {
-            return new JnaLibrary(NativeLibrary.getInstance(path.toString(), options));
+            return new JnaLibrary(path, NativeLibrary.getInstance(path.toString(), options));
         } catch (UnsatisfiedLinkError notALibrary) {
             throw new IllegalArgumentException(String.valueOf(notALibrary.getMessage()), notALibrary);
         }
@@ -119,18 +124,21 @@ final class JnaAccess implements NativeAccess {
      * @implNote {@code calls} counts the calls under way, and is -1 once closed, so a call never reaches a library
      * already unloaded and a close never unloads one a call is still in.
      */
-    private static final class JnaLibrary implements OpenLibrary {
+    static final class JnaLibrary implements OpenLibrary {
         private static final int CLOSED = -1;
 
+        private final Path path;
         private final NativeLibrary library;
         private final AtomicInteger calls = new AtomicInteger();
 
-        JnaLibrary(NativeLibrary library) {
+        JnaLibrary(Path path, NativeLibrary library) {
+            this.path = path;
             this.library = library;
         }
 
         @Override
         public boolean has(String symbol) {
+            requireOpen();
             try {
                 library.getFunction(symbol);
                 return true;
@@ -141,6 +149,7 @@ final class JnaAccess implements NativeAccess {
 
         @Override
         public NativeFunction function(String symbol, NativeSignature signature) {
+            requireOpen();
             Function function;
             try {
                 function = library.getFunction(symbol);
@@ -150,12 +159,18 @@ final class JnaAccess implements NativeAccess {
             return new JnaFunction(this, function, signature);
         }
 
+        private void requireOpen() {
+            if (calls.get() == CLOSED) {
+                throw new IllegalStateException("the library " + path + " is closed");
+            }
+        }
+
         void enter() {
             int current;
             do {
                 current = calls.get();
                 if (current == CLOSED) {
-                    throw new IllegalStateException("the library is closed");
+                    throw new IllegalStateException("the library " + path + " is closed");
                 }
             } while (!calls.compareAndSet(current, current + 1));
         }
@@ -168,7 +183,8 @@ final class JnaAccess implements NativeAccess {
         public void close() {
             if (!calls.compareAndSet(0, CLOSED)) {
                 throw new IllegalStateException(calls.get() == CLOSED
-                        ? "the library is closed already" : "a call into the library is under way");
+                        ? "the library " + path + " is closed already"
+                        : "a call into the library " + path + " is under way");
             }
             library.close();
         }

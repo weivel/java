@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -91,6 +92,21 @@ class NativeAccessTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("backends")
+    void aLookupInAClosedLibraryIsRefusedNamingTheLibrary(NativeAccess access) {
+        OpenLibrary echo = access.open(NativeFiles.echoBinary());
+        String fileName = NativeFiles.echoBinary().getFileName().toString();
+
+        echo.close();
+
+        IllegalStateException asked = assertThrows(IllegalStateException.class, () -> echo.has("echo_release"));
+        IllegalStateException looked = assertThrows(IllegalStateException.class,
+                () -> echo.function("echo_release", RELEASE));
+        assertTrue(asked.getMessage().contains(fileName), asked.getMessage());
+        assertTrue(looked.getMessage().contains(fileName), looked.getMessage());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("backends")
     void aCallWithTheWrongNumberOfArgumentsIsRefused(NativeAccess access) {
         try (OpenLibrary echo = access.open(NativeFiles.echoBinary())) {
             NativeFunction release = echo.function("echo_release", RELEASE);
@@ -152,5 +168,22 @@ class NativeAccessTest {
         assertFalse(region.isAlive());
         assertThrows(IllegalStateException.class, () -> region.getLong(8));
         assertThrows(IllegalStateException.class, arena::close);
+    }
+
+    /**
+     * @implNote JNA's own bookkeeping is entered directly: no function of the core or the echo library waits, so a call
+     * cannot honestly be held open from Java. The foreign function backend refuses through its arena, untested here.
+     */
+    @Test
+    void aJnaLibraryRefusesToCloseWhileACallIsUnderWayAndClosesOnceItLeaves() {
+        JnaAccess.JnaLibrary echo = (JnaAccess.JnaLibrary) JnaAccess.INSTANCE.open(NativeFiles.echoBinary());
+        echo.enter();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, echo::close);
+        echo.leave();
+        echo.close();
+
+        assertTrue(refused.getMessage().contains("under way"), refused.getMessage());
+        assertThrows(IllegalStateException.class, echo::close);
     }
 }

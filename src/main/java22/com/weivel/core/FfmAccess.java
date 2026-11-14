@@ -39,6 +39,7 @@ final class FfmAccess implements NativeAccess {
     private static final MethodHandle FREE = standardFunction("free", FunctionDescriptor.ofVoid(ADDRESS));
     private static final MethodHandle SEGMENT_AT = segmentAtHandle();
     private static final MethodHandle ADDRESS_OF = addressOfHandle();
+    private static final int MOST_PARAMETERS = 7;
 
     private FfmAccess() {
     }
@@ -46,6 +47,11 @@ final class FfmAccess implements NativeAccess {
     @Override
     public String name() {
         return "ffm";
+    }
+
+    @Override
+    public long addressSize() {
+        return ADDRESS.byteSize();
     }
 
     @Override
@@ -58,7 +64,7 @@ final class FfmAccess implements NativeAccess {
     public OpenLibrary open(Path path) {
         Arena arena = Arena.ofShared();
         try {
-            return new FfmLibrary(arena, SymbolLookup.libraryLookup(path, arena));
+            return new FfmLibrary(path, arena, SymbolLookup.libraryLookup(path, arena));
         } catch (IllegalArgumentException notALibrary) {
             arena.close();
             throw notALibrary;
@@ -174,26 +180,40 @@ final class FfmAccess implements NativeAccess {
 
     /** A library the foreign function and memory API opened, held open by its own arena. */
     private static final class FfmLibrary implements OpenLibrary {
+        private final Path path;
         private final Arena arena;
         private final SymbolLookup lookup;
 
-        FfmLibrary(Arena arena, SymbolLookup lookup) {
+        FfmLibrary(Path path, Arena arena, SymbolLookup lookup) {
+            this.path = path;
             this.arena = arena;
             this.lookup = lookup;
         }
 
         @Override
         public boolean has(String symbol) {
+            requireOpen();
             return lookup.find(symbol).isPresent();
         }
 
         @Override
         public NativeFunction function(String symbol, NativeSignature signature) {
+            requireOpen();
+            if (signature.parameters().size() > MOST_PARAMETERS) {
+                throw new IllegalArgumentException(symbol + " takes more than " + MOST_PARAMETERS + " parameters");
+            }
             Optional<MemorySegment> found = lookup.find(symbol);
             if (found.isEmpty()) {
                 throw new IllegalArgumentException("the library exports no function " + symbol);
             }
-            return new FfmFunction(spreading(LINKER.downcallHandle(found.get(), descriptorOf(signature)), signature));
+            return new FfmFunction(adapted(LINKER.downcallHandle(found.get(), descriptorOf(signature)), signature),
+                    signature.parameters().size());
+        }
+
+        private void requireOpen() {
+            if (!arena.scope().isAlive()) {
+                throw new IllegalStateException("the library " + path + " is closed");
+            }
         }
 
         @Override
@@ -202,10 +222,10 @@ final class FfmAccess implements NativeAccess {
         }
 
         /**
-         * Adapts a downcall handle to take every argument from one {@code long[]} and answer a {@code long}: a pointer
-         * made from its address, an {@code int} narrowed, an {@code int} answer widened, a {@code void} answered 0.
+         * Adapts a downcall handle to take every argument as a {@code long} and answer a {@code long}: a pointer made
+         * from its address, an {@code int} narrowed, an {@code int} answer widened, a {@code void} answered 0.
          */
-        private static MethodHandle spreading(MethodHandle downcall, NativeSignature signature) {
+        private static MethodHandle adapted(MethodHandle downcall, NativeSignature signature) {
             MethodHandle adapted = downcall;
             List<NativeType> parameters = signature.parameters();
             for (int index = 0; index < parameters.size(); index++) {
@@ -218,8 +238,7 @@ final class FfmAccess implements NativeAccess {
             }
             Class<?>[] longs = new Class<?>[parameters.size()];
             Arrays.fill(longs, long.class);
-            adapted = MethodHandles.explicitCastArguments(adapted, MethodType.methodType(long.class, longs));
-            return adapted.asSpreader(long[].class, parameters.size());
+            return MethodHandles.explicitCastArguments(adapted, MethodType.methodType(long.class, longs));
         }
 
         private static FunctionDescriptor descriptorOf(NativeSignature signature) {
@@ -240,20 +259,133 @@ final class FfmAccess implements NativeAccess {
         }
     }
 
+    /**
+     * A downcall handle taking one {@code long} per parameter, called with {@code invokeExact} through the call of its
+     * arity, so no call allocates.
+     */
     private static final class FfmFunction implements NativeFunction {
         private final MethodHandle handle;
+        private final int arity;
 
-        FfmFunction(MethodHandle handle) {
+        FfmFunction(MethodHandle handle, int arity) {
             this.handle = handle;
+            this.arity = arity;
         }
 
         @Override
         public long call(long... arguments) {
+            switch (arguments.length) {
+                case 0:
+                    return call();
+                case 1:
+                    return call(arguments[0]);
+                case 2:
+                    return call(arguments[0], arguments[1]);
+                case 3:
+                    return call(arguments[0], arguments[1], arguments[2]);
+                case 4:
+                    return call(arguments[0], arguments[1], arguments[2], arguments[3]);
+                case 5:
+                    return call(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+                case 6:
+                    return call(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]);
+                case 7:
+                    return call(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5],
+                            arguments[6]);
+                default:
+                    throw wrongCount(arguments.length);
+            }
+        }
+
+        @Override
+        public long call() {
+            requireArity(0);
             try {
-                return (long) handle.invokeExact(arguments);
+                return (long) handle.invokeExact();
             } catch (Throwable thrown) {
                 throw rethrown(thrown);
             }
+        }
+
+        @Override
+        public long call(long first) {
+            requireArity(1);
+            try {
+                return (long) handle.invokeExact(first);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second) {
+            requireArity(2);
+            try {
+                return (long) handle.invokeExact(first, second);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second, long third) {
+            requireArity(3);
+            try {
+                return (long) handle.invokeExact(first, second, third);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second, long third, long fourth) {
+            requireArity(4);
+            try {
+                return (long) handle.invokeExact(first, second, third, fourth);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second, long third, long fourth, long fifth) {
+            requireArity(5);
+            try {
+                return (long) handle.invokeExact(first, second, third, fourth, fifth);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second, long third, long fourth, long fifth, long sixth) {
+            requireArity(6);
+            try {
+                return (long) handle.invokeExact(first, second, third, fourth, fifth, sixth);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        @Override
+        public long call(long first, long second, long third, long fourth, long fifth, long sixth, long seventh) {
+            requireArity(7);
+            try {
+                return (long) handle.invokeExact(first, second, third, fourth, fifth, sixth, seventh);
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
+        }
+
+        private void requireArity(int count) {
+            if (count != arity) {
+                throw wrongCount(count);
+            }
+        }
+
+        private IllegalArgumentException wrongCount(int count) {
+            return new IllegalArgumentException("a function of " + arity + " parameters was handed " + count
+                    + " arguments");
         }
     }
 }
