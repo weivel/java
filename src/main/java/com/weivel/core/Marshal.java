@@ -63,6 +63,32 @@ final class Marshal {
         return struct;
     }
 
+    static MemorySegment quarantineReason(Arena arena, Optional<QuarantineReason> reason) {
+        if (reason.isEmpty()) {
+            return MemorySegment.NULL;
+        }
+        StructLayout layout = CoreLayouts.QUARANTINE_REASON;
+        MemorySegment struct = sized(arena, layout);
+        struct.set(JAVA_INT, offsetOf(layout, "code"), reason.get().code());
+        struct.set(ADDRESS, offsetOf(layout, "detail"), arena.allocateFrom(reason.get().detail()));
+        struct.set(ADDRESS, offsetOf(layout, "fix"), arena.allocateFrom(reason.get().fix()));
+        return struct;
+    }
+
+    static MemorySegment capacity(Arena arena, CapacityAnswer answer) {
+        StructLayout layout = CoreLayouts.CAPACITY;
+        MemorySegment struct = sized(arena, layout);
+        struct.set(JAVA_LONG, offsetOf(layout, "request"), answer.request());
+        writeNumbers(arena, struct, offsetOf(layout, "attributes"), answer.attributes());
+        struct.set(JAVA_INT, offsetOf(layout, "serves"), answer.serves().value());
+        return struct;
+    }
+
+    /** An empty answer struct of {@code layout}, its {@code size} set, for the core to fill. */
+    static MemorySegment emptyAnswer(Arena arena, StructLayout layout) {
+        return sized(arena, layout);
+    }
+
     static MemorySegment pluginOptions(Arena arena, long payload) {
         StructLayout layout = CoreLayouts.PLUGIN_OPTIONS;
         MemorySegment struct = sized(arena, layout);

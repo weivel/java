@@ -44,6 +44,11 @@ final class CallerTexts {
                         inText("an attribute name of the vocabulary", entry.attributeName())))))));
     }
 
+    static Optional<String> inReason(QuarantineReason reason) {
+        return firstOf(Stream.of(inText("the reason's detail", reason.detail()),
+                inText("the reason's fix", reason.fix())));
+    }
+
     static Optional<String> inNumbers(String what, List<NamedNumber> numbers) {
         return firstOf(numbers.stream().map(number -> inText(what, number.name())));
     }

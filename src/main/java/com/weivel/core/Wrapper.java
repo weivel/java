@@ -175,9 +175,19 @@ final class Wrapper {
     }
 
     private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<T> crossed = cross(call.crossing());
+        CoreCalls.Crossed<T> crossed;
+        Optional<Throwable> unread = Optional.empty();
+        try {
+            crossed = cross(call.crossing());
+        } catch (RuntimeException | OutOfMemoryError notCopied) {
+            crossed = null;
+            unread = Optional.of(notCopied);
+        }
         OwnRefusal own = new OwnRefusal();
         drain(waiting(), notes, own);
+        if (unread.isPresent()) {
+            return defect(notes, "the layer could not copy what the core answered a call", unread);
+        }
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
         return answer instanceof Answer.Ok<T> ok ? recorded(steps.answered(), ok.value(), notes) : answer;
     }
