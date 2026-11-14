@@ -5,6 +5,7 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 /** The one table of downcall handles through which the layer reaches every function of one loaded core. */
 final class CoreFunctions {
@@ -29,6 +30,15 @@ final class CoreFunctions {
                     function.descriptor());
         }
         return new CoreFunctions(handles);
+    }
+
+    /** A table whose every handle {@code replacement} answers for: the seam a test counts or fails a call through. */
+    CoreFunctions mapped(BiFunction<CoreFunction, MethodHandle, MethodHandle> replacement) {
+        MethodHandle[] replaced = new MethodHandle[handles.length];
+        for (CoreFunction function : CoreFunction.values()) {
+            replaced[function.ordinal()] = replacement.apply(function, handles[function.ordinal()]);
+        }
+        return new CoreFunctions(replaced);
     }
 
     MethodHandle handle(CoreFunction function) {
