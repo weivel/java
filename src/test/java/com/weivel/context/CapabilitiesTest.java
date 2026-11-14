@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -163,5 +164,29 @@ class CapabilitiesTest {
                 heard.add(implementation);
             }
         };
+    }
+
+    @Test
+    void aWatchHearsTheVeryImplementationLeaveWhenItsProviderIsReleasedAndForgottenInsideADispatch() {
+        PluginContext provider = fixture.opened(capabilities("provider", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
+        List<Object> heard = new ArrayList<>();
+        value(consumer.watchCapability(SCREENS, recording(heard)));
+        Object screen = new Object();
+        value(provider.provide(SCREENS, screen));
+        fixture.verify(provider);
+        AtomicBoolean first = new AtomicBoolean(true);
+        fixture.core.addListener(event -> {
+            if (first.getAndSet(false)) {
+                fixture.release(provider);
+                value(fixture.contexts.forget(provider));
+            }
+        });
+
+        fixture.core.call(CoreCalls.unregister(424242L));
+
+        assertEquals(Arrays.asList("provided", screen, "withdrawn", screen), heard);
+        assertSame(screen, heard.get(3));
+        assertEquals(Collections.emptyList(), fixture.failures);
     }
 }

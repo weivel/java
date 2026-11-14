@@ -18,6 +18,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
+import com.weivel.core.CoreCalls;
+import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class ServicesTest {
     private static final String GREETER = "provider:greeter";
+    private static final long UNKNOWN_HANDLE = 424242L;
 
     private final ContextFixture fixture = new ContextFixture();
     private final PluginContext provider = fixture.opened(providing("provider", GREETER));
@@ -152,5 +157,39 @@ class ServicesTest {
                 heard.add("unregistered");
             }
         };
+    }
+
+    @Test
+    void aWantSettledBeforeAnUnregistrationMadeInsideADispatchStillAnswersTheProvidersObject() {
+        CompletableFuture<Answer<Object>> settlement = consumer.want(GREETER, WantLimits.unbounded()).settlement();
+        Object greeter = new Object();
+        AtomicBoolean first = new AtomicBoolean(true);
+        fixture.core.addListener(event -> {
+            if (first.getAndSet(false)) {
+                value(value(provider.register(GREETER, greeter)).unregister());
+            }
+        });
+
+        fixture.core.call(CoreCalls.unregister(UNKNOWN_HANDLE));
+
+        assertSame(greeter, value(settlement.join()));
+    }
+
+    @Test
+    void aWatchHearsARegistrationUnregisteredInsideADispatchWithTheProvidersObject() {
+        List<Object> heard = new ArrayList<>();
+        value(consumer.watch(GREETER, recording(heard)));
+        Object greeter = new Object();
+        AtomicBoolean first = new AtomicBoolean(true);
+        fixture.core.addListener(event -> {
+            if (first.getAndSet(false)) {
+                value(value(provider.register(GREETER, greeter)).unregister());
+            }
+        });
+
+        fixture.core.call(CoreCalls.unregister(UNKNOWN_HANDLE));
+
+        assertEquals(Arrays.asList(greeter, "unregistered"), heard);
+        assertSame(greeter, heard.get(0));
     }
 }

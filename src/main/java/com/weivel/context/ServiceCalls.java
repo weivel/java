@@ -47,6 +47,10 @@ final class ServiceCalls {
 
     static PendingWant want(ContextState state, PluginContext context, String id, WantLimits limits) {
         CompletableFuture<Answer<Object>> settlement = new CompletableFuture<>();
+        if (context.isDetached()) {
+            state.settleLater(settlement, new Answer.Detached<>());
+            return new PendingWant(state, context, 0, settlement);
+        }
         Optional<WantOptions> options = optionsFor(state, limits);
         if (!options.isPresent()) {
             state.settleLater(settlement, new Answer.Mistake<>("a want with a timeout, a budget or a poll interval "

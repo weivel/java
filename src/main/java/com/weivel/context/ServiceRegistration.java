@@ -19,11 +19,11 @@ public final class ServiceRegistration {
      * Unregisters the service, which the core revokes from everyone holding it.
      *
      * @return nothing beyond its success, or the core's refusal, as for one its plugin's release already ended
+     * @implNote The registration's entry ends only once every event drained before the unregistration has been
+     * dispatched, so a want the core settled with it, or a watch it reached, still finds the provider's object.
      */
     public Answer<Void> unregister() {
-        return state.call(context, CoreCalls.unregister(registration), unregistered -> {
-            state.handles.end(registration);
-            return new Answer.Ok<>(unregistered);
-        });
+        return state.callThenDefer(context, CoreCalls.unregister(registration), Answer.Ok::new,
+                () -> state.handles.end(registration));
     }
 }

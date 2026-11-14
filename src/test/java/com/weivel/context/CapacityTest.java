@@ -15,6 +15,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import com.weivel.core.CoreCalls;
+import com.weivel.core.WantOptions;
+import com.weivel.timer.Scheduler;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -147,5 +151,61 @@ class CapacityTest {
                 Collections.singletonList(new Manifest.ServiceOffer(MEASURED,
                         Collections.singletonList(new NamedNumber("latency", latency)))),
                 Collections.emptyList(), Collections.emptyList(), Optional.empty());
+    }
+
+    @Test
+    void anAnswerTheCoreDoesNotTakeGoesToTheSink() {
+        try (ContextFixture fixture = new ContextFixture(ContextFixture.LATENCY_VOCABULARY)) {
+            PluginContext provider = fixture.opened(advertising(50));
+            PluginContext consumer = fixture.opened(ContextFixture.constrained("consumer", MEASURED, 10, Choice.NO));
+            value(provider.register(MEASURED, new Object(), new CapacityAnswerer() {
+                @Override
+                public List<NamedNumber> attributes() {
+                    return Arrays.asList(new NamedNumber("latency", 5), new NamedNumber("latency", 6));
+                }
+
+                @Override
+                public boolean serves(List<NamedNumber> constraints) {
+                    return true;
+                }
+            }));
+
+            CompletableFuture<Answer<Object>> settlement = consumer.want(MEASURED, WantLimits.polled(100))
+                    .settlement();
+
+            assertFalse(settlement.isDone());
+            assertEquals(1, fixture.failuresOf(FailureKind.CAPACITY_UNANSWERED).size());
+            fixture.failures.clear();
+        }
+    }
+
+    @Test
+    void aQuestionWithNoClockToAnswerItByGoesToTheSink() {
+        try (ContextFixture fixture = new ContextFixture(ContextFixture.LATENCY_VOCABULARY, false,
+                Scheduler.none())) {
+            PluginContext provider = fixture.opened(advertising(5));
+            PluginContext consumer = fixture.opened(ContextFixture.constrained("consumer", MEASURED, 10, Choice.NO));
+            value(provider.register(MEASURED, new Object()));
+
+            value(fixture.core.call(CoreCalls.wantService(fixture.plugin(consumer), MEASURED,
+                    new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 100))));
+
+            assertEquals(0, fixture.crossings.count("weivel_report_capacity"));
+            assertEquals(1, fixture.failuresOf(FailureKind.CAPACITY_UNANSWERED).size());
+            fixture.failures.clear();
+        }
+    }
+
+    @Test
+    void anAttributesAnswerLeavesServesAtItsDefault() {
+        try (ContextFixture fixture = new ContextFixture(ContextFixture.LATENCY_VOCABULARY)) {
+            PluginContext provider = fixture.opened(advertising(5));
+            PluginContext consumer = fixture.opened(ContextFixture.constrained("consumer", MEASURED, 10, Choice.NO));
+            value(provider.register(MEASURED, new Object()));
+
+            value(consumer.want(MEASURED, WantLimits.polled(100)).settlement().join());
+
+            assertEquals(Arrays.asList(Choice.DEFAULT, Choice.YES), fixture.crossings.capacityServes());
+        }
     }
 }

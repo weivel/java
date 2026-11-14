@@ -89,7 +89,7 @@ final class ContextFixture implements AutoCloseable {
     }
 
     void open(PluginContext context) {
-        ok(core.call(CoreCalls.openPlugin(plugin(context), contexts.payloadOf(context))));
+        ok(contexts.open(context));
     }
 
     long plugin(PluginContext context) {

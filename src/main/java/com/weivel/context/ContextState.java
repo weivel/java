@@ -40,9 +40,33 @@ final class ContextState {
         this.hostLog = hostLog;
     }
 
-    /** Makes one call for {@code context}, whose guard answers it detached once the core has forgotten the plugin. */
+    /**
+     * Makes one call for {@code context}, answered detached once the core has forgotten the plugin.
+     *
+     * @implNote Detachment is read once before the call, so a detached context answers detached before the wrapper
+     * judges a caller's mistake in the call, and decided under the layer lock by the guard, which a forget on another
+     * thread may have overtaken.
+     */
     <T> Answer<T> call(PluginContext context, CoreCall<T> call, CallSteps.AnsweredStep<T> answered) {
+        if (context.isDetached()) {
+            return new Answer.Detached<>();
+        }
         return CoreInternals.call(core, call, new CallSteps<>(context::guarded, answered));
+    }
+
+    /**
+     * Makes one call for {@code context} as {@link #call} does and, when the core answers it OK, queues {@code step}
+     * right behind the call's own events, so it runs once every event drained before it has been dispatched.
+     */
+    <T> Answer<T> callThenDefer(PluginContext context, CoreCall<T> call, CallSteps.AnsweredStep<T> answered,
+                                Runnable step) {
+        if (context.isDetached()) {
+            return new Answer.Detached<>();
+        }
+        return CoreInternals.callThenDefer(core, call, new CallSteps<>(context::guarded, answered), () -> {
+            step.run();
+            return DeferredStep.Status.DONE;
+        });
     }
 
     /** The object of the entry of {@code handle} when it is of {@code kind}; empty when the table holds none such. */

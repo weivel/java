@@ -24,15 +24,17 @@ import java.util.Set;
  *
  * <ul>
  *   <li>{@link #make} builds a plugin's context, no later than the host first opens it; the host opens the plugin
- *   with {@link #payloadOf} as its payload, and the plugin keeps that context until it is forgotten, a quarantined
- *   plugin opened again included.</li>
+ *   with {@link #open}, whose payload is {@link #payloadOf}, and the plugin keeps that context until it is forgotten,
+ *   a quarantined plugin opened again included.</li>
  *   <li>Every event is routed to the plugin it concerns through one listener on the core, added once for all the
  *   contexts, by the handle the event names.</li>
  *   <li>{@link #endEntries} ends a plugin's watches, listeners, registrations, implementations and answerers in the
  *   layer's tables, calling nothing in the core, once the events its release or quarantine call queued have been
- *   dispatched; a host makes it a step deferred behind that call's events.</li>
+ *   dispatched; a host makes it a step deferred behind that call's events. From then on the plugin hears nothing
+ *   until it is opened again.</li>
  *   <li>{@link #forget} forgets the plugin in the core and detaches its context in the same hold of the layer lock,
- *   so no call through the context reaches the core after the forget.</li>
+ *   so no call through the context reaches the core after the forget, and ends its entries once the events drained
+ *   before the forget have been dispatched.</li>
  *   <li>{@link #close} frees what the contexts hold once the core is destroyed.</li>
  * </ul>
  *
@@ -95,6 +97,19 @@ public final class PluginContexts implements AutoCloseable {
     }
 
     /**
+     * Opens the plugin in the core with its context's payload. A plugin opened again after a quarantine hears what is
+     * queued for it from this open on.
+     *
+     * @param context the context
+     * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} once the plugin is forgotten
+     */
+    public Answer<Void> open(PluginContext context) {
+        Objects.requireNonNull(context, "context");
+        return state.callThenDefer(context, CoreCalls.openPlugin(context.plugin(), context.token()), Answer.Ok::new,
+                context::unsilence);
+    }
+
+    /**
      * The payload the host opens the plugin with, which leads back to its context without a search.
      *
      * @param context the context
@@ -121,34 +136,38 @@ public final class PluginContexts implements AutoCloseable {
      * Ends the plugin's own entries in the layer's tables once the core has released or quarantined it and the events
      * that call queued have been dispatched: its watches, listeners, registrations, implementations and answerers. It
      * calls nothing in the core, which ended them already. A want is left to its settlement, which the core always
-     * makes: the release or quarantine rejected every want then waiting, and rejects every later one at once.
+     * makes: the release or quarantine rejected every want then waiting, and rejects every later one at once. A
+     * listener added afterwards hears nothing queued after the release or quarantine until {@link #open} opens the
+     * plugin again.
      *
      * @param context the context
      */
     public void endEntries(PluginContext context) {
+        context.silence();
         state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
         context.dropListeners();
     }
 
     /**
-     * Forgets the plugin in the core and, in the same hold of the layer lock, detaches its context and ends its
-     * entries, its own among them.
+     * Forgets the plugin in the core and, in the same hold of the layer lock, detaches its context; its entries, its
+     * own among them, end once every event drained before the forget has been dispatched, so such an event still
+     * finds what it names.
      *
      * @param context the context
      * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} for one forgotten already
      */
     public Answer<Void> forget(PluginContext context) {
-        Answer<Void> answer = state.call(context, CoreCalls.forgetPlugin(context.plugin()), forgotten -> {
+        return state.callThenDefer(context, CoreCalls.forgetPlugin(context.plugin()), forgotten -> {
             context.detach();
-            state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
-            state.handles.end(context.plugin());
             return new Answer.Ok<>(forgotten);
-        });
-        if (answer instanceof Answer.Ok) {
-            context.dropListeners();
-            state.contexts.remove(context);
-        }
-        return answer;
+        }, () -> endForgotten(context));
+    }
+
+    private void endForgotten(PluginContext context) {
+        state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
+        state.handles.end(context.plugin());
+        context.dropListeners();
+        state.contexts.remove(context);
     }
 
     /**
