@@ -556,6 +556,10 @@ final class Wrapper {
     }
 
     void report(Failure failure) {
+        if (lock.isHeldByCurrentThread()) {
+            throw new IllegalStateException(
+                    "a defect of the layer: a failure was reported under the layer lock, where no sink may run");
+        }
         ErrorSink current = sink;
         try {
             current.report(failure);

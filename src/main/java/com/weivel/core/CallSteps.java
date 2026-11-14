@@ -6,8 +6,10 @@ import java.util.Optional;
 /**
  * What the layer's own packages run around one call, under the layer lock: a guard before the call is made, and a
  * step once the core has answered it OK. Both are the layer's code and never a caller's, so neither may call into the
- * core, which would take the lock again on the thread that holds it; a failure of either is a defect of the layer,
- * reported to the error sink and answered as a {@link Answer.Defect}.
+ * core, which would take the lock again on the thread that holds it, nor report to the error sink; a failure of either
+ * is a defect of the layer, reported to the error sink once the lock is let go and answered as a
+ * {@link Answer.Defect}. Like {@link CoreInternals}, through which alone a call takes them, they are for the layer's
+ * own packages.
  *
  * @param guard checked under the lock once a due deadline was handed over and before the call is made: an answer it
  *     gives is the call's answer, the core not called and nothing drained
