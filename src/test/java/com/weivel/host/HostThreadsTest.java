@@ -1,6 +1,5 @@
 package com.weivel.host;
 
-import static com.weivel.host.HostFixture.consuming;
 import static com.weivel.host.HostFixture.done;
 import static com.weivel.host.HostFixture.named;
 import static com.weivel.host.HostFixture.providingCapability;
@@ -12,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.context.CapabilityWatcher;
-import com.weivel.context.ServiceWatcher;
 import com.weivel.core.Answer;
 import com.weivel.core.RefusalStatus;
 import java.util.Collections;
@@ -26,14 +24,12 @@ import org.junit.jupiter.api.Timeout;
 
 /** The host's steps that another thread can interleave with, each interleaving forced by gates. */
 class HostThreadsTest {
-    private static final long WAIT_SECONDS = 10;
-
     @Test
     @Timeout(30)
     void activationStartsEveryActivateOnTheActivatingThreadAndReturnsWhileAnotherThreadDispatches()
             throws Exception {
         try (HostFixture fixture = new HostFixture()) {
-            Thread dispatcher = blockedDispatcher(fixture);
+            Gates.BlockedDispatcher dispatcher = new Gates.BlockedDispatcher(fixture);
             TestEntry first = fixture.entry("first");
             TestEntry second = fixture.entry("second");
             long firstPlugin = fixture.register(named("first"), first);
@@ -44,9 +40,9 @@ class HostThreadsTest {
             assertEquals(2, activation.plan().order().size());
             assertSame(Thread.currentThread(), first.activatedOn);
             assertSame(Thread.currentThread(), second.activatedOn);
-            assertTrue(dispatcher.isAlive());
+            assertTrue(dispatcher.isDispatching());
             assertEquals(ActivationState.ACTIVE, done(activation.outcomes().get(0)).state());
-            release(dispatcher);
+            dispatcher.release();
         }
     }
 
@@ -59,15 +55,15 @@ class HostThreadsTest {
             flaky.onActivate = context -> activated;
             long plugin = fixture.register(providingCapability("flaky", "screens"), flaky);
             Activation activation = fixture.activate(plugin);
-            Thread dispatcher = blockedDispatcher(fixture);
+            Gates.BlockedDispatcher dispatcher = new Gates.BlockedDispatcher(fixture);
 
             activated.complete(null);
 
             assertEquals(ActivationState.QUARANTINED, done(activation.outcomes().get(0)).state());
-            assertTrue(dispatcher.isAlive());
+            assertTrue(dispatcher.isDispatching());
             Answer<?> late = flaky.context.register("flaky:late", new Object());
             assertEquals(RefusalStatus.REFUSED, assertInstanceOf(Answer.Refused.class, late).status());
-            release(dispatcher);
+            dispatcher.release();
             assertTrue(fixture.failures.isEmpty());
         }
     }
@@ -80,14 +76,14 @@ class HostThreadsTest {
         HostFixture fixture = new HostFixture((contexts, context, opened) -> {
             Answer<Void> answer = contexts.open(context, opened);
             opening.countDown();
-            await(proceed);
+            Gates.await(proceed);
             return answer;
         });
         long plugin = fixture.register(named("slow"), fixture.entry("slow"));
         AtomicReference<Activation> activation = new AtomicReference<>();
         Thread activating = new Thread(() -> activation.set(fixture.activate(plugin)));
         activating.start();
-        await(opening);
+        Gates.await(opening);
 
         CompletionStage<DestroyResult> destroyed = fixture.host.destroy();
 
@@ -96,7 +92,7 @@ class HostThreadsTest {
         activating.join();
         assertEquals(ActivationState.RELEASED, done(activation.get().outcomes().get(0)).state());
         assertTrue(fixture.trace().isEmpty());
-        destroyed.toCompletableFuture().get(WAIT_SECONDS, TimeUnit.SECONDS);
+        destroyed.toCompletableFuture().get(Gates.WAIT_SECONDS, TimeUnit.SECONDS);
         assertFalse(fixture.host.manifest(plugin).isPresent());
         fixture.host.close();
     }
@@ -113,7 +109,7 @@ class HostThreadsTest {
                 @Override
                 public void provided(Object implementation) {
                     watching.countDown();
-                    await(proceed);
+                    Gates.await(proceed);
                 }
 
                 @Override
@@ -133,14 +129,14 @@ class HostThreadsTest {
         Activation activation = fixture.activate(watcherPlugin, screenPlugin);
         Thread settling = new Thread(() -> activated.complete(null));
         settling.start();
-        await(watching);
+        Gates.await(watching);
 
         CompletionStage<DestroyResult> destroyed = fixture.host.destroy();
 
         assertFalse(destroyed.toCompletableFuture().isDone());
         proceed.countDown();
         settling.join();
-        destroyed.toCompletableFuture().get(WAIT_SECONDS, TimeUnit.SECONDS);
+        destroyed.toCompletableFuture().get(Gates.WAIT_SECONDS, TimeUnit.SECONDS);
         assertEquals(ActivationState.ACTIVE, done(activation.outcomes().get(1)).state());
         assertTrue(fixture.trace().contains("deactivate screen"));
         fixture.host.close();
@@ -152,52 +148,5 @@ class HostThreadsTest {
                 Collections.singletonList("screens"), Collections.<com.weivel.core.Manifest.ServiceOffer>emptyList(),
                 Collections.<com.weivel.core.Manifest.ServiceWant>emptyList(), Collections.<String>emptyList(),
                 java.util.Optional.empty());
-    }
-
-    /**
-     * A thread dispatching the host's core, held inside a plugin's watcher until {@link #release} lets it go: a
-     * plugin watching {@code signal} hears the host register it on that thread.
-     */
-    private static Thread blockedDispatcher(HostFixture fixture) throws InterruptedException {
-        CountDownLatch inside = new CountDownLatch(1);
-        CountDownLatch proceed = new CountDownLatch(1);
-        TestEntry watcher = fixture.entry("blocking");
-        long plugin = fixture.register(consuming("blocking", "signal"), watcher);
-        fixture.activate(plugin);
-        value(watcher.context.watch("signal", new ServiceWatcher() {
-            @Override
-            public void registered(Object service) {
-                inside.countDown();
-                await(proceed);
-            }
-
-            @Override
-            public void unregistered() {
-            }
-        }));
-        Thread dispatcher = new Thread(() -> fixture.host.registerHostService("signal", new Object()));
-        GATES.put(dispatcher, proceed);
-        dispatcher.start();
-        await(inside);
-        return dispatcher;
-    }
-
-    private static final java.util.Map<Thread, CountDownLatch> GATES =
-            java.util.Collections.synchronizedMap(new java.util.HashMap<>());
-
-    private static void release(Thread dispatcher) throws InterruptedException {
-        GATES.remove(dispatcher).countDown();
-        dispatcher.join();
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(WAIT_SECONDS, TimeUnit.SECONDS)) {
-                throw new AssertionError("a gate was never opened");
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError(interrupted);
-        }
     }
 }
