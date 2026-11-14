@@ -218,6 +218,15 @@ public final class Layout {
         return offset;
     }
 
+    /** Where the field reached by naming each member on its way ends: its offset plus its size. */
+    long endOf(String... names) {
+        Layout current = this;
+        for (String member : names) {
+            current = current.members.get(current.indexOf(member));
+        }
+        return offsetOf(names) + current.size;
+    }
+
     private int indexOf(String member) {
         for (int index = 0; index < members.size(); index++) {
             if (members.get(index).name.equals(Optional.of(member))) {

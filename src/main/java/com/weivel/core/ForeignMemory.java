@@ -119,17 +119,22 @@ public final class ForeignMemory implements AutoCloseable {
     }
 
     /**
-     * Copies the core's {@code weivel_manifest} at an address into a manifest value, the memory left to its owner.
+     * Copies the core's {@code weivel_manifest} at an address into a manifest value, the memory left to its owner. It
+     * is read up to the {@code size} it declares, as the core reads one: a field past an older producer's size is
+     * absent and takes the default core.h states, and what a newer producer laid out past this layer's shape is
+     * ignored; a list of growing elements is stepped at its first element's {@code size}.
      *
      * @param address the struct's address, laid out as the core's header declares it
      * @return the value
-     * @throws IllegalArgumentException for a manifest with no import name, which the core requires
+     * @throws IllegalArgumentException for a manifest with no import name, which the core requires, or a manifest or
+     *     element whose size is below its first published shape, naming the struct
      */
     public Manifest manifest(long address) {
         if (address == 0) {
             throw new IllegalArgumentException("a NULL pointer holds no manifest");
         }
-        return ManifestCopy.read(new NativeRegion(access, address, CoreLayouts.MANIFEST.byteSize(), null));
+        long declared = Integer.toUnsignedLong(access.getInt(address, 0));
+        return ManifestCopy.read(new NativeRegion(access, address, declared, null));
     }
 
     /**
