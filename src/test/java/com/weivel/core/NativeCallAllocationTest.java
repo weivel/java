@@ -22,8 +22,16 @@ class NativeCallAllocationTest {
      *     many are run, so measuring until one round is clean still tells the two apart.
      */
     private static final int MOST_ROUNDS = 300;
-    /** What reading the allocation counter itself may cost, measured as 0 on JDK 25; a spreader costs 40 B a call. */
-    private static final long ALLOWED_BYTES = 1024;
+    /** The smallest object a call could allocate, so an allocation per call costs at least this much each time. */
+    private static final long SMALLEST_OBJECT_BYTES = 16;
+    /**
+     * Fewer bytes than one smallest object per hundred calls.
+     *
+     * @implNote A clean round was not reached on some macOS arm64 runs within 300 rounds, where the compiled call
+     *     path settled into allocating a few kilobytes a round whatever the layer did; an allocation per call, as the
+     *     spreader made (24 to 40 bytes a call), costs a hundred times this bound and more.
+     */
+    private static final long ALLOWED_BYTES = MEASURED_CALLS * SMALLEST_OBJECT_BYTES / 100;
 
     @Test
     void aFixedArityCallThroughTheForeignFunctionBackendAllocatesNothing() {
