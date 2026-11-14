@@ -164,15 +164,22 @@ final class Wrapper {
     }
 
     private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<T> crossed;
-        try (Arena callArena = Arena.ofConfined()) {
-            pending.set(JAVA_INT, 0, 0);
-            crossed = call.crossing().cross(functions, callArena, core, pending);
-        }
+        CoreCalls.Crossed<T> crossed = cross(call.crossing());
         OwnRefusal own = new OwnRefusal();
         drain(waiting(), notes, own);
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
         return answer instanceof Answer.Ok<T> ok ? recorded(steps.answered(), ok.value(), notes) : answer;
+    }
+
+    /**
+     * Makes one crossing into the core, under the lock, in an arena of its own: the one place a call's crossing is
+     * made, so nothing else in the package needs the table of the core's functions.
+     */
+    <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
+        try (Arena callArena = Arena.ofConfined()) {
+            pending.set(JAVA_INT, 0, 0);
+            return crossing.cross(functions, callArena, core, pending);
+        }
     }
 
     private <T> Optional<Answer<T>> guarded(CallSteps.CallGuard<T> guard, CallNotes notes) {
@@ -370,11 +377,7 @@ final class Wrapper {
     }
 
     private void advanceHeld(long now, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<Void> crossed;
-        try (Arena callArena = Arena.ofConfined()) {
-            pending.set(JAVA_INT, 0, 0);
-            crossed = CoreCalls.advanceCrossing(now).cross(functions, callArena, core, pending);
-        }
+        CoreCalls.Crossed<Void> crossed = cross(CoreCalls.advanceCrossing(now));
         if (crossed.status() == STATUS_MALFORMED) {
             notes.noteDefect("the core called the advance made for a due deadline malformed", Optional.empty());
         } else if (crossed.status() != STATUS_OK) {

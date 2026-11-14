@@ -17,7 +17,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Only the wrapper reaches the core's functions: no source of the {@code core} package but the wrapper's names the
- * table of downcall handles or invokes a method handle.
+ * table of downcall handles, a call's crossing, or the binary's functions, or invokes a method handle, so every
+ * crossing into the core goes through the one method of the wrapper that makes it.
  *
  * <p>The check reads identifiers, with comments and literals taken out, so it cannot see a handle reached by
  * reflection or by a name built at run time, nor a source outside this package; it holds the boundary against the
@@ -25,9 +26,10 @@ import org.junit.jupiter.api.Test;
  */
 class WrapperBoundaryTest {
     private static final Set<String> WRAPPER_SOURCES = Set.of("CoreFunction.java", "CoreFunctions.java",
-            "CoreBinary.java", "Wrapper.java", "CoreCalls.java");
+            "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java");
     private static final Set<String> FORBIDDEN = Set.of("CoreFunction", "CoreFunctions", "MethodHandle",
-            "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle");
+            "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle", "functions",
+            "crossing", "cross");
     private static final Pattern COMMENTS_AND_LITERALS = Pattern.compile(
             "/\\*.*?\\*/|//[^\\n]*|\"\"\"(?s:.*?)\"\"\"|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", Pattern.DOTALL);
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*");
@@ -52,7 +54,11 @@ class WrapperBoundaryTest {
         String offending = "class Elsewhere { int call(Object table) throws Throwable { "
                 + "return (int) table.handle(\"x\").invokeExact(); } }";
 
+        String bypassing = "class Elsewhere { Object call(CoreBinary binary, CoreCall<?> call) throws Throwable { "
+                + "return call.crossing().cross(binary.functions(), null, null, null); } }";
+
         assertTrue(identifiersIn(offending).contains("invokeExact"));
+        assertTrue(identifiersIn(bypassing).containsAll(List.of("crossing", "cross", "functions")));
         assertTrue(identifiersIn("/* invokeExact */ String text = \"invokeExact\";").stream()
                 .noneMatch(FORBIDDEN::contains));
     }
