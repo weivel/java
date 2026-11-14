@@ -20,7 +20,12 @@ are in `src/test/java/com/weivel/<module>/`.
 
 ## What is built
 
-Each package holds only its purpose so far.
+`CoreBinary.load` opens the core's shared binary from the path its caller gives and resolves every function the
+core's header declares into one table of downcall handles, which nothing else in the layer names. A path that is no
+library, and a library that lacks one of the core's functions, are each answered as a value, the second naming the
+first function missing. `CoreBinary.close` closes what the load opened.
+
+The other packages hold only their purpose so far.
 
 ## Using it
 
