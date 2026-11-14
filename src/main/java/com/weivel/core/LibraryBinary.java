@@ -9,6 +9,8 @@ import java.util.Objects;
  */
 public final class LibraryBinary implements AutoCloseable {
     private static final NativeSignature RELEASE = NativeSignature.of(NativeType.VOID, NativeType.ADDRESS);
+    private static final NativeSignature BYTES = NativeSignature.of(NativeType.INT, NativeType.ADDRESS, NativeType.LONG,
+            NativeType.ADDRESS, NativeType.ADDRESS);
 
     private final NativeAccess access;
     private final OpenLibrary library;
@@ -53,11 +55,15 @@ public final class LibraryBinary implements AutoCloseable {
      * @return the function; {@link Answer.Mistake} naming the symbol when the library exports none of that name
      */
     public Answer<LibraryFunction> function(String symbol) {
+        return function(symbol, LibraryCopies.NONE);
+    }
+
+    Answer<LibraryFunction> function(String symbol, LibraryCopies copies) {
         Objects.requireNonNull(symbol, "symbol");
         if (!library.has(symbol)) {
             return new Answer.Mistake<>("the library exports no function " + symbol);
         }
-        return new Answer.Ok<>(new LibraryFunction(access, library.bytesFunction(symbol), release));
+        return new Answer.Ok<>(new LibraryFunction(access, library.function(symbol, BYTES), release, copies));
     }
 
     /**

@@ -50,6 +50,9 @@ interface NativeAccess {
 
     void writeBytes(long address, long offset, byte[] bytes);
 
+    /** Writes {@code length} bytes of {@code bytes} from {@code from} at {@code address} plus {@code offset}. */
+    void writeBytes(long address, long offset, byte[] bytes, int from, int length);
+
     /** Sets {@code length} bytes from {@code address} plus {@code offset} to zero. */
     void clear(long address, long offset, long length);
 
@@ -63,6 +66,9 @@ interface NativeAccess {
      */
     long addressOf(ByteBuffer direct);
 
-    /** Whether a heap array reaches native code in place for the length of a call, rather than copied. */
-    boolean lendsTheHeap();
+    /**
+     * Keeps {@code object} reachable up to this call, so memory it owns, as a direct buffer owns its native memory,
+     * is not freed by its cleaner while native code still reads it through a raw address.
+     */
+    void keepReachable(Object object);
 }

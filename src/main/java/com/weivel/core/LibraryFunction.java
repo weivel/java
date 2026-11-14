@@ -4,26 +4,31 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * One function of a {@link LibraryBinary}, of the standard's bytes kind: the caller's bytes in, lent for the length of
- * the call wherever Java can lend them, and the library's body out, copied once into a Java array and handed to the
- * library's release symbol before the call answers. Any thread may call, while the binary is open.
+ * One function of a {@link LibraryBinary}, of the standard's bytes kind: the caller's bytes in, and the library's
+ * body out, copied once into a Java array and handed to the library's release symbol before the call answers. A
+ * direct buffer is lent to the library in place; a heap array is copied once into native memory for the call. Any
+ * thread may call, while the binary is open.
+ *
+ * @implNote The heap is never lent: the foreign function API lends it only through a critical downcall, which holds
+ * off garbage collection for the whole C call, and nothing bounds how long a bytes function runs (rev 195).
  */
 public final class LibraryFunction {
     private static final int LARGEST_BODY = Integer.MAX_VALUE - 8;
 
     private final NativeAccess access;
-    private final NativeBytesFunction function;
+    private final NativeFunction function;
     private final NativeFunction release;
+    private final LibraryCopies copies;
 
-    LibraryFunction(NativeAccess access, NativeBytesFunction function, NativeFunction release) {
+    LibraryFunction(NativeAccess access, NativeFunction function, NativeFunction release, LibraryCopies copies) {
         this.access = access;
         this.function = function;
         this.release = release;
+        this.copies = copies;
     }
 
     /**
-     * Calls the function with a heap array: lent in place on the foreign function API, copied once into native memory
-     * for the call on JNA, which can lend C only native memory.
+     * Calls the function with a heap array, copied once into native memory for the call.
      *
      * @param input the bytes, never changed
      * @return the function's status and body
@@ -32,13 +37,12 @@ public final class LibraryFunction {
      */
     public LibraryOutput call(byte[] input) {
         Objects.requireNonNull(input, "input");
-        return call(input, 0, input.length);
+        return copied(input, 0, input.length);
     }
 
     /**
-     * Calls the function with a buffer's remaining bytes: a direct buffer's lent in place on every backend, an array's
-     * as {@link #call(byte[])} lends them, and a read-only heap buffer's, whose array Java does not hand out, copied
-     * once. The buffer's position and limit are left as they were.
+     * Calls the function with a buffer's remaining bytes: a direct buffer's lent in place, a heap buffer's copied once
+     * as {@link #call(byte[])} copies them. The buffer's position and limit are left as they were.
      *
      * @param input the bytes, never changed
      * @return the function's status and body
@@ -47,29 +51,38 @@ public final class LibraryFunction {
     public LibraryOutput call(ByteBuffer input) {
         Objects.requireNonNull(input, "input");
         if (input.isDirect()) {
-            long address = access.addressOf(input);
-            return answered((output, outputLength) -> function.call(address, input.remaining(), output,
-                    outputLength));
+            return lent(input);
         }
         if (input.hasArray()) {
-            return call(input.array(), input.arrayOffset() + input.position(), input.remaining());
+            return copied(input.array(), input.arrayOffset() + input.position(), input.remaining());
         }
-        byte[] copy = new byte[input.remaining()];
-        input.duplicate().get(copy);
-        return call(copy);
+        byte[] bytes = new byte[input.remaining()];
+        input.duplicate().get(bytes);
+        return copied(bytes, 0, bytes.length);
     }
 
-    private LibraryOutput call(byte[] input, int offset, int length) {
-        return answered((output, outputLength) -> function.call(input, offset, length, output, outputLength));
-    }
-
-    private LibraryOutput answered(Crossing crossing) {
+    private LibraryOutput lent(ByteBuffer direct) {
         try (NativeArena arena = new NativeArena(access)) {
-            NativeRegion output = arena.allocate(Layout.LONG);
-            NativeRegion outputLength = arena.allocate(Layout.LONG);
-            int status = crossing.cross(output.address(), outputLength.address());
-            return new LibraryOutput(status, copiedThenReleased(output.getAddress(0), outputLength.getLong(0)));
+            return answered(arena, access.addressOf(direct), direct.remaining());
+        } finally {
+            access.keepReachable(direct);
         }
+    }
+
+    private LibraryOutput copied(byte[] input, int offset, int length) {
+        try (NativeArena arena = new NativeArena(access)) {
+            NativeRegion copy = arena.allocate(length);
+            access.writeBytes(copy.address(), 0, input, offset, length);
+            copies.inputCopied(copy.address(), length);
+            return answered(arena, copy.address(), length);
+        }
+    }
+
+    private LibraryOutput answered(NativeArena arena, long input, long inputLength) {
+        NativeRegion output = arena.allocate(Layout.LONG);
+        NativeRegion outputLength = arena.allocate(Layout.LONG);
+        int status = (int) function.call(input, inputLength, output.address(), outputLength.address());
+        return new LibraryOutput(status, copiedThenReleased(output.getAddress(0), outputLength.getLong(0)));
     }
 
     private byte[] copiedThenReleased(long body, long length) {
@@ -81,14 +94,10 @@ public final class LibraryFunction {
                 throw new IllegalStateException("the library answered " + Long.toUnsignedString(length)
                         + " bytes, more than a Java array holds");
             }
+            copies.beforeTheBodyIsCopied();
             return access.readBytes(body, 0, (int) length);
         } finally {
             release.call(body);
         }
-    }
-
-    @FunctionalInterface
-    private interface Crossing {
-        int cross(long output, long outputLength);
     }
 }
