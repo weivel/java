@@ -75,6 +75,11 @@ final class CoreFunctions {
         return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth, sixth);
     }
 
+    int status(CoreFunction function, long first, long second, long third, long fourth, long fifth, long sixth,
+               long seventh) {
+        return (int) functions[function.ordinal()].call(first, second, third, fourth, fifth, sixth, seventh);
+    }
+
     NativeAccess access() {
         return access;
     }

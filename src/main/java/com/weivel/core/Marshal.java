@@ -90,6 +90,20 @@ final class Marshal {
         return struct;
     }
 
+    static NativeRegion strings(NativeArena arena, List<String> strings) {
+        NativeRegion struct = arena.allocate(CoreLayouts.STRINGS);
+        writeStrings(arena, struct, 0, strings);
+        return struct;
+    }
+
+    static NativeRegion handles(NativeArena arena, List<Long> handles) {
+        NativeRegion items = arena.allocate(Layout.LONG, handles.size());
+        for (int index = 0; index < handles.size(); index++) {
+            items.putLong(index * Layout.LONG.byteSize(), handles.get(index));
+        }
+        return items;
+    }
+
     private static NativeRegion sized(NativeArena arena, Layout layout) {
         NativeRegion struct = arena.allocate(layout);
         struct.putInt(offsetOf(layout, "size"), (int) layout.byteSize());

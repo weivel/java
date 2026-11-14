@@ -21,6 +21,7 @@ import java.util.function.Function;
  */
 public final class CoreCalls {
     private static final int STATUS_OK = 0;
+    private static final int STATUS_REFUSED = 3;
 
     private CoreCalls() {
     }
@@ -280,6 +281,54 @@ public final class CoreCalls {
     public static CoreCall<Void> verifyActivation(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
                 functions.status(CoreFunction.VERIFY_ACTIVATION, core, plugin, pending), null));
+    }
+
+    /**
+     * {@code weivel_verify_activation} and, when the core refuses the activation, {@code weivel_quarantine_plugin}
+     * with no reason in the same crossing, so the plugin is quarantined before any other call reaches the core and
+     * before any event of the verification is dispatched, and its ledger row shows the core's refusal.
+     *
+     * @param plugin the plugin's handle
+     * @return the call, answering whether it was verified or quarantined; a verification refused for a reason the
+     *     quarantine cannot follow is answered as the core answered the verification
+     * @implNote The core's {@code pending_events} counts every event waiting, so the quarantine's answer covers the
+     * verification's events too and the wrapper drains both in the order they were queued.
+     */
+    public static CoreCall<Verification> verifyOrQuarantine(long plugin) {
+        return builtByTheLayer((functions, arena, core, pending) -> {
+            int verified = functions.status(CoreFunction.VERIFY_ACTIVATION, core, plugin, pending);
+            if (verified != STATUS_REFUSED) {
+                return new Crossed<>(verified, Verification.passed());
+            }
+            int quarantined = functions.status(CoreFunction.QUARANTINE_PLUGIN, core, plugin, 0L, pending);
+            return new Crossed<>(STATUS_OK, Verification.quarantined(quarantined));
+        });
+    }
+
+    /**
+     * {@code weivel_plan_activation}, its plan copied and released before the call answers.
+     *
+     * @param plugins the plugins to plan, as the core registered them
+     * @param source which declarations draw the plan's edges
+     * @param hostProvided the service ids the host supplies itself
+     * @return the call, answering the plan
+     */
+    public static CoreCall<ActivationPlan> planActivation(List<Long> plugins, EdgeSource source,
+                                                          List<String> hostProvided) {
+        Objects.requireNonNull(plugins, "plugins");
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(hostProvided, "hostProvided");
+        return unlessMistaken(CallerTexts.inTexts("a service id the host provides", hostProvided),
+                (functions, arena, core, pending) -> {
+                    NativeRegion plan = Marshal.emptyAnswer(arena, CoreLayouts.ACTIVATION_PLAN);
+                    int status = functions.status(CoreFunction.PLAN_ACTIVATION, core,
+                            plugins.isEmpty() ? 0L : Marshal.handles(arena, plugins).address(), plugins.size(),
+                            source.value(), Marshal.strings(arena, hostProvided).address(), plan.address(), pending);
+                    return new Crossed<>(status, status == STATUS_OK
+                            ? copiedThenReleased(functions, CoreFunction.ACTIVATION_PLAN_RELEASE, plan,
+                                    AnswerCopy::plan)
+                            : null);
+                });
     }
 
     /**
