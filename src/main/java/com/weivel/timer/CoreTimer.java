@@ -45,6 +45,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class CoreTimer {
     private final Core core;
     private final Scheduler scheduler;
+    private final TimerObserver observer;
     private final boolean following;
     private final long longestWait;
     private final Hooks hooks = new Hooks();
@@ -55,9 +56,10 @@ public final class CoreTimer {
     private boolean armed;
     private boolean destroyed;
 
-    private CoreTimer(Core core, Scheduler scheduler, boolean following, long longestWait) {
+    private CoreTimer(Core core, Scheduler scheduler, TimerObserver observer, boolean following, long longestWait) {
         this.core = core;
         this.scheduler = scheduler;
+        this.observer = observer;
         this.following = following;
         this.longestWait = longestWait;
     }
@@ -73,15 +75,28 @@ public final class CoreTimer {
      *     it could wait for nothing; {@link Answer.Destroyed} for a destroyed core
      */
     public static Answer<CoreTimer> start(Core core, Scheduler scheduler) {
+        return start(core, scheduler, TimerObserver.NONE);
+    }
+
+    /**
+     * Starts the timer of a core as {@link #start(Core, Scheduler)} does, telling {@code observer} each move it makes.
+     *
+     * @param core the core to follow
+     * @param scheduler the caller's clock and scheduler
+     * @param observer what hears each arm and disarm as the core announces it
+     * @return as {@link #start(Core, Scheduler)} answers
+     */
+    public static Answer<CoreTimer> start(Core core, Scheduler scheduler, TimerObserver observer) {
         Objects.requireNonNull(core, "core");
         Objects.requireNonNull(scheduler, "scheduler");
+        Objects.requireNonNull(observer, "observer");
         boolean following = !(scheduler instanceof NoScheduler);
         long longestWait = following ? scheduler.maximumWait() : Long.MAX_VALUE;
         if (longestWait <= 0) {
             return new Answer.Mistake<>("a scheduler whose longest wait is " + longestWait
                     + " milliseconds can wait for no deadline");
         }
-        CoreTimer timer = new CoreTimer(core, scheduler, following, longestWait);
+        CoreTimer timer = new CoreTimer(core, scheduler, observer, following, longestWait);
         if (following) {
             Answer<Void> installed = CoreInternals.installDeadlineHooks(core, timer.hooks);
             if (installed instanceof Answer.Ok) {
@@ -173,6 +188,17 @@ public final class CoreTimer {
         cancel(cancelled);
         if (set) {
             arm(arming, at, OptionalLong.empty());
+        }
+        tellObserver(set ? OptionalLong.of(at) : OptionalLong.empty());
+    }
+
+    private void tellObserver(OptionalLong deadline) {
+        try {
+            observer.moved(deadline);
+        } catch (VirtualMachineError error) {
+            throw error;
+        } catch (Throwable failure) {
+            report("the timer's observer failed when the timer moved", Optional.of(failure));
         }
     }
 

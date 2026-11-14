@@ -53,7 +53,6 @@ final class WantRun {
         run.follow(world.context(CONSUMER).want(given.service, given.timeout.isPresent()
                 ? WantLimits.timeout(given.timeout.getAsLong())
                 : WantLimits.unbounded()));
-        world.noteTimer();
         if (given.registerAt.isPresent()) {
             run.registerAt(given, given.registerAt.getAsLong());
         }
@@ -72,7 +71,6 @@ final class WantRun {
         if (!(registered instanceof Answer.Ok)) {
             throw new IllegalStateException("the provider's registration answered " + registered);
         }
-        world.noteTimer();
     }
 
     private void follow(PendingWant want) {

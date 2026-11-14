@@ -20,12 +20,14 @@ import com.weivel.context.WantLimits;
 import com.weivel.core.ActivationPlan;
 import com.weivel.core.Answer;
 import com.weivel.core.CoreConstants;
+import com.weivel.core.CoreProbes;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.FailureKind;
 import com.weivel.core.LedgerRow;
 import com.weivel.core.Manifest;
 import com.weivel.core.Refusal;
 import com.weivel.core.RefusalStatus;
+import com.weivel.timer.TestScheduler;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -253,17 +256,22 @@ class HostTest {
     }
 
     @Test
-    void theTimerDeadlineIsTheLatestTheCoreAnnouncedUntilItAnnouncesNone() {
-        TestEntry waiting = fixture.entry("waiting");
-        long plugin = fixture.register(consuming("waiting", "absent:service"), waiting);
-        fixture.activate(plugin);
-        assertEquals(OptionalLong.empty(), host.timerDeadline());
+    void theTimerObserverHearsEachMoveTheTimerMakesAsTheCoreAnnouncesIt() throws Exception {
+        TestScheduler scheduler = new TestScheduler();
+        List<OptionalLong> moves = Collections.synchronizedList(new ArrayList<OptionalLong>());
+        Host observed = value(Host.create(CoreProbes.binary(), HostOptions.defaults().withScheduler(scheduler)
+                .withTimerObserver(moves::add).withErrorSink(fixture.failures::add)));
+        TestEntry waiting = new TestEntry("waiting", new ArrayList<String>());
+        long plugin = value(observed.register(consuming("waiting", "absent:service"), waiting));
+        observed.activate(Collections.singletonList(plugin), EdgeSource.SERVICES);
 
         waiting.context.want("absent:service", WantLimits.timeout(1000));
+        scheduler.moveTo(1000);
 
-        assertEquals(OptionalLong.of(1000), host.timerDeadline());
-        fixture.scheduler.moveTo(1000);
-        assertEquals(OptionalLong.empty(), host.timerDeadline());
+        assertEquals(Arrays.asList(OptionalLong.of(1000), OptionalLong.empty()), moves);
+        observed.destroy().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        observed.close();
+        assertTrue(fixture.failures.isEmpty());
     }
 
     @Test

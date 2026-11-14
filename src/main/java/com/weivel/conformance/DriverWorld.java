@@ -34,11 +34,10 @@ final class DriverWorld implements AutoCloseable {
     private final List<Failure> failures = Collections.synchronizedList(new ArrayList<Failure>());
     private final Map<String, Long> plugins = new LinkedHashMap<>();
     private final List<Object> timerMoves = new ArrayList<>();
-    private OptionalLong noted = OptionalLong.empty();
 
     DriverWorld(CoreBinary binary, CoreOptions core) {
         Answer<Host> created = Host.create(binary, HostOptions.defaults().withCore(core).withScheduler(time)
-                .withLog(logs::add).withErrorSink(failures::add));
+                .withLog(logs::add).withErrorSink(failures::add).withTimerObserver(this::timerMoved));
         if (!(created instanceof Answer.Ok)) {
             throw new IllegalStateException("the driver's host could not be created: " + created);
         }
@@ -107,29 +106,22 @@ final class DriverWorld implements AutoCloseable {
         return new ArrayList<>(plugins.keySet());
     }
 
-    /**
-     * Notes a move of the host's timer when the deadline it says it is armed for changed since the last note, as
-     * {@code [the clock's time, the deadline or null]}.
-     *
-     * @implNote The timer is read after each thing the suite does, so a move undone within one of them goes
-     * unnoted; every move a layer vector states falls at a time the suite acts.
-     */
-    void noteTimer() {
-        OptionalLong deadline = host.timerDeadline();
-        if (deadline.equals(noted)) {
-            return;
+    /** Records one move of the host's timer as {@code [the clock's time, the deadline or null]}. */
+    private void timerMoved(OptionalLong deadline) {
+        synchronized (timerMoves) {
+            timerMoves.add(Arrays.<Object>asList(time.now(),
+                    deadline.isPresent() ? (Object) deadline.getAsLong() : StandardJson.NULL));
         }
-        noted = deadline;
-        timerMoves.add(Arrays.<Object>asList(time.now(),
-                deadline.isPresent() ? (Object) deadline.getAsLong() : StandardJson.NULL));
     }
 
     void runUntil(long until) {
-        time.runUntil(until, this::noteTimer);
+        time.runUntil(until);
     }
 
     List<Object> timerMoves() {
-        return Collections.unmodifiableList(new ArrayList<>(timerMoves));
+        synchronized (timerMoves) {
+            return Collections.unmodifiableList(new ArrayList<>(timerMoves));
+        }
     }
 
     List<LogRecord> logs() {

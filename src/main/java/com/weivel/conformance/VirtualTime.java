@@ -32,13 +32,10 @@ final class VirtualTime implements Scheduler {
     /**
      * Runs every task due by {@code time}, earliest first and those scheduled meanwhile included, the clock standing
      * at each one's due time as it runs, then stands at {@code time}.
-     *
-     * @param afterEach what the suite does once each task has run
      */
-    void runUntil(long time, Runnable afterEach) {
+    void runUntil(long time) {
         for (VirtualTask due = nextDue(time); due != null; due = nextDue(time)) {
             due.callback.run();
-            afterEach.run();
         }
         moveClockTo(time);
     }

@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -134,7 +133,7 @@ public final class Host implements AutoCloseable {
                 ? Optional.<SystemScheduler>empty()
                 : Optional.of(Schedulers.system());
         Scheduler scheduler = own.isPresent() ? own.get() : options.scheduler().get();
-        Answer<CoreTimer> started = CoreTimer.start(core, scheduler);
+        Answer<CoreTimer> started = CoreTimer.start(core, scheduler, options.timerObserver());
         if (!(started instanceof Answer.Ok)) {
             core.destroy();
             core.close();
@@ -208,16 +207,6 @@ public final class Host implements AutoCloseable {
             return new Answer.Destroyed<>();
         }
         return core.call(CoreCalls.ledger());
-    }
-
-    /**
-     * The deadline the host's timer is armed for, as the core last announced it.
-     *
-     * @return the deadline on the scheduler's clock; empty while no deadline is announced, on {@link Scheduler#none()}
-     *     and once the destroy has disarmed the timer
-     */
-    public OptionalLong timerDeadline() {
-        return timer.armed();
     }
 
     /**
