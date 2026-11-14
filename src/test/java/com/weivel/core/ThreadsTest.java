@@ -88,7 +88,7 @@ class ThreadsTest {
                 await(releaseListener);
             }
         });
-        CoreInternals.setDeadlineHooks(core, new DeadlineHooks() {
+        CoreInternals.installDeadlineHooks(core, new DeadlineHooks() {
             @Override
             public long now() {
                 return 0;
@@ -192,7 +192,7 @@ class ThreadsTest {
         private final List<DeadlineHooksTest.Follow> follows = Collections.synchronizedList(new ArrayList<>());
 
         GatedFollow(Core core) {
-            assertTrue(CoreInternals.setDeadlineHooks(core, this));
+            assertEquals(new Answer.Ok<Void>(null), CoreInternals.installDeadlineHooks(core, this));
         }
 
         @Override

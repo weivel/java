@@ -46,6 +46,7 @@ public final class CoreTimer {
     private final Core core;
     private final Scheduler scheduler;
     private final boolean following;
+    private final Hooks hooks = new Hooks();
     private final ReentrantLock lock = new ReentrantLock();
     private long ticket;
     private Scheduler.Task task;
@@ -60,22 +61,28 @@ public final class CoreTimer {
     }
 
     /**
-     * Starts the timer of a core. With a scheduler it becomes the core's deadline hooks, replacing any it had, and a
-     * deadline the core already waits on is armed at once. On {@link Scheduler#none()} it installs nothing.
+     * Starts the timer of a core. With a scheduler it becomes the core's deadline hooks, and a deadline the core
+     * already waits on is armed at once. On {@link Scheduler#none()} it installs nothing.
      *
      * @param core the core to follow
      * @param scheduler the caller's clock and scheduler
-     * @return the timer; {@link Answer.Destroyed} for a destroyed core
+     * @return the timer; {@link Answer.Mistake} when another timer on a scheduler follows the core already, since one
+     *     core is followed by one timer; {@link Answer.Destroyed} for a destroyed core
      */
     public static Answer<CoreTimer> start(Core core, Scheduler scheduler) {
         Objects.requireNonNull(core, "core");
         Objects.requireNonNull(scheduler, "scheduler");
         boolean following = !(scheduler instanceof NoScheduler);
         CoreTimer timer = new CoreTimer(core, scheduler, following);
-        if (following && !CoreInternals.setDeadlineHooks(core, timer.new Hooks())) {
-            return new Answer.Destroyed<>();
+        if (following) {
+            return switch (CoreInternals.installDeadlineHooks(core, timer.hooks)) {
+                case Answer.Ok<Void> installed -> new Answer.Ok<>(timer);
+                case Answer.Mistake<Void> taken -> new Answer.Mistake<>(
+                        "another timer follows this core already; destroy it before starting another");
+                default -> new Answer.Destroyed<>();
+            };
         }
-        if (!following && core.isDestroyed()) {
+        if (core.isDestroyed()) {
             return new Answer.Destroyed<>();
         }
         return new Answer.Ok<>(timer);
@@ -106,8 +113,8 @@ public final class CoreTimer {
     }
 
     /**
-     * Disarms the timer for good: it cancels the one task it holds and takes its hooks off the core, so nothing of the
-     * layer's is left for the scheduler to run. A callback the scheduler begins all the same does nothing. It must not
+     * Disarms the timer for good: it cancels the one task it holds and takes its own hooks off the core, and only its
+     * own, so nothing of the layer's is left for the scheduler to run. A callback the scheduler begins all the same does nothing. It must not
      * be called under the layer lock, since taking the hooks off calls through the wrapper.
      */
     public void destroy() {
@@ -127,7 +134,7 @@ public final class CoreTimer {
         }
         cancel(cancelled);
         if (following) {
-            CoreInternals.setDeadlineHooks(core, null);
+            CoreInternals.removeDeadlineHooks(core, hooks);
         }
     }
 

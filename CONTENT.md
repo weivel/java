@@ -56,6 +56,8 @@ has one lock of its own, always the innermost.
 `CoreTimer` arms the core's next deadline on the caller's `Scheduler`, which owns the clock: it follows the latest
 deadline announcement drained and nothing else, hands the core the time through the wrapper when its task runs, waits
 in steps on a scheduler that cannot wait as long, and gives the wrapper the clock for its check before each call.
+One timer follows one core: a second started while one follows is the caller's mistake, and a timer's destroy takes
+off its own hooks and nothing else.
 `Schedulers.system()` is one shared daemon thread reading `System.nanoTime()`; `Scheduler.none()` arms nothing and
 reads no clock.
 

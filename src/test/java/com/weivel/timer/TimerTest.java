@@ -226,6 +226,33 @@ class TimerTest {
     }
 
     @Test
+    void aSecondTimerOnOneCoreIsTheCallersMistakeAndTheFirstKeepsFollowing() {
+        CoreTimer first = started(scheduler);
+        TestScheduler other = new TestScheduler();
+
+        Answer<CoreTimer> second = CoreTimer.start(core, other);
+
+        assertInstanceOf(Answer.Mistake.class, second);
+        ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
+        assertEquals(OptionalLong.of(100), first.armed());
+        assertEquals(List.of(100L), scheduler.live());
+        assertEquals(List.of(), other.scheduled());
+    }
+
+    @Test
+    void aDestroyedTimerTakesItsHooksOffSoAnotherMayFollow() {
+        started(scheduler).destroy();
+        TestScheduler other = new TestScheduler();
+
+        CoreTimer second = started(other);
+        ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
+
+        assertEquals(OptionalLong.of(100), second.armed());
+        assertEquals(List.of(100L), other.live());
+        assertEquals(List.of(), scheduler.scheduled());
+    }
+
+    @Test
     void aTimerOnNoSchedulerArmsNothingAndReadsNoClock() {
         CoreTimer timer = started(Scheduler.none());
 

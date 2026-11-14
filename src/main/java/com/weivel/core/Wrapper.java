@@ -594,17 +594,35 @@ final class Wrapper {
                 : DeferredStep.Deferral.LEFT_TO_THE_DISPATCH;
     }
 
-    /** Sets the deadline hooks, none for null; hooks set while a deadline is recorded are told it at once. */
-    boolean setDeadlineHooks(DeadlineHooks replacement) {
+    /** Installs deadline hooks where none are; hooks installed while a deadline is recorded are told it at once. */
+    Answer<Void> installDeadlineHooks(DeadlineHooks installing) {
+        Objects.requireNonNull(installing, "hooks");
         if (!enter()) {
-            return false;
+            return new Answer.Destroyed<>();
         }
-        hooks = replacement;
+        if (hooks != null) {
+            lock.unlock();
+            return new Answer.Mistake<>("other deadline hooks follow this core already; take them off first");
+        }
+        hooks = installing;
         if (deadlineSerial != 0) {
             deadlineSerial++;
         }
         leave(new CallNotes(), null);
-        return true;
+        return new Answer.Ok<>(null);
+    }
+
+    /** Takes the deadline hooks off when they are {@code removing}, and leaves any others installed. */
+    boolean removeDeadlineHooks(DeadlineHooks removing) {
+        if (!enter()) {
+            return false;
+        }
+        boolean installed = hooks == removing;
+        if (installed) {
+            hooks = null;
+        }
+        leave(new CallNotes(), null);
+        return installed;
     }
 
     void addListener(CoreListener listener) {

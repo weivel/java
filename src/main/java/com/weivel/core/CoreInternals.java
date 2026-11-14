@@ -43,15 +43,28 @@ public final class CoreInternals {
     }
 
     /**
-     * Sets the hooks a timer follows the core's deadline through, replacing any set before; hooks set while a
-     * deadline is recorded are told it at once.
+     * Installs the hooks a timer follows the core's deadline through, where none are installed; hooks installed while
+     * a deadline is recorded are told it at once. One core is followed by one timer.
      *
      * @param core the core
-     * @param hooks the hooks, or null for none
-     * @return false when the core is destroyed
+     * @param hooks the hooks
+     * @return {@link Answer.Ok}; {@link Answer.Mistake} when other hooks are installed, which stay;
+     *     {@link Answer.Destroyed} for a destroyed core
      */
-    public static boolean setDeadlineHooks(Core core, DeadlineHooks hooks) {
-        return core.setDeadlineHooks(hooks);
+    public static Answer<Void> installDeadlineHooks(Core core, DeadlineHooks hooks) {
+        return core.installDeadlineHooks(hooks);
+    }
+
+    /**
+     * Takes the deadline hooks off the core when they are the very hooks given, and leaves any others installed, so a
+     * timer never takes off what it did not install.
+     *
+     * @param core the core
+     * @param hooks the hooks to take off, compared by identity
+     * @return whether they were installed and are now taken off
+     */
+    public static boolean removeDeadlineHooks(Core core, DeadlineHooks hooks) {
+        return core.removeDeadlineHooks(hooks);
     }
 
     /**

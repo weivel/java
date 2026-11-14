@@ -137,7 +137,7 @@ class DeadlineHooksTest {
     @Test
     void aFailingHookGoesToTheSink() {
         Core core = TestCores.core(listener, sink);
-        CoreInternals.setDeadlineHooks(core, new DeadlineHooks() {
+        CoreInternals.installDeadlineHooks(core, new DeadlineHooks() {
             @Override
             public long now() {
                 throw new IllegalStateException("a clock failing on purpose");
@@ -158,6 +158,23 @@ class DeadlineHooksTest {
         core.destroy();
     }
 
+    @Test
+    void hooksAreTakenOffOnlyByWhoeverInstalledThemAndNeverInstalledOverOthers() {
+        Core core = TestCores.core(listener, sink);
+        TestHooks installed = TestHooks.on(core);
+        TestHooks other = new TestHooks(core);
+
+        assertInstanceOf(Answer.Mistake.class, CoreInternals.installDeadlineHooks(core, other));
+        assertFalse(CoreInternals.removeDeadlineHooks(core, other));
+        ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
+        assertTrue(CoreInternals.removeDeadlineHooks(core, installed));
+        ok(core.call(CoreCalls.wantService(HOST, "unfollowed", WantOptions.timed(0, 50))));
+
+        assertEquals(List.of(new Follow(100, true)), installed.follows());
+        assertEquals(List.of(), other.follows());
+        core.destroy();
+    }
+
     record Follow(long at, boolean set) {
     }
 
@@ -175,7 +192,7 @@ class DeadlineHooksTest {
 
         static TestHooks on(Core core) {
             TestHooks hooks = new TestHooks(core);
-            assertTrue(CoreInternals.setDeadlineHooks(core, hooks));
+            assertEquals(new Answer.Ok<Void>(null), CoreInternals.installDeadlineHooks(core, hooks));
             return hooks;
         }
 
@@ -210,7 +227,7 @@ class DeadlineHooksTest {
         Core core = TestCores.core(listener, sink);
         core.destroy();
 
-        assertFalse(CoreInternals.setDeadlineHooks(core, null));
+        assertInstanceOf(Answer.Destroyed.class, CoreInternals.installDeadlineHooks(core, new TestHooks(core)));
         assertInstanceOf(Answer.Destroyed.class, core.call(CoreCalls.nextDeadline()));
     }
 }
