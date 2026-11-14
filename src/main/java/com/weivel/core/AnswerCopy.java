@@ -28,6 +28,45 @@ final class AnswerCopy {
         return Collections.unmodifiableList(copied);
     }
 
+    /** @implNote Rows are of the kind that may grow, so they are stepped at the first row's {@code size}. */
+    static List<LedgerRow> ledger(NativeRegion snapshot) {
+        Layout layout = CoreLayouts.LEDGER_SNAPSHOT;
+        Layout row = CoreLayouts.LEDGER_ROW;
+        int count = snapshot.getInt(offsetOf(layout, "row_count"));
+        if (count == 0) {
+            return Collections.emptyList();
+        }
+        long rowsAddress = snapshot.getAddress(offsetOf(layout, "rows"));
+        long stride = Integer.toUnsignedLong(snapshot.at(rowsAddress, row.byteSize()).getInt(offsetOf(row, "size")));
+        if (stride < row.byteSize()) {
+            throw new IllegalStateException("a ledger row smaller than the fields the layer reads");
+        }
+        NativeRegion rows = snapshot.at(rowsAddress, stride * count);
+        List<LedgerRow> copied = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            copied.add(ledgerRow(rows.at(rowsAddress + index * stride, stride)));
+        }
+        return Collections.unmodifiableList(copied);
+    }
+
+    private static LedgerRow ledgerRow(NativeRegion row) {
+        Layout layout = CoreLayouts.LEDGER_ROW;
+        long refusal = offsetOf(layout, "refusal");
+        long detail = row.getAddress(refusal + offsetOf(CoreLayouts.REFUSAL, "detail"));
+        long subject = row.getAddress(offsetOf(layout, "subject"));
+        Optional<Refusal> reason = detail == 0
+                ? Optional.<Refusal>empty()
+                : Optional.of(new Refusal(row.getInt(refusal + offsetOf(CoreLayouts.REFUSAL, "code")),
+                        row.textAt(detail),
+                        textOrEmpty(row, row.getAddress(refusal + offsetOf(CoreLayouts.REFUSAL, "fix"))),
+                        subject == 0 ? Optional.<String>empty() : Optional.of(row.textAt(subject)),
+                        row.getInt(offsetOf(layout, "has_fix")) != 0));
+        return new LedgerRow(row.getLong(offsetOf(layout, "plugin")),
+                textOrEmpty(row, row.getAddress(offsetOf(layout, "import_name"))),
+                LedgerRow.Status.of(row.getInt(offsetOf(layout, "status"))),
+                row.getInt(offsetOf(layout, "verified")) != 0, reason);
+    }
+
     /** @implNote Every array of a plan is of the kind whose elements never grow, so each is stepped at its layout. */
     static ActivationPlan plan(NativeRegion plan) {
         Layout layout = CoreLayouts.ACTIVATION_PLAN;

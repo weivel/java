@@ -1,67 +1,48 @@
 package com.weivel.core;
 
-import java.util.Optional;
-
 /**
  * What {@link CoreCalls#verifyOrQuarantine} answers: the activation passed, or the core refused it and the plugin was
- * quarantined in the same crossing, with the status the quarantine answered.
+ * quarantined in the same crossing.
  */
 public final class Verification {
-    private static final Verification VERIFIED = new Verification(Optional.<Integer>empty());
+    private static final Verification PASSED = new Verification(true);
+    private static final Verification QUARANTINED = new Verification(false);
 
-    private final Optional<Integer> quarantineStatus;
+    private final boolean verified;
 
-    private Verification(Optional<Integer> quarantineStatus) {
-        this.quarantineStatus = quarantineStatus;
+    private Verification(boolean verified) {
+        this.verified = verified;
     }
 
     static Verification passed() {
-        return VERIFIED;
+        return PASSED;
     }
 
-    static Verification quarantined(int status) {
-        return new Verification(Optional.of(status));
+    static Verification quarantined() {
+        return QUARANTINED;
     }
 
     /**
      * Whether the core verified the activation.
      *
-     * @return true when it passed, false when the core refused it and the plugin was quarantined
+     * @return true when it passed, false when the core refused it and quarantined the plugin
      */
     public boolean verified() {
-        return !quarantineStatus.isPresent();
-    }
-
-    /**
-     * Whether the quarantine of a refused activation took.
-     *
-     * @return true for a refused activation whose quarantine the core answered OK
-     */
-    public boolean quarantinedInTheCore() {
-        return quarantineStatus.isPresent() && quarantineStatus.get() == 0;
-    }
-
-    /**
-     * Answers {@code quarantineStatus}.
-     *
-     * @return the core's status for the quarantine; empty when the activation passed and nothing was quarantined
-     */
-    public Optional<Integer> quarantineStatus() {
-        return quarantineStatus;
+        return verified;
     }
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof Verification && quarantineStatus.equals(((Verification) other).quarantineStatus);
+        return other instanceof Verification && verified == ((Verification) other).verified;
     }
 
     @Override
     public int hashCode() {
-        return quarantineStatus.hashCode();
+        return Boolean.hashCode(verified);
     }
 
     @Override
     public String toString() {
-        return "Verification[quarantineStatus=" + quarantineStatus + "]";
+        return "Verification[verified=" + verified + "]";
     }
 }

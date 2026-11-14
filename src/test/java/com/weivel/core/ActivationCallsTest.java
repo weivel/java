@@ -116,7 +116,6 @@ class ActivationCallsTest {
         Verification verification = ok(core.call(CoreCalls.verifyOrQuarantine(plugin)));
 
         assertTrue(!verification.verified());
-        assertEquals(Optional.of(0), verification.quarantineStatus());
         assertEquals(Arrays.asList(CoreFunction.VERIFY_ACTIVATION, CoreFunction.QUARANTINE_PLUGIN),
                 log.calls().subList(0, 2));
         List<CoreEvent> heard = listener.events();
@@ -125,6 +124,17 @@ class ActivationCallsTest {
                 ((CoreEvent.RefusalEvent) heard.get(0)).refusal().code());
         assertEquals(RefusalStatus.REFUSED, assertInstanceOf(Answer.Refused.class,
                 core.call(CoreCalls.registerService(plugin, "lacking:late"))).status());
+    }
+
+    @Test
+    void aRefusedVerificationWhoseQuarantineTheCoreRefusesIsAnsweredTheVerificationsRefusal() {
+        core = TestCores.core(listener, sink);
+        long plugin = WrapperCallTest.openedPlugin(core, Manifest.named("released"));
+        ok(core.call(CoreCalls.releasePlugin(plugin)));
+
+        Answer<Verification> verification = core.call(CoreCalls.verifyOrQuarantine(plugin));
+
+        assertEquals(CoreConstants.REFUSAL_PLUGIN_STATE, TestCores.refusalOf(verification).code());
     }
 
     @Test
