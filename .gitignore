@@ -1,17 +1,6 @@
-node_modules/
-dist/
-site/
-*.log
-docs/
-.superpowers/
-graphify-out/
-.idea/
-
-# Gradle (each java module lives in its own directory at the repository root)
-**/build/
+build/
 .gradle/
-**/.gradle/
-*.iml
+siblings/
 
-# Generated on the default branch by the release readme job.
+# Generated on the default branch by the readme job.
 README.md

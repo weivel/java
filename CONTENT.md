@@ -1,118 +1,38 @@
-The plugin contract, published as `@intisy/bayonet`. It holds the
-`plugin.json` manifest schema, the plugin context and lifecycle, the typed keys a capability or a
-service is reached by, the declaration engine a host runs, the ESM driver a host starts plugins with,
-and the `validate` command. The contract is written in Java and the TypeScript surface is generated
-from it. It has no dependencies, and only the `./host` subpath and the CLI import node, so a plugin
-and a dashboard renderer can import the same package a host does without carrying either.
+## What this is
 
-## Under-the-Hood Architecture
+The Java language implementation of weivel, for a host written in Java that runs plugins written in Java. It is one
+of the language implementations the core's `CONTRACT.md` describes, held to that contract and to the vectors in
+`weivel/conformance`, and it decides nothing itself: compatibility, order, reach, waiting and revocation are the
+core's answers.
 
-```mermaid
-flowchart TD
-    MANIFEST[plugin.json] -->|validate| VALIDATE[validateManifest]
-    MANIFEST -->|declares| CAPS[capabilities]
-    MANIFEST -->|declares| SVC[services.provides / consumes]
+## What it is not
 
-    subgraph Host [host, one per app]
-        HOST[createPluginHost]
-        LEDGER[(introspection ledger)]
-        HUB[(service registry)]
-    end
+It is not the core, and it carries no C. It reaches the core's binary through Java's foreign function and memory API
+alone, loading it from the path its caller gives, so one build of the layer runs against whichever core binary its
+caller loads. It forces no path, file name, variable or format on its caller.
 
-    HOST -->|contextFor| CTX[PluginContext]
-    CTX -->|provide| HOST
-    CTX -->|register / get / want / watch| HUB
-    CTX -->|subscribe| BUS[events]
-    CTX --> LEDGER
+## Modules
 
-    PLUGIN[plugin entry module] -->|activate ctx| CTX
-    HOST -->|verifyActivation| CHECK{declared == provided?}
-    CHECK -->|no| QUARANTINE[markBroken: capabilities and services dropped, host stays up]
-    CHECK -->|yes| ACTIVE[capability id is the only dispatch key a host has]
+`src/main/java/com/weivel/` holds the modules every language implementation of weivel holds, as the core's `MODULES`
+list names them, one package each: `com.weivel.core`, `com.weivel.handles`, `com.weivel.timer`, `com.weivel.context`,
+`com.weivel.host`, `com.weivel.standard`, `com.weivel.conformance` and `com.weivel.benchmarks`. Each package's tests
+are in `src/test/java/com/weivel/<module>/`.
 
-    SVC --> ORDER[activationOrder: providers before consumers, cycles named]
-```
+## What is built
 
-## The permanence rules
+Each package holds only its purpose so far.
 
-The API is append-only from its first release. These four rules are what make that possible, and
-they are enforced in review:
+## Using it
 
-1. **The API package is append-only.** A published capability interface, service contract,
-   manifest field, or event shape is never removed and never changes meaning. New needs get new
-   ids, never edits to old ones. Deprecation is a documentation state, not a code change.
-2. **Every vocabulary is open.** An unknown capability id, service id, event topic, manifest
-   field, or screen-node kind is ignored with a debug log, never an error. A plugin built against
-   next year's API loads on today's host, minus what the host does not know.
-3. **`"api": 1` is a floor.** A host refuses to load only a plugin whose declared floor exceeds
-   what the host implements, and says exactly that. Everything else loads.
-4. **Nothing may branch on a plugin id.** Hosts and core libraries never compare against a
-   specific plugin's id; capability ids and service ids are the only dispatch keys. A plugin
-   asking for another plugin's namespaced service is not a violation: that is dispatch by service
-   id, and declaring the dependency is the point.
+The layer needs Java 25 and the core's shared binary. Java refuses, or warns about, native access a launch did not
+grant, so a process using the layer from the class path runs with `--enable-native-access=ALL-UNNAMED`.
 
-## Structure
+## Building
 
-- one directory per java module (the contract and the engine, the source of truth)
-  - `annotations/`, `processor/`: the emission annotations and the emitter that renders TypeScript
-  - `contract/`: the manifest, the plugin, the context, and the typed keys
-  - `engine/`: validation, activation order, the service hub, the ledger and the diagnostics channel
-  - `teavm/`: the engine's JavaScript module surface, compiled to an ES2015 module
-- `generated/` (emitted from the Java, committed)
-  - `api.keys.js` and `api.keys.d.ts`: the package root, types and constants
-  - `api.d.ts`: the contract declarations, also served as `./contract`
-  - `engine.js` and `engine.d.ts`: the engine, served as `./engine`
-- `src/host/`: the ESM driver and manifest scanner a host runs plugins with, served as `./host`
-- `src/cli/`: the `intisy-plugin` command
-- `dist/` (compiled output, not committed): `cli/main.js` and `host/index.js`
-- The manifest schema is NOT here: it is `weivel/model`'s `plugin.schema.json`, published at
-  `https://weivel.github.io/model/plugin.schema.json`. This implementation validates against it:
-  `engine`'s `PublishedSchemaTest` holds `ManifestSchema` to it and `schema-bundle-parity` holds the
-  TeaVM bundle to it, reading `weivel/model` checked out inside or beside this repository.
-
-## Installation
-
-Through the plugin manager, as a dependency of the host or plugin that needs it:
-
-```bash
-npm install @intisy/bayonet
-```
-
-## Configuration
-
-This package reads no configuration file. Its one environment switch is
-`INTISY_PLUGIN_STRICT=1`, which makes every ignored unknown id loud instead of quiet:
-
-```bash
-INTISY_PLUGIN_STRICT=1 npx intisy-plugin validate
-```
-
-A host can route the same diagnostics into its own logger with `setDiagnosticSink`, and force
-the mode with `setStrict(true)`.
-
-## Logging
-
-This package writes no log files. Every plugin-facing message goes to the `Logger` the host puts
-on the context, and the package's own diagnostics go to the sink a host installs, or to the
-console when it installs none.
-
-## scripts/teavm-build.mjs (generic TeaVM build harness)
-
-A standalone Node script, invoked directly from a consuming package's `build` script rather than
-imported from the api surface. It runs a Gradle TeaVM `generateJavaScript` task for a Java module and
-copies the emitted ESM to a stable path, so a bundler can stage it alongside the package's own
-TypeScript. Nothing in it is specific to any one consumer.
-
-Contract: runs `./gradlew <module>:<task>` inside `--java-dir`, locates the single non-sourcemap
-`.js` file under `<java-dir>/<module-dir>/build/generated/teavm/js/`, and copies it (plus its
-`.map`, if present) to `--out`. Fails loudly if the java dir or gradle wrapper is missing, the
-generated-js directory does not exist after the build, more or fewer than one `.js` file is found, or
-the staged output is empty.
-
-Usage, from the consuming package's own directory:
-```bash
-node node_modules/@intisy/bayonet/scripts/teavm-build.mjs --java-dir . --module :stub-teavm --out src/generated/stub-provider.teavm.js
-```
-Flags: `--java-dir` / `--module` / `--out` (all required), `--task` (default `generateJavaScript`),
-`--module-dir` (default `--module` minus its leading `:`), `--skip-build` (re-copy the
-last-generated output without re-running Gradle).
+`./gradlew check` builds and tests everything. The wrapper fetches its pinned Gradle, and Gradle fetches a Java 25
+toolchain when none is installed; the native build needs CMake 3.15 or later and a C compiler on the `PATH`. The
+build reads the core, the standard and the conformance kit from `siblings/core`, `siblings/standard` and
+`siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links
+or clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts`
+program, and the standard's shared library and `layouts` program, with CMake in Release, and the tests run against
+those binaries.
