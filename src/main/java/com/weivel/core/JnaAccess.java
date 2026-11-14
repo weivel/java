@@ -4,6 +4,7 @@ import com.sun.jna.Function;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -118,6 +119,20 @@ final class JnaAccess implements NativeAccess {
         return new Pointer(address).getString(0, StandardCharsets.UTF_8.name());
     }
 
+    @Override
+    public long addressOf(ByteBuffer direct) {
+        if (!direct.isDirect()) {
+            throw new IllegalArgumentException("a heap buffer has no native address");
+        }
+        return Pointer.nativeValue(Native.getDirectBufferPointer(direct)) + direct.position();
+    }
+
+    /** @implNote JNA hands C a pointer only to native memory, so a heap array is copied for each call. */
+    @Override
+    public boolean lendsTheHeap() {
+        return false;
+    }
+
     /**
      * A library JNA opened, which this object alone holds and closes.
      *
@@ -126,6 +141,8 @@ final class JnaAccess implements NativeAccess {
      */
     static final class JnaLibrary implements OpenLibrary {
         private static final int CLOSED = -1;
+        private static final NativeSignature BYTES_SIGNATURE = NativeSignature.of(NativeType.INT, NativeType.ADDRESS,
+                NativeType.LONG, NativeType.ADDRESS, NativeType.ADDRESS);
 
         private final Path path;
         private final NativeLibrary library;
@@ -157,6 +174,11 @@ final class JnaAccess implements NativeAccess {
                 throw new IllegalArgumentException("the library exports no function " + symbol, missing);
             }
             return new JnaFunction(this, function, signature);
+        }
+
+        @Override
+        public NativeBytesFunction bytesFunction(String symbol) {
+            return new JnaBytesFunction(function(symbol, BYTES_SIGNATURE));
         }
 
         private void requireOpen() {
@@ -240,6 +262,31 @@ final class JnaAccess implements NativeAccess {
                     return 0;
                 default:
                     throw new IllegalStateException("a return type the seam does not know: " + signature.returned());
+            }
+        }
+    }
+
+    /** A bytes function whose heap input is copied into native memory freed once the call returns. */
+    private static final class JnaBytesFunction implements NativeBytesFunction {
+        private final NativeFunction function;
+
+        JnaBytesFunction(NativeFunction function) {
+            this.function = function;
+        }
+
+        @Override
+        public int call(long input, long inputLength, long output, long outputLength) {
+            return (int) function.call(input, inputLength, output, outputLength);
+        }
+
+        @Override
+        public int call(byte[] input, int offset, int length, long output, long outputLength) {
+            long copy = INSTANCE.allocate(length);
+            try {
+                new Pointer(copy).write(0, input, offset, length);
+                return (int) function.call(copy, length, output, outputLength);
+            } finally {
+                INSTANCE.free(copy);
             }
         }
     }

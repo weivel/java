@@ -1,5 +1,6 @@
 package com.weivel.core;
 
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 
 /**
@@ -54,4 +55,14 @@ interface NativeAccess {
 
     /** Reads the UTF-8 text starting at {@code address}, up to its terminating zero byte. */
     String readText(long address);
+
+    /**
+     * The address of the byte at a direct buffer's position.
+     *
+     * @throws IllegalArgumentException for a buffer that is not direct
+     */
+    long addressOf(ByteBuffer direct);
+
+    /** Whether a heap array reaches native code in place for the length of a call, rather than copied. */
+    boolean lendsTheHeap();
 }

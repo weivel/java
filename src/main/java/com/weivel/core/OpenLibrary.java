@@ -13,6 +13,13 @@ interface OpenLibrary extends AutoCloseable {
     NativeFunction function(String symbol, NativeSignature signature);
 
     /**
+     * The function the library exports as {@code symbol}, of the standard's bytes kind.
+     *
+     * @throws IllegalArgumentException naming the symbol, when the library exports none of that name
+     */
+    NativeBytesFunction bytesFunction(String symbol);
+
+    /**
      * Closes the library, after which no function looked up in it may be called.
      *
      * @throws IllegalStateException when it was closed already, or a call into it is under way

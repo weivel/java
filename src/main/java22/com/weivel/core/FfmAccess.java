@@ -17,6 +17,7 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -40,6 +41,10 @@ final class FfmAccess implements NativeAccess {
     private static final MethodHandle SEGMENT_AT = segmentAtHandle();
     private static final MethodHandle ADDRESS_OF = addressOfHandle();
     private static final int MOST_PARAMETERS = 7;
+    private static final NativeSignature BYTES_SIGNATURE = NativeSignature.of(NativeType.INT, NativeType.ADDRESS,
+            NativeType.LONG, NativeType.ADDRESS, NativeType.ADDRESS);
+    private static final FunctionDescriptor BYTES_DESCRIPTOR = FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG,
+            ADDRESS, ADDRESS);
 
     private FfmAccess() {
     }
@@ -146,6 +151,23 @@ final class FfmAccess implements NativeAccess {
         return EVERYTHING.getString(address, StandardCharsets.UTF_8);
     }
 
+    @Override
+    public long addressOf(ByteBuffer direct) {
+        if (!direct.isDirect()) {
+            throw new IllegalArgumentException("a heap buffer has no native address");
+        }
+        return MemorySegment.ofBuffer(direct).address();
+    }
+
+    /**
+     * @implNote Measured on JDK 25.0.3: a heap segment handed to a downcall linked with
+     * {@code Linker.Option.critical(true)} reaches C at the array's own address, and a plain downcall refuses it.
+     */
+    @Override
+    public boolean lendsTheHeap() {
+        return true;
+    }
+
     private static MethodHandle standardFunction(String symbol, FunctionDescriptor descriptor) {
         return LINKER.downcallHandle(LINKER.defaultLookup().find(symbol).get(), descriptor);
     }
@@ -208,6 +230,14 @@ final class FfmAccess implements NativeAccess {
             }
             return new FfmFunction(adapted(LINKER.downcallHandle(found.get(), descriptorOf(signature)), signature),
                     signature.parameters().size());
+        }
+
+        @Override
+        public NativeBytesFunction bytesFunction(String symbol) {
+            NativeFunction plain = function(symbol, BYTES_SIGNATURE);
+            MethodHandle lending = LINKER.downcallHandle(lookup.find(symbol).get(), BYTES_DESCRIPTOR,
+                    Linker.Option.critical(true));
+            return new FfmBytesFunction(plain, lending);
         }
 
         private void requireOpen() {
@@ -386,6 +416,39 @@ final class FfmAccess implements NativeAccess {
         private IllegalArgumentException wrongCount(int count) {
             return new IllegalArgumentException("a function of " + arity + " parameters was handed " + count
                     + " arguments");
+        }
+    }
+
+    /**
+     * A bytes function reached through two downcalls: the plain one for native input, and one linked critical, which
+     * alone admits a heap segment, for a heap array lent in place.
+     *
+     * @implNote A critical downcall keeps a heap segment where it is for the length of the call, which is the only
+     * way the JDK lets C read the heap; such a call may not call back into Java, which no bytes function does.
+     */
+    private static final class FfmBytesFunction implements NativeBytesFunction {
+        private final NativeFunction plain;
+        private final MethodHandle lending;
+
+        FfmBytesFunction(NativeFunction plain, MethodHandle lending) {
+            this.plain = plain;
+            this.lending = lending;
+        }
+
+        @Override
+        public int call(long input, long inputLength, long output, long outputLength) {
+            return (int) plain.call(input, inputLength, output, outputLength);
+        }
+
+        @Override
+        public int call(byte[] input, int offset, int length, long output, long outputLength) {
+            MemorySegment lent = MemorySegment.ofArray(input).asSlice(offset, length);
+            try {
+                return (int) lending.invokeExact(lent, (long) length, MemorySegment.ofAddress(output),
+                        MemorySegment.ofAddress(outputLength));
+            } catch (Throwable thrown) {
+                throw rethrown(thrown);
+            }
         }
     }
 }

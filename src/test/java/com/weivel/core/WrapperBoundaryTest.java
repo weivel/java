@@ -35,7 +35,8 @@ class WrapperBoundaryTest {
             "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java");
     private static final Set<String> SEAM_SOURCES = setOf("NativeAccess.java", "NativeBackends.java",
             "OpenLibrary.java", "NativeFunction.java", "NativeSignature.java", "NativeType.java", "NativeArena.java",
-            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java");
+            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java", "NativeBytesFunction.java", "LibraryBinary.java",
+            "LibraryFunction.java");
     private static final Set<String> FORBIDDEN = setOf("CoreFunction", "CoreFunctions", "MethodHandle",
             "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle", "functions", "crossing",
             "cross", "NativeAccess", "NativeBackends", "OpenLibrary", "NativeFunction", "NativeSignature", "NativeType",
