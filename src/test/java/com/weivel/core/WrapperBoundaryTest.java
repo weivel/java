@@ -32,10 +32,13 @@ import org.junit.jupiter.api.Test;
  */
 class WrapperBoundaryTest {
     private static final Set<String> WRAPPER_SOURCES = setOf("CoreFunction.java", "CoreFunctions.java",
-            "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java");
+            "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java", "CoreSymbols.java");
     private static final Set<String> SEAM_SOURCES = setOf("NativeAccess.java", "NativeBackends.java",
             "OpenLibrary.java", "NativeFunction.java", "NativeSignature.java", "NativeType.java", "NativeArena.java",
-            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java", "LibraryBinary.java", "LibraryFunction.java");
+            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java", "LibraryBinary.java", "LibraryFunction.java",
+            "ForeignLibrary.java", "ForeignFunction.java", "ForeignMemory.java");
+    private static final Set<String> WRAPPER_ONLY = setOf("CoreFunction", "CoreFunctions", "functions", "crossing",
+            "cross");
     private static final Set<String> FORBIDDEN = setOf("CoreFunction", "CoreFunctions", "MethodHandle",
             "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle", "functions", "crossing",
             "cross", "NativeAccess", "NativeBackends", "OpenLibrary", "NativeFunction", "NativeSignature", "NativeType",
@@ -61,6 +64,24 @@ class WrapperBoundaryTest {
         assertTrue(sources.stream().anyMatch(source -> source.endsWith("Core.java")), "no source was read");
         assertTrue(sources.stream().anyMatch(source -> source.endsWith("FfmAccess.java")),
                 "no Java 22 source was read");
+        assertEquals(Collections.emptyList(), offences);
+    }
+
+    /**
+     * The seam's public classes open libraries other than the core for other packages, so no seam source may reach
+     * the table of the core's functions or a call's crossing: whatever it opens, only the wrapper crosses into the
+     * core.
+     */
+    @Test
+    void noSeamSourceReachesTheTableOfTheCoresFunctions() throws IOException {
+        List<String> offences = new ArrayList<>();
+        for (Path source : coreSources()) {
+            if (SEAM_SOURCES.contains(source.getFileName().toString())) {
+                identifiersOf(source).stream().filter(WRAPPER_ONLY::contains).distinct()
+                        .forEach(name -> offences.add(source.getFileName() + " names " + name));
+            }
+        }
+
         assertEquals(Collections.emptyList(), offences);
     }
 

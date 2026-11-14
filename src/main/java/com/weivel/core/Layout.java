@@ -10,12 +10,22 @@ import java.util.Optional;
  * The layout of a C value, declared by hand: a primitive, padding, a struct whose members follow each other with
  * their padding stated, a union whose members share its start, or a sequence of one element. Both native backends
  * read every struct through these offsets, which the tests compare with what the C compiler laid out.
+ *
+ * @implNote Public so that a package of the layer that reaches a C library other than the core, as {@code standard}
+ * does, declares that library's structs in its own package, as every struct is declared in the package that owns the
+ * call. A layout is arithmetic over sizes and reaches no native code.
  */
-final class Layout {
-    static final Layout INT = value(4);
-    static final Layout LONG = value(8);
-    static final Layout DOUBLE = value(8);
-    static final Layout ADDRESS = value(8);
+public final class Layout {
+    /** One byte, as a {@code char} of a C array field. */
+    public static final Layout BYTE = value(1);
+    /** A 32-bit integer. */
+    public static final Layout INT = value(4);
+    /** A 64-bit integer, a {@code size_t} included. */
+    public static final Layout LONG = value(8);
+    /** A 64-bit IEEE 754 double. */
+    public static final Layout DOUBLE = value(8);
+    /** A pointer, 8 bytes on the 64-bit JVMs the layer runs on. */
+    public static final Layout ADDRESS = value(8);
 
     private enum Kind {
         VALUE, PADDING, STRUCT, UNION, SEQUENCE
@@ -56,7 +66,13 @@ final class Layout {
         return size;
     }
 
-    static Layout padding(long size) {
+    /**
+     * Bytes the C compiler leaves unused, stated so that every member's offset follows from the ones before it.
+     *
+     * @param size how many bytes
+     * @return the padding
+     */
+    public static Layout padding(long size) {
         return new Layout(Kind.PADDING, Optional.<String>empty(), size, 1, Collections.<Layout>emptyList(),
                 Collections.<Long>emptyList());
     }
@@ -64,10 +80,12 @@ final class Layout {
     /**
      * Members laid out one after another, each at an offset its alignment allows.
      *
+     * @param members the members, padding included, in order
+     * @return the struct
      * @throws IllegalArgumentException when a member falls at an offset its alignment forbids, or the struct's size is
      *     not a multiple of its alignment, so padding the C compiler would add is missing
      */
-    static Layout struct(Layout... members) {
+    public static Layout struct(Layout... members) {
         List<Long> offsets = new ArrayList<>();
         long offset = 0;
         long alignment = 1;
@@ -87,8 +105,13 @@ final class Layout {
                 Collections.unmodifiableList(offsets));
     }
 
-    /** Members that all start at the union's start; the union is as large and as aligned as its largest. */
-    static Layout union(Layout... members) {
+    /**
+     * Members that all start at the union's start; the union is as large and as aligned as its largest.
+     *
+     * @param members the members
+     * @return the union
+     */
+    public static Layout union(Layout... members) {
         long size = 0;
         long alignment = 1;
         List<Long> offsets = new ArrayList<>();
@@ -101,46 +124,90 @@ final class Layout {
                 Collections.unmodifiableList(offsets));
     }
 
-    static Layout sequence(long count, Layout element) {
+    /**
+     * {@code count} elements of {@code element} in a row, as a C array field.
+     *
+     * @param count how many elements
+     * @param element each element's layout
+     * @return the sequence
+     */
+    public static Layout sequence(long count, Layout element) {
         return new Layout(Kind.SEQUENCE, Optional.<String>empty(), element.size * count, element.alignment,
                 Collections.<Layout>emptyList(), Collections.<Long>emptyList());
     }
 
-    Layout withName(String newName) {
+    /**
+     * This layout under a name: a struct's as its C type, a member's as its field.
+     *
+     * @param newName the name
+     * @return the named copy
+     */
+    public Layout withName(String newName) {
         return new Layout(kind, Optional.of(newName), size, alignment, members, offsets);
     }
 
-    Optional<String> name() {
+    /**
+     * Answers the name.
+     *
+     * @return the name given, or empty
+     */
+    public Optional<String> name() {
         return name;
     }
 
-    long byteSize() {
+    /**
+     * Answers the size.
+     *
+     * @return the size in bytes, the C compiler's {@code sizeof}
+     */
+    public long byteSize() {
         return size;
     }
 
-    boolean isStruct() {
+    /**
+     * Whether this is a struct.
+     *
+     * @return whether it is
+     */
+    public boolean isStruct() {
         return kind == Kind.STRUCT;
     }
 
-    boolean isUnion() {
+    /**
+     * Whether this is a union.
+     *
+     * @return whether it is
+     */
+    public boolean isUnion() {
         return kind == Kind.UNION;
     }
 
-    boolean isPadding() {
+    /**
+     * Whether this is padding.
+     *
+     * @return whether it is
+     */
+    public boolean isPadding() {
         return kind == Kind.PADDING;
     }
 
-    /** The members of a struct or union, padding included, in order. */
-    List<Layout> members() {
+    /**
+     * The members of a struct or union, padding included, in order.
+     *
+     * @return the members
+     */
+    public List<Layout> members() {
         return members;
     }
 
     /**
      * The offset of a field reached by naming each member on its way.
      *
+     * @param names the member names, outermost first
+     * @return the offset in bytes from this layout's start
      * @throws IllegalArgumentException when a name on the way is no member's
      */
-    long offsetOf(String... names) {
+    public long offsetOf(String... names) {
         long offset = 0;
         Layout current = this;
         for (String member : names) {
@@ -149,6 +216,15 @@ final class Layout {
             current = current.members.get(index);
         }
         return offset;
+    }
+
+    /** Where the field reached by naming each member on its way ends: its offset plus its size. */
+    long endOf(String... names) {
+        Layout current = this;
+        for (String member : names) {
+            current = current.members.get(current.indexOf(member));
+        }
+        return offsetOf(names) + current.size;
     }
 
     private int indexOf(String member) {

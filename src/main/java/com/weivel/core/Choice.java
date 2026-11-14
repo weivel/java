@@ -18,4 +18,14 @@ public enum Choice {
     int value() {
         return value;
     }
+
+    /** @throws IllegalArgumentException for a value the core's header gives no choice */
+    static Choice of(int value) {
+        for (Choice choice : values()) {
+            if (choice.value == value) {
+                return choice;
+            }
+        }
+        throw new IllegalArgumentException(value + " is no choice the core's header names");
+    }
 }

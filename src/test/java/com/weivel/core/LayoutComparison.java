@@ -16,7 +16,7 @@ public final class LayoutComparison {
     }
 
     /** Asserts that {@code holder} declares at least one struct layout and that each matches C's. */
-    static void assertEveryDeclaredLayoutMatches(Class<?> holder, CLayouts printed) {
+    public static void assertEveryDeclaredLayoutMatches(Class<?> holder, CLayouts printed) {
         List<Layout> declared = declaredStructLayouts(holder);
         assertFalse(declared.isEmpty(), holder.getName() + " declares no struct layout");
         for (Layout layout : declared) {
