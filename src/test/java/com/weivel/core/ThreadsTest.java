@@ -128,7 +128,8 @@ class ThreadsTest {
     void nothingOfTheCallersRunsWhileTheLayerLockIsHeld() {
         List<Boolean> lockSeen = Collections.synchronizedList(new ArrayList<>());
         Core[] holder = new Core[1];
-        Core core = TestCores.core(event -> {
+        EventCopyTest.FailingCopy incomplete = new EventCopyTest.FailingCopy(sequence -> true, sequence -> false);
+        Core core = TestCores.core(TestCores.functions(), incomplete, event -> {
             lockSeen.add(holder[0].isLockHeld());
             throw new IllegalStateException("a listener failing so the sink is told");
         }, failure -> lockSeen.add(holder[0].isLockHeld()));

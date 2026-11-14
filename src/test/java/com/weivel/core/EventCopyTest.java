@@ -2,11 +2,15 @@ package com.weivel.core;
 
 import static com.weivel.core.CoreConstants.HOST;
 import static com.weivel.core.TestCores.ok;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -34,6 +38,21 @@ class EventCopyTest {
         assertEquals(consumer, question.plugin());
         assertEquals(List.of(new NamedNumber("latency", 10.0)), question.constraints());
         assertFalse(question.incomplete());
+        core.destroy();
+    }
+
+    @Test
+    void constraintsLaidOutWiderThanTheLayerKnowsAreReadAtTheFirstElementsSize() {
+        Core core = constrainedCore(EventCopy.INSTANCE, TestCores.functions().mapped((function, handle) ->
+                function == CoreFunction.NEXT_EVENT ? WiderNumbers.around(handle) : handle));
+        long consumer = constrainedConsumer(core);
+        ok(core.call(CoreCalls.registerService(HOST, "measured")));
+
+        ok(core.call(CoreCalls.wantService(consumer, "measured", polled())));
+
+        CoreEvent.CapacityWantedEvent question = listener.of(CoreEvent.CapacityWantedEvent.class).getFirst();
+        assertEquals(List.of(new NamedNumber("latency", 10.0), new NamedNumber("latency", 10.0)),
+                question.constraints());
         core.destroy();
     }
 
@@ -131,9 +150,13 @@ class EventCopyTest {
     }
 
     private Core constrainedCore(EventCopying copying) {
+        return constrainedCore(copying, TestCores.functions());
+    }
+
+    private Core constrainedCore(EventCopying copying, CoreFunctions functions) {
         CoreOptions vocabulary = new CoreOptions(0, 0, 0, List.of(), List.of(),
                 List.of(new CoreOptions.ConstraintEntry("latency", "latency", 2)));
-        return TestCores.created(TestCores.functions(), copying, vocabulary, listener, sink);
+        return TestCores.created(functions, copying, vocabulary, listener, sink);
     }
 
     private static long constrainedConsumer(Core core) {
@@ -180,6 +203,57 @@ class EventCopyTest {
                 throw new OutOfMemoryError("a copy failed on purpose");
             }
             return EventCopy.INSTANCE.fixedPart(event, sequence);
+        }
+    }
+
+    /**
+     * A {@code weivel_next_event} that hands a capacity question's constraints over as a newer core would: each element
+     * twice as wide as the layer's, and the one constraint listed twice. Read at the layer's own stride, the second
+     * element would be the first one's tail, which names {@link #MISREAD} at 99.
+     */
+    static final class WiderNumbers {
+        static final String MISREAD = "misread";
+        private static final long WIDER = CoreLayouts.NUMBER.byteSize() * 2;
+        private static final long CONSTRAINTS = CoreLayouts.offsetOf(CoreLayouts.EVENT, "data")
+                + CoreLayouts.offsetOf(CoreLayouts.CAPACITY_EVENT, "constraints");
+        private final MethodHandle original;
+
+        private WiderNumbers(MethodHandle original) {
+            this.original = original;
+        }
+
+        static MethodHandle around(MethodHandle original) {
+            try {
+                return MethodHandles.lookup().findVirtual(WiderNumbers.class, "call", MethodType.methodType(
+                                int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class))
+                        .bindTo(new WiderNumbers(original));
+            } catch (ReflectiveOperationException unreachable) {
+                throw new AssertionError(unreachable);
+            }
+        }
+
+        int call(MemorySegment core, MemorySegment event, MemorySegment pending) throws Throwable {
+            int status = (int) original.invokeExact(core, event, pending);
+            if (status == 0 && event.get(JAVA_INT, 4) == CoreConstants.EVENT_CAPACITY_WANTED) {
+                widen(event);
+            }
+            return status;
+        }
+
+        private static void widen(MemorySegment event) {
+            MemorySegment first = event.get(ADDRESS, CONSTRAINTS).reinterpret(CoreLayouts.NUMBER.byteSize());
+            MemorySegment wider = Arena.global().allocate(WIDER * 2, 8);
+            for (int index = 0; index < 2; index++) {
+                MemorySegment element = wider.asSlice(index * WIDER, WIDER);
+                element.set(JAVA_INT, 0, (int) WIDER);
+                element.set(ADDRESS, 8, first.get(ADDRESS, 8));
+                element.set(JAVA_DOUBLE, 16, first.get(JAVA_DOUBLE, 16));
+                element.set(JAVA_LONG, 24, -1L);
+                element.set(ADDRESS, 32, Arena.global().allocateFrom(MISREAD));
+                element.set(JAVA_DOUBLE, 40, 99.0);
+            }
+            event.set(ADDRESS, CONSTRAINTS, wider);
+            event.set(JAVA_INT, CONSTRAINTS + 8, 2);
         }
     }
 

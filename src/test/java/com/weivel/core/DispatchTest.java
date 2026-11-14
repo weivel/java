@@ -235,11 +235,19 @@ class DispatchTest {
         Core core = TestCores.core(listener, sink);
         ok(core.call(CoreCalls.watchService(HOST, "dropped")));
         ok(core.call(CoreCalls.watchService(HOST, "dropped")));
-        core.addListener(event -> core.destroy());
+        AtomicBoolean stepRan = new AtomicBoolean();
+        core.addListener(event -> {
+            CoreInternals.defer(core, () -> {
+                stepRan.set(true);
+                return DeferredStep.Status.DONE;
+            });
+            core.destroy();
+        });
 
         ok(core.call(CoreCalls.registerService(HOST, "dropped")));
 
         assertEquals(1, listener.events().size());
+        assertFalse(stepRan.get());
         assertTrue(core.isDestroyed());
         assertEquals(new Answer.Destroyed<Long>(), core.call(CoreCalls.getService(HOST, "dropped")));
         assertEquals(DeferredStep.Deferral.DESTROYED, CoreInternals.defer(core, () -> DeferredStep.Status.DONE));
