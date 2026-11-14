@@ -31,6 +31,32 @@ public final class CoreInternals {
     }
 
     /**
+     * Makes one call as {@link #call} does and, when it is answered OK, puts {@code step} on the dispatch queue in the
+     * same hold of the layer lock, right behind the call's own events, so no other call's events land between them.
+     *
+     * @param core the core
+     * @param call the call
+     * @param steps the guard checked before it and the step run once the core answered it OK
+     * @param step the step to run once the call's events have been dispatched
+     * @param <T> the call's result
+     * @return what the core answered, or what a step answered in its place; the step is queued only for an OK
+     */
+    public static <T> Answer<T> callThenDefer(Core core, CoreCall<T> call, CallSteps<T> steps, DeferredStep step) {
+        return core.callThenDefer(call, steps, step);
+    }
+
+    /**
+     * How many events the core has handed the layer so far: the drain sequence number of the latest event drained,
+     * read under the layer lock. An event whose sequence number is at most this was drained before the read.
+     *
+     * @param core the core
+     * @return the count
+     */
+    public static long drainedCount(Core core) {
+        return core.drainedCount();
+    }
+
+    /**
      * Puts a step on the dispatch queue behind whatever is queued. While no dispatch runs, the calling thread becomes
      * the dispatcher and the step has run when this returns, behind whatever a call still arming the timer drained.
      *

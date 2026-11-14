@@ -73,11 +73,12 @@ public final class Core implements AutoCloseable {
      * @return what the core answered, or {@link Answer.Destroyed} once this core is destroyed
      */
     public <T> Answer<T> call(CoreCall<T> call) {
-        return wrapper.call(Objects.requireNonNull(call, "call"), CallSteps.none());
+        return wrapper.call(Objects.requireNonNull(call, "call"), CallSteps.none(), Optional.empty());
     }
 
     <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps) {
-        return wrapper.call(Objects.requireNonNull(call, "call"), Objects.requireNonNull(steps, "steps"));
+        return wrapper.call(Objects.requireNonNull(call, "call"), Objects.requireNonNull(steps, "steps"),
+                Optional.empty());
     }
 
     /**
@@ -106,6 +107,19 @@ public final class Core implements AutoCloseable {
      */
     public void setErrorSink(ErrorSink sink) {
         wrapper.setErrorSink(sink);
+    }
+
+    <T> Answer<T> callThenDefer(CoreCall<T> call, CallSteps<T> steps, DeferredStep step) {
+        return wrapper.call(Objects.requireNonNull(call, "call"), Objects.requireNonNull(steps, "steps"),
+                Optional.of(Objects.requireNonNull(step, "step")));
+    }
+
+    long drainedCount() {
+        return wrapper.drainedCount();
+    }
+
+    boolean isLockHeldByCurrentThread() {
+        return wrapper.isLockHeldByCurrentThread();
     }
 
     DeferredStep.Deferral defer(DeferredStep step) {

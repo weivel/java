@@ -150,7 +150,8 @@ final class Wrapper {
         return new Answer.Defect<>(text);
     }
 
-    <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps) {
+    /** Makes a call; when it is answered OK, {@code after} joins the queue behind its events in the same hold. */
+    <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps, Optional<DeferredStep> after) {
         Optional<String> mistake = call.mistake();
         if (mistake.isPresent()) {
             return new Answer.Mistake<>(mistake.get());
@@ -166,6 +167,9 @@ final class Wrapper {
         try {
             Optional<Answer<T>> cancelled = guarded(steps.guard(), notes);
             answer = cancelled.isPresent() ? cancelled.get() : callHeld(call, steps, notes);
+            if (answer instanceof Answer.Ok<T>) {
+                after.ifPresent(step -> queue.addLast(new QueueEntry.StepEntry(step)));
+            }
         } catch (Throwable thrown) {
             lock.unlock();
             throw rethrown(thrown);
@@ -699,6 +703,19 @@ final class Wrapper {
     /** Whether any thread holds the layer lock: what a test reads from code that must run outside it. */
     boolean isLockHeld() {
         return lock.isLocked();
+    }
+
+    boolean isLockHeldByCurrentThread() {
+        return lock.isHeldByCurrentThread();
+    }
+
+    long drainedCount() {
+        hold();
+        try {
+            return sequence;
+        } finally {
+            lock.unlock();
+        }
     }
 
     private boolean enter() {
