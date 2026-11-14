@@ -87,6 +87,11 @@ public final class TestScheduler implements Scheduler {
         }
     }
 
+    /** The clock's time, read without counting it as a read of the layer's. */
+    long time() {
+        return clock;
+    }
+
     int reads() {
         return reads.get();
     }

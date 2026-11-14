@@ -25,8 +25,10 @@ import java.util.OptionalLong;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 /** The timer, each rule of the contract's {@code timer} section, on a clock and scheduler the test owns. */
+@Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class TimerTest {
     private static final String ADVANCE = "weivel_advance";
     private static final String NEXT_DEADLINE = "weivel_next_deadline";
@@ -279,6 +281,7 @@ class TimerTest {
     @Test
     void aTimedWantArmsTheTimerAtItsDeadline() {
         CoreTimer timer = started(scheduler);
+        List<List<Long>> moves = movesOf(timer);
         long want = ok(core.call(CoreCalls.wantService(HOST, "accounts", WantOptions.timed(0, 1000))));
         assertEquals(OptionalLong.of(1000), timer.armed());
 
@@ -289,11 +292,13 @@ class TimerTest {
         assertEquals(Collections.singletonList(1000L), crossings.advanceTimes());
         assertEquals(Collections.singletonList(1000L), scheduler.fired());
         assertEquals(OptionalLong.empty(), timer.armed());
+        assertEquals(Arrays.asList(Arrays.asList(0L, 1000L), Arrays.asList(1000L, null)), moves);
     }
 
     @Test
     void aSettledWantDisarmsTheTimer() {
         CoreTimer timer = started(scheduler);
+        List<List<Long>> moves = movesOf(timer);
         long want = ok(core.call(CoreCalls.wantService(HOST, "accounts", WantOptions.timed(0, 1000))));
         scheduler.moveTo(500);
 
@@ -305,6 +310,7 @@ class TimerTest {
         assertEquals(Collections.emptyList(), timedOut());
         assertEquals(Collections.emptyList(), scheduler.fired());
         assertEquals(Collections.emptyList(), scheduler.live());
+        assertEquals(Arrays.asList(Arrays.asList(0L, 1000L), Arrays.asList(500L, null)), moves);
     }
 
     @Test
@@ -324,7 +330,7 @@ class TimerTest {
 
     @Test
     void aRegistrationPastAnUnfiredDeadlineLoses() {
-        started(scheduler);
+        List<List<Long>> moves = movesOf(started(scheduler));
         long want = ok(core.call(CoreCalls.wantService(HOST, "accounts", WantOptions.timed(0, 1000))));
 
         scheduler.setClock(1500);
@@ -336,6 +342,82 @@ class TimerTest {
         assertTimedOutAbout("accounts");
         assertEquals(Collections.singletonList(1500L), crossings.advanceTimes());
         assertEquals(Collections.emptyList(), scheduler.fired());
+        assertEquals(Arrays.asList(Arrays.asList(0L, 1000L), Arrays.asList(1500L, null)), moves);
+    }
+
+    @Test
+    void aSchedulerThatCannotWaitAtAllIsTheCallersMistake() {
+        scheduler.limitWaitsTo(0);
+
+        assertInstanceOf(Answer.Mistake.class, CoreTimer.start(core, scheduler));
+        TestScheduler other = new TestScheduler();
+        CoreTimer followed = started(other);
+        ok(core.call(CoreCalls.wantService(HOST, "followed", WantOptions.timed(0, 100))));
+        assertEquals(OptionalLong.of(100), followed.armed());
+        assertEquals(Collections.emptyList(), scheduler.scheduled());
+    }
+
+    @Test
+    void anAdvanceTheCoreDoesNotTakeLeavesTheTimerDisarmed() {
+        CoreTimer timer = started(scheduler);
+        ok(core.call(CoreCalls.wantService(HOST, "abandoned", WantOptions.timed(0, 100))));
+        core.destroy();
+
+        scheduler.moveTo(100);
+
+        assertEquals(OptionalLong.empty(), timer.armed());
+        assertEquals(Collections.emptyList(), scheduler.live());
+    }
+
+    @Test
+    void aTaskScheduledWhileANewerDeadlineArrivesIsCancelledNotKept() {
+        scheduler.limitWaitsTo(40);
+        CoreTimer timer = started(scheduler);
+        ok(core.call(CoreCalls.wantService(HOST, "far", WantOptions.timed(0, 100))));
+        scheduler.whenScheduled(at -> {
+            if (at == 80) {
+                ok(core.call(CoreCalls.wantService(HOST, "sooner", WantOptions.timed(0, 60))));
+            }
+        });
+
+        scheduler.moveTo(40);
+
+        assertEquals(OptionalLong.of(60), timer.armed());
+        assertEquals(Collections.singletonList(60L), scheduler.live());
+        timer.destroy();
+        assertEquals(Collections.emptyList(), scheduler.live());
+    }
+
+    @Test
+    void aTimerOnNoSchedulerForADestroyedCoreIsAnsweredDestroyed() {
+        core.destroy();
+
+        assertInstanceOf(Answer.Destroyed.class, CoreTimer.start(core, Scheduler.none()));
+    }
+
+    @Test
+    void anAnnouncementADestroyedTimerIsStillToldArmsNothing() {
+        CoreTimer timer = started(scheduler);
+        timer.destroy();
+
+        timer.hooks().follow(200, true);
+
+        assertEquals(OptionalLong.empty(), timer.armed());
+        assertEquals(Collections.emptyList(), scheduler.scheduled());
+    }
+
+    /** Records each move of the timer as the layer makes it: the clock's time then, and what it armed, or null. */
+    private List<List<Long>> movesOf(CoreTimer timer) {
+        List<List<Long>> moves = new ArrayList<>();
+        OptionalLong[] last = {OptionalLong.empty()};
+        core.addListener(event -> {
+            OptionalLong armed = timer.armed();
+            if (!armed.equals(last[0])) {
+                last[0] = armed;
+                moves.add(Arrays.asList(scheduler.time(), armed.isPresent() ? armed.getAsLong() : null));
+            }
+        });
+        return moves;
     }
 
     private CoreTimer started(Scheduler chosen) {

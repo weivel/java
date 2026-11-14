@@ -63,8 +63,9 @@ deadline announcement drained and nothing else, hands the core the time through 
 in steps on a scheduler that cannot wait as long, and gives the wrapper the clock for its check before each call.
 One timer follows one core: a second started while one follows is the caller's mistake, and a timer's destroy takes
 off its own hooks and nothing else.
-`Schedulers.system()` is one shared daemon thread reading `System.nanoTime()`; `Scheduler.none()` arms nothing and
-reads no clock.
+`Schedulers.system()` makes a scheduler of its own on one daemon thread reading `System.nanoTime()`, owned and closed
+by whoever made it, its thread running the listeners of the core it fires for; a scheduler that can wait no time is
+refused. `Scheduler.none()` arms nothing and reads no clock.
 
 `PluginContext` is what a plugin sees of the core, and the only way it reaches any of it: it gets, wants, watches, lists
 and registers services, provides, lists and watches capabilities, listens to what the core reports about it (a

@@ -4,7 +4,8 @@ import static com.weivel.core.CoreConstants.HOST;
 import static com.weivel.core.CoreProbes.ok;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.core.Core;
@@ -24,11 +25,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /** {@link Schedulers#system()} on its real executor. */
+@Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class SystemSchedulerTest {
     private static final long WAIT_SECONDS = 20;
 
     @Test
-    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void aTimedWantTimesOutOnTheSystemScheduler() throws Exception {
         CompletableFuture<CoreEvent.WantSettledEvent> settled = new CompletableFuture<>();
         CompletableFuture<String> heardOn = new CompletableFuture<>();
@@ -40,8 +41,7 @@ class SystemSchedulerTest {
                 settled.complete(want);
             }
         }, failures::add);
-        try {
-            Scheduler system = Schedulers.system();
+        try (SystemScheduler system = Schedulers.system()) {
             CoreTimer timer = ok(CoreTimer.start(core, system));
             long want = ok(core.call(CoreCalls.wantService(HOST, "never-registered",
                     WantOptions.timed(timer.time().getAsLong(), 50))));
@@ -76,19 +76,83 @@ class SystemSchedulerTest {
     }
 
     @Test
-    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void aCancelledTaskNeverRunsAndATaskThatRanCannotBeCancelled() throws Exception {
-        Scheduler system = Schedulers.system();
-        CountDownLatch ran = new CountDownLatch(1);
-        List<String> late = Collections.synchronizedList(new ArrayList<>());
+        try (SystemScheduler system = Schedulers.system()) {
+            CountDownLatch ran = new CountDownLatch(1);
+            List<String> late = Collections.synchronizedList(new ArrayList<>());
 
-        Scheduler.Task cancelled = system.schedule(system.now() + 60_000, () -> late.add("ran"));
-        Scheduler.Task due = system.schedule(system.now(), ran::countDown);
+            Scheduler.Task cancelled = system.schedule(system.now() + 60_000, () -> late.add("ran"));
+            Scheduler.Task due = system.schedule(system.now(), ran::countDown);
 
-        assertTrue(cancelled.cancel());
-        assertTrue(ran.await(WAIT_SECONDS, TimeUnit.SECONDS));
-        assertFalse(due.cancel());
-        assertEquals(Collections.emptyList(), late);
-        assertSame(system, Schedulers.system());
+            assertTrue(cancelled.cancel());
+            assertTrue(ran.await(WAIT_SECONDS, TimeUnit.SECONDS));
+            assertFalse(due.cancel());
+            assertEquals(Collections.emptyList(), late);
+        }
+    }
+
+    @Test
+    void aTaskWhoseCallbackHasBegunCannotBeCancelled() throws Exception {
+        try (SystemScheduler system = Schedulers.system()) {
+            CountDownLatch begun = new CountDownLatch(1);
+            CountDownLatch finish = new CountDownLatch(1);
+            Scheduler.Task running = system.schedule(system.now(), () -> {
+                begun.countDown();
+                awaitQuietly(finish);
+            });
+            assertTrue(begun.await(WAIT_SECONDS, TimeUnit.SECONDS));
+
+            boolean cancelledWhileRunning = running.cancel();
+            finish.countDown();
+
+            assertFalse(cancelledWhileRunning);
+        }
+    }
+
+    @Test
+    void eachCallMakesASchedulerOfItsOwnWithAThreadOfItsOwn() throws Exception {
+        try (SystemScheduler first = Schedulers.system(); SystemScheduler second = Schedulers.system()) {
+            assertNotSame(first, second);
+            assertNotSame(threadOf(first), threadOf(second));
+        }
+    }
+
+    @Test
+    void closingASchedulerEndsItsThreadAndLeavesAnotherRunning() throws Exception {
+        try (SystemScheduler kept = Schedulers.system()) {
+            SystemScheduler closed = Schedulers.system();
+            Thread closedThread = threadOf(closed);
+            threadOf(kept);
+
+            closed.close();
+
+            assertTrue(closed.awaitClosed(TimeUnit.SECONDS.toMillis(WAIT_SECONDS)));
+            closedThread.join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS));
+            assertFalse(closedThread.isAlive());
+            assertThrows(IllegalStateException.class, () -> closed.schedule(closed.now(), () -> { }));
+            assertTrue(threadOf(kept).isAlive());
+        }
+    }
+
+    @Test
+    void aDeadlineFurtherThanALongCanCountIsWaitedForAsLongAsCanBe() {
+        assertEquals(Long.MAX_VALUE, SystemScheduler.delayUntil(Long.MAX_VALUE, -10));
+        assertEquals(0, SystemScheduler.delayUntil(Long.MIN_VALUE, 10));
+        assertEquals(0, SystemScheduler.delayUntil(5, 10));
+        assertEquals(30, SystemScheduler.delayUntil(40, 10));
+    }
+
+    private static Thread threadOf(Scheduler scheduler) throws Exception {
+        CompletableFuture<Thread> thread = new CompletableFuture<>();
+        scheduler.schedule(scheduler.now(), () -> thread.complete(Thread.currentThread()));
+        return thread.get(WAIT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
