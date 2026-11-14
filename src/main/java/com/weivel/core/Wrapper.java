@@ -96,7 +96,7 @@ final class Wrapper {
                 drain(waiting(), notes, new OwnRefusal());
             }
         } catch (Throwable thrown) {
-            lock.unlock();
+            abandonCreation();
             throw rethrown(thrown);
         }
         if (status != STATUS_OK) {
@@ -115,6 +115,17 @@ final class Wrapper {
                     .invokeExact(Marshal.coreOptions(callArena, options), slot, pending);
             core = status == STATUS_OK ? slot.get(ADDRESS, 0) : MemorySegment.NULL;
             return status;
+        }
+    }
+
+    /** Entered with the lock held and left without it: destroys a core created before the creation failed. */
+    private void abandonCreation() {
+        try {
+            if (!core.equals(MemorySegment.NULL)) {
+                destroyCore();
+            }
+        } finally {
+            discardUncreated();
         }
     }
 

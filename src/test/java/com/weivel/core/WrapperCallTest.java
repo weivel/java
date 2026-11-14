@@ -5,6 +5,7 @@ import static com.weivel.core.TestCores.ok;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.foreign.MemorySegment;
@@ -30,6 +31,32 @@ class WrapperCallTest {
         assertEquals("core created", created.text());
         assertEquals(1, created.sequence());
         core.destroy();
+    }
+
+    @Test
+    void aCreationThatThrowsAfterTheCoreAnsweredDestroysThatCoreAndClosesItsArena() {
+        CoreOptions debug = new CoreOptions(0, CoreConstants.LOG_DEBUG, 0, List.of(), List.of(), List.of());
+        TestCores.CallLog log = new TestCores.CallLog();
+        MemorySegment[] seen = new MemorySegment[1];
+        EventCopying overflowing = new EventCopying() {
+            @Override
+            public CoreEvent whole(MemorySegment event, long sequence) {
+                seen[0] = event;
+                throw new StackOverflowError("a copy overflowing on purpose");
+            }
+
+            @Override
+            public CoreEvent fixedPart(MemorySegment event, long sequence) {
+                return EventCopy.INSTANCE.fixedPart(event, sequence);
+            }
+        };
+
+        assertThrows(StackOverflowError.class, () -> Wrapper.start(log.around(TestCores.functions()), overflowing,
+                debug, Optional.of(listener), sink));
+
+        assertEquals(1, log.count(CoreFunction.CORE_CREATE));
+        assertEquals(1, log.count(CoreFunction.CORE_DESTROY));
+        assertFalse(seen[0].scope().isAlive());
     }
 
     @Test
