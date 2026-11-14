@@ -304,6 +304,8 @@ class HandlesTest {
 
     @Test
     void aPluginsPayloadReachesItsRecordWithoutASearch() {
+        made(CoreCalls.registerService(HOST, "before-the-payload"), HandleKind.SERVICE_REGISTRATION, HOST,
+                new Object());
         Object record = new Object();
         long plugin = made(CoreCalls.registerManifest(Manifest.named("payload")), HandleKind.PLUGIN,
                 Handles.NO_OWNER, record);

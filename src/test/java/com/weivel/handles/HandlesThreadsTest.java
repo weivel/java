@@ -47,7 +47,7 @@ class HandlesThreadsTest {
     }
 
     @Test
-    @Timeout(60)
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void anotherThreadUsesTheTableWhileAStepMakingAnEntryHoldsTheLayerLock() throws Exception {
         long other = ok(core.call(CoreCalls.registerService(HOST, "other")));
         Object provider = new Object();
@@ -82,7 +82,7 @@ class HandlesThreadsTest {
     }
 
     @Test
-    @Timeout(120)
+    @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void manyThreadsMakingFindingAndEndingEntriesLoseNone() throws Exception {
         long[][] handlesOfThread = new long[THREADS][HANDLES_PER_THREAD];
         for (int thread = 0; thread < THREADS; thread++) {
