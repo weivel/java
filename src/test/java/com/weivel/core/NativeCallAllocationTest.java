@@ -14,6 +14,14 @@ class NativeCallAllocationTest {
     private static final NativeSignature RELEASE = NativeSignature.of(NativeType.VOID, NativeType.ADDRESS);
     private static final int WARM_UP_CALLS = 200_000;
     private static final int MEASURED_CALLS = 100_000;
+    /**
+     * Rounds measured, the least counted.
+     *
+     * @implNote One round after a fixed warm-up failed on two-core runners, where the call path was still interpreted
+     *     and the interpreter's method handle path allocates; a spreader allocates in every round, so the least of
+     *     several rounds still tells the two apart.
+     */
+    private static final int MEASURED_ROUNDS = 10;
     /** What reading the allocation counter itself may cost, measured as 0 on JDK 25; a spreader costs 40 B a call. */
     private static final long ALLOWED_BYTES = 1024;
 
@@ -26,12 +34,15 @@ class NativeCallAllocationTest {
             NativeFunction release = echo.function("echo_release", RELEASE);
             callRepeatedly(release, WARM_UP_CALLS);
 
-            long before = threads.getThreadAllocatedBytes(thread);
-            callRepeatedly(release, MEASURED_CALLS);
-            long allocated = threads.getThreadAllocatedBytes(thread) - before;
+            long least = Long.MAX_VALUE;
+            for (int round = 0; round < MEASURED_ROUNDS; round++) {
+                long before = threads.getThreadAllocatedBytes(thread);
+                callRepeatedly(release, MEASURED_CALLS);
+                least = Math.min(least, threads.getThreadAllocatedBytes(thread) - before);
+            }
 
-            System.out.println(MEASURED_CALLS + " calls allocated " + allocated + " bytes");
-            assertTrue(allocated <= ALLOWED_BYTES, MEASURED_CALLS + " calls allocated " + allocated + " bytes");
+            System.out.println(MEASURED_CALLS + " calls allocated at least " + least + " bytes");
+            assertTrue(least <= ALLOWED_BYTES, MEASURED_CALLS + " calls allocated at least " + least + " bytes");
         }
     }
 
