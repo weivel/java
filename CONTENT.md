@@ -109,6 +109,17 @@ once into native memory, because lending the heap would hold off garbage collect
 the library answers is copied once into a Java array and released before the call answers. `unloadLibrary`, and the
 destroy, close a library to calls at once and close its binary once no call runs in it.
 
+`com.weivel.standard` is optional, and no class of the packages above depends on it, which a test reads off the
+built jar with `jdeps`. `StandardBinary.load` opens the standard's binary from the caller's path through the same
+seam, through `ForeignLibrary`, which binds only the symbols its caller names and never one of the core's, and fails
+naming the first function missing. `Standard` answers what the standard answers, each as a `StandardAnswer`: a JSON
+manifest validated and read into a `Manifest`, plugins discovered on disk as `DiscoveredPlugin`s, which register with
+a host from the JAR their manifest names and an entry class name the caller gives, a library declaration read into a
+`LibraryDeclaration` for `loadLibrary`, identities, the mirror list, SHA-256, and the three service ids, read from the
+standard's functions. Every struct the standard fills is copied into Java values and released through the standard's
+own release before the call answers. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
+interfaces, a refusal thrown as a `ServiceRefusal`.
+
 The other packages hold only their purpose so far.
 
 ## Using it

@@ -229,6 +229,10 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
             'weivel.test.coreLayouts'    : coreLayouts,
             'weivel.test.standardLayouts': standardLayouts,
             'weivel.test.coreHeader'     : new File(siblingsDirectory, 'core/include/weivel/core.h'),
+            'weivel.test.servicesHeader' : new File(siblingsDirectory, 'standard/include/weivel/services.h'),
+            'weivel.test.jar'            : tasks.named('jar', Jar).get().archiveFile.get().asFile,
+            'weivel.test.jdeps'          : javaToolchains.launcherFor(jdk25).get().metadata.installationPath
+                    .file(executableFileName('bin/jdeps')).asFile,
     ]
     task.dependsOn pluginsJar
     testFiles['weivel.test.pluginsJar'] = pluginsJarFile
