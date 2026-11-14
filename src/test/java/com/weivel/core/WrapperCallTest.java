@@ -194,6 +194,59 @@ class WrapperCallTest {
     }
 
     @Test
+    void aGetOrWatchOfAMalformedIdIsTheCallersMistakeAndNoSinkHearsOfIt() {
+        Core core = TestCores.core(listener, sink);
+
+        Answer<Long> got = core.call(CoreCalls.getService(HOST, ""));
+        Answer<Long> watched = core.call(CoreCalls.watchService(HOST, ""));
+
+        assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, got).status());
+        assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, watched).status());
+        assertEquals(List.of(), sink.failures());
+        core.destroy();
+    }
+
+    @Test
+    void aMalformedAdvanceCanOnlyBeTheLayersAndIsADefect() {
+        CoreFunctions withoutCore = TestCores.functions().mapped((function, handle) ->
+                function == CoreFunction.ADVANCE ? withNullArgument(handle, 0) : handle);
+        Core core = TestCores.core(withoutCore, EventCopy.INSTANCE, listener, sink);
+
+        Answer<Void> answer = core.call(CoreCalls.advance(10));
+
+        assertInstanceOf(Answer.Defect.class, answer);
+        assertEquals(1, sink.of(FailureKind.LAYER_DEFECT).size());
+        core.destroy();
+    }
+
+    @Test
+    void aMalformedOpenCarriesTheCallersPayloadAndIsTheCallersMistake() {
+        CoreFunctions withoutCore = TestCores.functions().mapped((function, handle) ->
+                function == CoreFunction.OPEN_PLUGIN ? withNullArgument(handle, 0) : handle);
+        Core core = TestCores.core(withoutCore, EventCopy.INSTANCE, listener, sink);
+        long plugin = ok(core.call(CoreCalls.registerManifest(Manifest.named("opened"))));
+
+        Answer<Void> answer = core.call(CoreCalls.openPlugin(plugin, 7));
+
+        assertEquals(RefusalStatus.MALFORMED, assertInstanceOf(Answer.Refused.class, answer).status());
+        assertEquals(List.of(), sink.failures());
+        core.destroy();
+    }
+
+    @Test
+    void anOutOfMemoryAnswerIsTheCoresRefusalAndNoDefect() {
+        CoreFunctions starved = TestCores.functions().mapped((function, handle) ->
+                function == CoreFunction.REGISTER_SERVICE ? withStatus(handle, 4) : handle);
+        Core core = TestCores.core(starved, EventCopy.INSTANCE, listener, sink);
+
+        Answer<Long> answer = core.call(CoreCalls.registerService(HOST, "starved"));
+
+        assertEquals(new Answer.Refused<Long>(RefusalStatus.OUT_OF_MEMORY, Optional.empty()), answer);
+        assertEquals(List.of(), sink.failures());
+        core.destroy();
+    }
+
+    @Test
     void aGetFindingNothingIsAnAbsenceNotARefusal() {
         Core core = TestCores.core(listener, sink);
 
@@ -211,7 +264,13 @@ class WrapperCallTest {
         return plugin;
     }
 
-    private static MethodHandle withNullArgument(MethodHandle handle, int position) {
+    /** The handle made as it is, its status replaced by {@code status}. */
+    static MethodHandle withStatus(MethodHandle handle, int status) {
+        MethodHandle replaced = MethodHandles.dropArguments(MethodHandles.constant(int.class, status), 0, int.class);
+        return MethodHandles.filterReturnValue(handle, replaced);
+    }
+
+    static MethodHandle withNullArgument(MethodHandle handle, int position) {
         MethodHandle nothing = MethodHandles.dropArguments(MethodHandles.constant(MemorySegment.class,
                 MemorySegment.NULL), 0, MemorySegment.class);
         return MethodHandles.filterArguments(handle, position, nothing);

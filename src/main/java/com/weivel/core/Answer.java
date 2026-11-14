@@ -10,7 +10,8 @@ import java.util.Optional;
  * @param <T> the result of a call that succeeded
  */
 public sealed interface Answer<T>
-        permits Answer.Ok, Answer.Absent, Answer.Refused, Answer.Detached, Answer.Destroyed, Answer.Defect {
+        permits Answer.Ok, Answer.Absent, Answer.Refused, Answer.Detached, Answer.Destroyed, Answer.Defect,
+        Answer.Mistake {
 
     /**
      * The core did what it was asked.
@@ -81,6 +82,24 @@ public sealed interface Answer<T>
          * @param detail what went wrong
          */
         public Defect {
+            Objects.requireNonNull(detail, "detail");
+        }
+    }
+
+    /**
+     * The caller's mistake, found by the layer before anything reached the core: the call was not made, and no sink
+     * was told, since it is the caller's to correct.
+     *
+     * @param detail what was wrong with the call, in English
+     * @param <T> the result a success would have carried
+     */
+    record Mistake<T>(String detail) implements Answer<T> {
+        /**
+         * Checks that the detail is present.
+         *
+         * @param detail what was wrong
+         */
+        public Mistake {
             Objects.requireNonNull(detail, "detail");
         }
     }

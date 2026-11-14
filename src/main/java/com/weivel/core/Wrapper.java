@@ -77,6 +77,10 @@ final class Wrapper {
                                  Optional<CoreListener> listener, ErrorSink sink) {
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(sink, "sink");
+        Optional<String> mistake = CallerTexts.inOptions(options);
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
         Wrapper wrapper = new Wrapper(functions, copying, sink);
         listener.ifPresent(wrapper.listeners::add);
         return wrapper.create(options);
@@ -136,6 +140,10 @@ final class Wrapper {
     }
 
     <T> Answer<T> call(CoreCall<T> call, CallSteps<T> steps) {
+        Optional<String> mistake = call.mistake();
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
         if (!enter()) {
             return new Answer.Destroyed<>();
         }

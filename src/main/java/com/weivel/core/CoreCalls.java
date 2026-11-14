@@ -6,15 +6,18 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * The core's calls, one typed factory per function of the core's header, each building a {@link CoreCall} that
  * {@link Core#call} makes through the one wrapper. Each call is documented by the function of the same name in the
  * core's header; this class says only how its answer reads.
  *
- * <p>A call whose parts include something its caller built (a manifest, options, an id, a time) answers a malformed
- * status as the caller's mistake, {@link Answer.Refused} with {@link RefusalStatus#MALFORMED}; any other call answers
- * it as a defect of the layer. A status of {@code WEIVEL_STATUS_NONE} is {@link Answer.Absent}.
+ * <p>A call whose parts include something its caller built (a manifest, an id, want options, an open's payload)
+ * answers a malformed status as the caller's mistake, {@link Answer.Refused} with {@link RefusalStatus#MALFORMED};
+ * any other call answers it as a defect of the layer, an advance among them, whose time the core never calls
+ * malformed. A status of {@code WEIVEL_STATUS_NONE} is {@link Answer.Absent}. A text of the caller's holding a NUL
+ * character, which C would read cut short, is answered {@link Answer.Mistake} without anything reaching the core.
  *
  * @implNote This class and the wrapper are the only places a downcall handle of the core is invoked.
  */
@@ -44,7 +47,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> registerManifest(Manifest manifest) {
         Objects.requireNonNull(manifest, "manifest");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inManifest(manifest), (functions, arena, core, pending) -> {
             MemorySegment plugin = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.REGISTER_MANIFEST)
                     .invokeExact(core, Marshal.manifest(arena, manifest), plugin, pending);
@@ -60,7 +63,7 @@ public final class CoreCalls {
      * @return the call, answering nothing beyond its success
      */
     public static CoreCall<Void> openPlugin(long plugin, long payload) {
-        return builtByTheLayer((functions, arena, core, pending) -> new Crossed<>(
+        return carryingCallersParts((functions, arena, core, pending) -> new Crossed<>(
                 (int) functions.handle(CoreFunction.OPEN_PLUGIN)
                         .invokeExact(core, plugin, Marshal.pluginOptions(arena, payload), pending),
                 null));
@@ -112,7 +115,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> registerService(long owner, String id) {
         Objects.requireNonNull(id, "id");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
             MemorySegment registration = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.REGISTER_SERVICE)
                     .invokeExact(core, owner, arena.allocateFrom(id), registration, pending);
@@ -155,7 +158,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> getService(long plugin, String id) {
         Objects.requireNonNull(id, "id");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
             MemorySegment implementation = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.GET_SERVICE)
                     .invokeExact(core, plugin, arena.allocateFrom(id), implementation, pending);
@@ -174,7 +177,7 @@ public final class CoreCalls {
     public static CoreCall<Long> wantService(long plugin, String id, WantOptions options) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(options, "options");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
             MemorySegment want = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.WANT_SERVICE).invokeExact(core, plugin,
                     arena.allocateFrom(id), Marshal.wantOptions(arena, options), want, pending);
@@ -191,7 +194,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> watchService(long plugin, String id) {
         Objects.requireNonNull(id, "id");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
             MemorySegment watch = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.WATCH_SERVICE)
                     .invokeExact(core, plugin, arena.allocateFrom(id), watch, pending);
@@ -208,7 +211,7 @@ public final class CoreCalls {
      */
     public static CoreCall<Long> provideCapability(long plugin, String id) {
         Objects.requireNonNull(id, "id");
-        return carryingCallersParts((functions, arena, core, pending) -> {
+        return unlessMistaken(CallerTexts.inText("the id", id), (functions, arena, core, pending) -> {
             MemorySegment implementation = arena.allocate(JAVA_LONG);
             int status = (int) functions.handle(CoreFunction.PROVIDE_CAPABILITY)
                     .invokeExact(core, plugin, arena.allocateFrom(id), implementation, pending);
@@ -236,7 +239,7 @@ public final class CoreCalls {
      * @return the call, answering nothing beyond its success
      */
     public static CoreCall<Void> advance(long now) {
-        return new CoreCall<>(advanceCrossing(now), true, true);
+        return new CoreCall<>(advanceCrossing(now), false, true);
     }
 
     static Crossing<Void> advanceCrossing(long now) {
@@ -250,5 +253,9 @@ public final class CoreCalls {
 
     private static <T> CoreCall<T> carryingCallersParts(Crossing<T> crossing) {
         return new CoreCall<>(crossing, true, false);
+    }
+
+    private static <T> CoreCall<T> unlessMistaken(Optional<String> mistake, Crossing<T> crossing) {
+        return mistake.isPresent() ? CoreCall.mistaken(mistake.get()) : carryingCallersParts(crossing);
     }
 }

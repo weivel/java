@@ -57,6 +57,7 @@ public final class Core implements AutoCloseable {
             case Answer.Absent<Wrapper> absent -> new Answer.Defect<>("the core's creation answered nothing");
             case Answer.Detached<Wrapper> detached -> new Answer.Detached<>();
             case Answer.Destroyed<Wrapper> destroyed -> new Answer.Destroyed<>();
+            case Answer.Mistake<Wrapper> mistake -> new Answer.Mistake<>(mistake.detail());
         };
     }
 
