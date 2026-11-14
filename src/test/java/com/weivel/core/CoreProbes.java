@@ -107,6 +107,7 @@ public final class CoreProbes {
         private final List<WantOptions> wantOptions = Collections.synchronizedList(new ArrayList<>());
         private final TestCores.CallLog log = new TestCores.CallLog();
         private final List<Long> advanceTimes = Collections.synchronizedList(new ArrayList<>());
+        private final List<Choice> capacityServes = Collections.synchronizedList(new ArrayList<>());
 
         CoreFunctions around(CoreFunctions table) {
             CoreFunctions counted = log.around(table);
@@ -115,6 +116,11 @@ public final class CoreProbes {
                     case ADVANCE:
                         return arguments -> {
                             recordTime(arguments[1]);
+                            return original.call(arguments);
+                        };
+                    case REPORT_CAPACITY:
+                        return arguments -> {
+                            recordServes(table.access(), arguments[3]);
                             return original.call(arguments);
                         };
                     case WANT_SERVICE:
@@ -147,6 +153,22 @@ public final class CoreProbes {
                         choiceOf(struct.getInt(field("budgeted"))), struct.getLong(field("budget_millis")),
                         struct.getLong(field("poll_millis"))));
             }
+        }
+
+        /**
+         * What every capacity answer handed the core carried as {@code serves}, in order.
+         *
+         * @return the choices
+         */
+        public List<Choice> capacityServes() {
+            synchronized (capacityServes) {
+                return Collections.unmodifiableList(new ArrayList<>(capacityServes));
+            }
+        }
+
+        void recordServes(NativeAccess access, long capacity) {
+            NativeRegion struct = new NativeRegion(access, capacity, CoreLayouts.CAPACITY.byteSize(), null);
+            capacityServes.add(choiceOf(struct.getInt(CoreLayouts.offsetOf(CoreLayouts.CAPACITY, "serves"))));
         }
 
         private static long field(String name) {

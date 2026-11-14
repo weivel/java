@@ -63,8 +63,9 @@ deadline announcement drained and nothing else, hands the core the time through 
 in steps on a scheduler that cannot wait as long, and gives the wrapper the clock for its check before each call.
 One timer follows one core: a second started while one follows is the caller's mistake, and a timer's destroy takes
 off its own hooks and nothing else.
-`Schedulers.system()` is one shared daemon thread reading `System.nanoTime()`; `Scheduler.none()` arms nothing and
-reads no clock.
+`Schedulers.system()` makes a scheduler of its own on one daemon thread reading `System.nanoTime()`, owned and closed
+by whoever made it, its thread running the listeners of the core it fires for; a scheduler that can wait no time is
+refused. `Scheduler.none()` arms nothing and reads no clock.
 
 `PluginContext` is what a plugin sees of the core, and the only way it reaches any of it: it gets, wants, watches, lists
 and registers services, provides, lists and watches capabilities, listens to what the core reports about it (a
@@ -75,9 +76,12 @@ is answered as the core gave it, never as an empty answer. A registration may of
 constrained want's questions, and one that offers none answers with no live attributes and that it serves everyone.
 What a plugin's listener, watcher or answerer throws goes to the error sink. `PluginContexts` is the surface a host
 builds them through: `make` builds a plugin's context from its handle and manifest value no later than its first open,
-`payloadOf` is what the host opens it with, `endEntries` ends its entries in the layer's tables once its release's or
-quarantine's own events are dispatched, `forget` forgets it in the core and detaches its context in the same hold of the
-layer lock, after which every call through it answers `Detached` without reaching the core, and `close` frees them
+`open` opens it with `payloadOf` as its payload, `release` and `quarantine` make that call and, in its hold, queue the
+end of its entries in the layer's tables behind the call's own events, after which it hears nothing until `open` opens
+it again, `forget`
+forgets it in the core and detaches its context in the same hold of the layer lock, after which every call through it
+answers `Detached` without reaching the core, before any check of the caller's mistake, and ends its entries once the
+events drained before the forget are dispatched, as an unregistration ends its registration's and a stopped watch its watch's, and `close` frees them
 once the core is destroyed. One listener on the core routes every event to the plugin it concerns, by the handle it
 names through the table, and the core's own log events to the host's log at their level. A context takes the layer
 lock through the wrapper and the table's lock inside it, never the other way, and has no lock of its own.

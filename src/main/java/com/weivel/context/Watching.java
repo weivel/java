@@ -16,14 +16,15 @@ public final class Watching {
     }
 
     /**
-     * Stops the watch in the core; once the core has stopped it, the watcher hears nothing more.
+     * Stops the watch in the core: the watcher hears nothing the core reports after the stop, and still hears what it
+     * reported before.
      *
      * @return nothing beyond its success, or the core's refusal, as for a watch its plugin's release already stopped
+     * @implNote The watch's entry ends only once every event drained before the stop has been dispatched, since each
+     * was reported while the watch lived.
      */
     public Answer<Void> stop() {
-        return state.call(context, CoreCalls.unregister(watch), stopped -> {
-            state.handles.end(watch);
-            return new Answer.Ok<>(stopped);
-        });
+        return state.callThenDefer(context, CoreCalls.unregister(watch), Answer.Ok::new,
+                () -> state.handles.end(watch));
     }
 }

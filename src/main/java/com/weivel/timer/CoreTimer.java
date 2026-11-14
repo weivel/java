@@ -46,6 +46,7 @@ public final class CoreTimer {
     private final Core core;
     private final Scheduler scheduler;
     private final boolean following;
+    private final long longestWait;
     private final Hooks hooks = new Hooks();
     private final ReentrantLock lock = new ReentrantLock();
     private long ticket;
@@ -54,10 +55,11 @@ public final class CoreTimer {
     private boolean armed;
     private boolean destroyed;
 
-    private CoreTimer(Core core, Scheduler scheduler, boolean following) {
+    private CoreTimer(Core core, Scheduler scheduler, boolean following, long longestWait) {
         this.core = core;
         this.scheduler = scheduler;
         this.following = following;
+        this.longestWait = longestWait;
     }
 
     /**
@@ -67,13 +69,19 @@ public final class CoreTimer {
      * @param core the core to follow
      * @param scheduler the caller's clock and scheduler
      * @return the timer; {@link Answer.Mistake} when another timer on a scheduler follows the core already, since one
-     *     core is followed by one timer; {@link Answer.Destroyed} for a destroyed core
+     *     core is followed by one timer, or when the scheduler's {@link Scheduler#maximumWait()} is not positive, since
+     *     it could wait for nothing; {@link Answer.Destroyed} for a destroyed core
      */
     public static Answer<CoreTimer> start(Core core, Scheduler scheduler) {
         Objects.requireNonNull(core, "core");
         Objects.requireNonNull(scheduler, "scheduler");
         boolean following = !(scheduler instanceof NoScheduler);
-        CoreTimer timer = new CoreTimer(core, scheduler, following);
+        long longestWait = following ? scheduler.maximumWait() : Long.MAX_VALUE;
+        if (longestWait <= 0) {
+            return new Answer.Mistake<>("a scheduler whose longest wait is " + longestWait
+                    + " milliseconds can wait for no deadline");
+        }
+        CoreTimer timer = new CoreTimer(core, scheduler, following, longestWait);
         if (following) {
             Answer<Void> installed = CoreInternals.installDeadlineHooks(core, timer.hooks);
             if (installed instanceof Answer.Ok) {
@@ -117,8 +125,8 @@ public final class CoreTimer {
 
     /**
      * Disarms the timer for good: it cancels the one task it holds and takes its own hooks off the core, and only its
-     * own, so nothing of the layer's is left for the scheduler to run. A callback the scheduler begins all the same does nothing. It must not
-     * be called under the layer lock, since taking the hooks off calls through the wrapper.
+     * own. A scheduler that cannot take the task out, or that runs its callback all the same, finds the callback does
+     * nothing. It must not be called under the layer lock, since taking the hooks off calls through the wrapper.
      */
     public void destroy() {
         Scheduler.Task cancelled;
@@ -139,6 +147,11 @@ public final class CoreTimer {
         if (following) {
             CoreInternals.removeDeadlineHooks(core, hooks);
         }
+    }
+
+    /** The hooks the timer installs on its core: what a test calls in place of the wrapper. */
+    DeadlineHooks hooks() {
+        return hooks;
     }
 
     private void follow(long at, boolean set) {
@@ -167,6 +180,7 @@ public final class CoreTimer {
     private void arm(long arming, long at, OptionalLong knownNow) {
         Optional<Scheduler.Task> scheduled = scheduled(arming, waitEnd(at, knownNow));
         if (!scheduled.isPresent()) {
+            disarmIfCurrent(arming);
             return;
         }
         boolean current;
@@ -185,12 +199,11 @@ public final class CoreTimer {
     }
 
     private long waitEnd(long at, OptionalLong knownNow) {
-        long longest = scheduler.maximumWait();
-        if (longest == Long.MAX_VALUE) {
+        if (longestWait == Long.MAX_VALUE) {
             return at;
         }
         long now = knownNow.isPresent() ? knownNow.getAsLong() : scheduler.now();
-        long reachable = now > Long.MAX_VALUE - longest ? Long.MAX_VALUE : now + longest;
+        long reachable = now > Long.MAX_VALUE - longestWait ? Long.MAX_VALUE : now + longestWait;
         return Math.min(at, reachable);
     }
 
@@ -201,7 +214,7 @@ public final class CoreTimer {
             throw error;
         } catch (Throwable failure) {
             report("the scheduler failed to schedule the timer, so the deadline is left to the check before each call",
-                    failure);
+                    Optional.of(failure));
             return Optional.empty();
         }
     }
@@ -212,7 +225,7 @@ public final class CoreTimer {
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable failure) {
-            report("the timer failed when it fired", failure);
+            report("the timer failed when it fired", Optional.of(failure));
         }
     }
 
@@ -238,13 +251,46 @@ public final class CoreTimer {
             arm(rearming, at, OptionalLong.of(now));
             return;
         }
-        core.call(CoreCalls.advance(now));
+        Answer<Void> advanced = core.call(CoreCalls.advance(now));
+        if (!(advanced instanceof Answer.Ok)) {
+            disarmAfterAFailedAdvance(firing, advanced);
+        }
+    }
+
+    /**
+     * Disarms a timer whose advance the core did not take, unless a newer announcement armed it meanwhile, so it
+     * never reads armed with no task to fire; the deadline is left to the wrapper's check before each call.
+     */
+    private void disarmAfterAFailedAdvance(long firing, Answer<Void> advanced) {
+        if (disarmIfCurrent(firing) && !(advanced instanceof Answer.Destroyed)) {
+            report("the core did not take the time the timer handed it, so the deadline is left to the check before "
+                    + "each call: " + advanced, Optional.empty());
+        }
     }
 
     private boolean isCurrent(long firing) {
         lock.lock();
         try {
             return !destroyed && ticket == firing;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Disarms the timer when nothing armed it again since {@code arming}, so it never reads armed with no task.
+     *
+     * @return whether it disarmed
+     */
+    private boolean disarmIfCurrent(long arming) {
+        lock.lock();
+        try {
+            if (destroyed || ticket != arming) {
+                return false;
+            }
+            armed = false;
+            ticket++;
+            return true;
         } finally {
             lock.unlock();
         }
@@ -259,12 +305,12 @@ public final class CoreTimer {
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable failure) {
-            report("the scheduler failed to cancel the timer's task", failure);
+            report("the scheduler failed to cancel the timer's task", Optional.of(failure));
         }
     }
 
-    private void report(String text, Throwable failure) {
-        CoreInternals.report(core, new Failure(FailureKind.DEADLINE_HOOK, text, 0, 0, Optional.of(failure)));
+    private void report(String text, Optional<Throwable> failure) {
+        CoreInternals.report(core, new Failure(FailureKind.DEADLINE_HOOK, text, 0, 0, failure));
     }
 
     /** What the wrapper calls: the clock for its check before a call, and each announcement it drained. */

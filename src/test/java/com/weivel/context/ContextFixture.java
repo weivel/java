@@ -3,15 +3,12 @@ package com.weivel.context;
 import static com.weivel.core.CoreProbes.ok;
 
 import com.weivel.core.Answer;
-import com.weivel.core.CallSteps;
 import com.weivel.core.Choice;
 import com.weivel.core.Core;
 import com.weivel.core.CoreCalls;
 import com.weivel.core.CoreEvent;
-import com.weivel.core.CoreInternals;
 import com.weivel.core.CoreOptions;
 import com.weivel.core.CoreProbes;
-import com.weivel.core.DeferredStep;
 import com.weivel.core.ErrorSink;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
@@ -89,7 +86,7 @@ final class ContextFixture implements AutoCloseable {
     }
 
     void open(PluginContext context) {
-        ok(core.call(CoreCalls.openPlugin(plugin(context), contexts.payloadOf(context))));
+        ok(contexts.open(context));
     }
 
     long plugin(PluginContext context) {
@@ -102,22 +99,13 @@ final class ContextFixture implements AutoCloseable {
 
     /** Releases the plugin in the core and ends its entries once the release's own events are dispatched. */
     void release(PluginContext context) {
-        ok(CoreInternals.callThenDefer(core, CoreCalls.releasePlugin(plugin(context)), CallSteps.none(),
-                endingEntriesOf(context)));
+        ok(contexts.release(context));
     }
 
     /** Quarantines the plugin in the core and ends its entries once the quarantine's own events are dispatched. */
     void quarantine(PluginContext context) {
-        ok(CoreInternals.callThenDefer(core, CoreCalls.quarantinePlugin(plugin(context),
-                Optional.of(new QuarantineReason(0, "quarantined on purpose", "open it again"))), CallSteps.none(),
-                endingEntriesOf(context)));
-    }
-
-    private DeferredStep endingEntriesOf(PluginContext context) {
-        return () -> {
-            contexts.endEntries(context);
-            return DeferredStep.Status.DONE;
-        };
+        ok(contexts.quarantine(context,
+                Optional.of(new QuarantineReason(0, "quarantined on purpose", "open it again"))));
     }
 
     List<Failure> failuresOf(FailureKind kind) {

@@ -34,9 +34,12 @@ public final class PendingWant {
      * Withdraws the want while it still waits, so it settles as an absence.
      *
      * @return nothing beyond its success; the core's refusal for a want that has settled already; an absence for one
-     *     the core never made
+     *     the core never made; {@link Answer.Detached} once the plugin is forgotten
      */
     public Answer<Void> withdraw() {
+        if (context.isDetached()) {
+            return new Answer.Detached<>();
+        }
         if (want == 0) {
             return new Answer.Absent<>();
         }

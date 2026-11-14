@@ -3,7 +3,6 @@ package com.weivel.handles;
 import com.weivel.core.Answer;
 import com.weivel.core.CallSteps;
 import com.weivel.core.CoreEvent;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,17 +36,28 @@ public final class Handles {
     private static final long TOKEN_INDEX_MASK = 0xffffffffL;
 
     private final ReentrantLock lock = new ReentrantLock();
-    private final PairTable<HandleEntry> entries = new PairTable<>();
-    private final PairTable<Object> holdings = new PairTable<>();
-    private HandleEntry[] entriesByToken = new HandleEntry[SMALLEST_TOKEN_CAPACITY];
-    private int[] tokenGenerations = new int[SMALLEST_TOKEN_CAPACITY];
-    private int[] freeTokenIndexes = new int[SMALLEST_TOKEN_CAPACITY];
+    private final TableMemory memory;
+    private final PairTable<HandleEntry> entries;
+    private final PairTable<Object> holdings;
+    private HandleEntry[] entriesByToken;
+    private int[] tokenGenerations;
+    private int[] freeTokenIndexes;
     private int freeTokenCount;
     private int tokenIndexesUsed;
     private int reserved;
 
     /** Makes an empty table. */
     public Handles() {
+        this(TableMemory.HEAP);
+    }
+
+    Handles(TableMemory memory) {
+        this.memory = memory;
+        entries = new PairTable<>(memory);
+        holdings = new PairTable<>(memory);
+        entriesByToken = memory.entries(SMALLEST_TOKEN_CAPACITY);
+        tokenGenerations = memory.ints(SMALLEST_TOKEN_CAPACITY);
+        freeTokenIndexes = memory.ints(SMALLEST_TOKEN_CAPACITY);
     }
 
     /**
@@ -56,10 +66,11 @@ public final class Handles {
      * given back with {@link Reservation#cancel()}.
      *
      * @return the reservation, used once
-     * @throws OutOfMemoryError when the room cannot be had, before anything is asked of the core
+     * @throws OutOfMemoryError when the room cannot be had, before anything is asked of the core, the table left as it
+     *     was and no room taken
      */
     public Reservation reserve() {
-        HandleEntry shell = new HandleEntry();
+        Reservation reservation = new Reservation(new HandleEntry());
         lock.lock();
         try {
             int wanted = reserved + 1;
@@ -70,7 +81,7 @@ public final class Handles {
         } finally {
             lock.unlock();
         }
-        return new Reservation(shell);
+        return reservation;
     }
 
     /**
@@ -135,8 +146,10 @@ public final class Handles {
      *
      * @param owner a plugin's handle, or {@code WEIVEL_HOST}
      * @return the entries ended, in no particular order
+     * @throws IllegalStateException for {@link #NO_OWNER}, which owns every plugin's own entry
      */
     public List<HandleEntry> endOwned(long owner) {
+        refuseNoOwner(owner);
         lock.lock();
         try {
             List<HandleEntry> ended = entries.removeAll((handle, unused, entry) -> entry.owner() == owner);
@@ -153,9 +166,11 @@ public final class Handles {
      * @param owner a plugin's handle, or {@code WEIVEL_HOST}
      * @param kinds the kinds to end
      * @return the entries ended, in no particular order
+     * @throws IllegalStateException for {@link #NO_OWNER}, which owns every plugin's own entry
      */
     public List<HandleEntry> endOwned(long owner, Set<HandleKind> kinds) {
         Objects.requireNonNull(kinds, "kinds");
+        refuseNoOwner(owner);
         lock.lock();
         try {
             List<HandleEntry> ended = entries.removeAll((handle, unused, entry) ->
@@ -248,6 +263,12 @@ public final class Handles {
         }
     }
 
+    private static void refuseNoOwner(long owner) {
+        if (owner == NO_OWNER) {
+            throw new IllegalStateException("the entries of no owner are every plugin's own; end each with end()");
+        }
+    }
+
     private void ensureTokenRoom(int wanted) {
         int available = freeTokenCount + entriesByToken.length - tokenIndexesUsed;
         if (available >= wanted) {
@@ -257,11 +278,24 @@ public final class Handles {
         while (freeTokenCount + capacity - tokenIndexesUsed < wanted) {
             capacity *= 2;
         }
-        entriesByToken = Arrays.copyOf(entriesByToken, capacity);
-        tokenGenerations = Arrays.copyOf(tokenGenerations, capacity);
-        freeTokenIndexes = Arrays.copyOf(freeTokenIndexes, capacity);
+        HandleEntry[] grownEntries = memory.entries(capacity);
+        int[] grownGenerations = memory.ints(capacity);
+        int[] grownFreeIndexes = memory.ints(capacity);
+        System.arraycopy(entriesByToken, 0, grownEntries, 0, entriesByToken.length);
+        System.arraycopy(tokenGenerations, 0, grownGenerations, 0, tokenGenerations.length);
+        System.arraycopy(freeTokenIndexes, 0, grownFreeIndexes, 0, freeTokenIndexes.length);
+        entriesByToken = grownEntries;
+        tokenGenerations = grownGenerations;
+        freeTokenIndexes = grownFreeIndexes;
     }
 
+    /**
+     * Takes a token: the index of a free slot and, above it, that slot's generation, drawn anew each time.
+     *
+     * @implNote A generation is 32 bits and wraps after 2^32 takings of one slot, so a token ended that long ago
+     * could match a newer entry in its slot. Reaching it takes 2^32 entries made and ended in that one slot while
+     * someone still holds the old token, which the layer does not guard against.
+     */
     private long takeToken() {
         int index = freeTokenCount > 0 ? freeTokenIndexes[--freeTokenCount] : tokenIndexesUsed++;
         int generation = ++tokenGenerations[index];

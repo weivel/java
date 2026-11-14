@@ -52,7 +52,7 @@ public final class TestScheduler implements Scheduler {
         onRead = action;
     }
 
-    void whenScheduled(LongConsumer action) {
+    public void whenScheduled(LongConsumer action) {
         onSchedule = action;
     }
 
@@ -85,6 +85,11 @@ public final class TestScheduler implements Scheduler {
             }
             return due;
         }
+    }
+
+    /** The clock's time, read without counting it as a read of the layer's. */
+    long time() {
+        return clock;
     }
 
     int reads() {

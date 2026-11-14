@@ -30,6 +30,7 @@ public final class PluginContext {
     private final PluginLog log;
     private volatile long token;
     private volatile boolean detached;
+    private volatile boolean silenced;
 
     PluginContext(ContextState state, long plugin, Manifest manifest, long madeAfter) {
         this.state = state;
@@ -205,9 +206,22 @@ public final class PluginContext {
         return detached ? Optional.of(new Answer.Detached<>()) : Optional.empty();
     }
 
-    /** Whether an event naming this plugin was drained after this context was made, and so may reach it. */
+    /**
+     * Whether an event naming this plugin may reach it: one drained after this context was made, and dispatched
+     * while the plugin is not silenced by its release or quarantine.
+     */
     boolean hears(long sequence) {
-        return sequence > madeAfter;
+        return sequence > madeAfter && !silenced;
+    }
+
+    /** Called from the dispatch, once the events of the plugin's release or quarantine call are dispatched. */
+    void silence() {
+        silenced = true;
+    }
+
+    /** Called from the dispatch, once the events of the call opening the plugin again are dispatched. */
+    void unsilence() {
+        silenced = false;
     }
 
     void tell(PluginEvent event) {
