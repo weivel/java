@@ -20,17 +20,22 @@ import com.weivel.context.WantLimits;
 import com.weivel.core.ActivationPlan;
 import com.weivel.core.Answer;
 import com.weivel.core.CoreConstants;
+import com.weivel.core.CoreProbes;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.FailureKind;
+import com.weivel.core.LedgerRow;
 import com.weivel.core.Manifest;
 import com.weivel.core.Refusal;
 import com.weivel.core.RefusalStatus;
+import com.weivel.timer.TestScheduler;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -106,6 +111,27 @@ class HostTest {
         assertEquals(ActivationState.ACTIVE, done(activation.outcomes().get(1)).state());
         providerDone.complete(null);
         assertEquals(ActivationState.ACTIVE, done(activation.outcomes().get(0)).state());
+    }
+
+    @Test
+    void whatAnActivatesOwnCallsQueueIsHeardOnceThatActivateHasReturned() {
+        TestEntry waiting = fixture.entry("waiting");
+        waiting.onActivate = context -> context.want("serving:events", WantLimits.unbounded()).settlement()
+                .thenRun(() -> fixture.trace.add("settled waiting"));
+        TestEntry serving = fixture.entry("serving");
+        serving.onActivate = context -> {
+            value(context.register("serving:events", new Object()));
+            fixture.trace.add("registered serving");
+            return CompletableFuture.completedFuture(null);
+        };
+        long waitingPlugin = fixture.register(consuming("waiting", "serving:events"), waiting);
+        long servingPlugin = fixture.register(services("serving", Collections.singletonList("serving:events"),
+                Collections.<String>emptyList()), serving);
+
+        host.activate(Arrays.asList(waitingPlugin, servingPlugin), EdgeSource.CAPABILITIES);
+
+        assertEquals(Arrays.asList("activate waiting", "activate serving", "registered serving", "settled waiting"),
+                fixture.trace());
     }
 
     @Test
@@ -207,6 +233,45 @@ class HostTest {
         Refusal refusal = (Refusal) assertInstanceOf(Answer.Refused.class, verified).refusal().get();
         assertEquals(CoreConstants.REFUSAL_PLUGIN_STATE, refusal.code());
         assertEquals(ActivationState.ACTIVE, done(fixture.activate(plugin).outcomes().get(0)).state());
+    }
+
+    @Test
+    void theLedgerShowsAPluginQuarantinedForARefusedVerificationWithTheCoresRefusal() {
+        TestEntry growing = fixture.entry("growing");
+        long plugin = fixture.register(named("growing"), growing);
+        long bystander = fixture.register(named("bystander"), fixture.entry("bystander"));
+        fixture.activate(plugin);
+        value(growing.context.provide("screens", new Object()));
+        value(host.verify(plugin));
+
+        List<LedgerRow> rows = value(host.ledger());
+
+        assertEquals(Arrays.asList(plugin, bystander), Arrays.asList(rows.get(0).plugin(), rows.get(1).plugin()));
+        assertEquals(LedgerRow.Status.QUARANTINED, rows.get(0).status());
+        assertEquals(LedgerRow.Status.REGISTERED, rows.get(1).status());
+        Refusal reason = rows.get(0).reason().get();
+        assertEquals(CoreConstants.REFUSAL_ACTIVATION_MISMATCH, reason.code());
+        assertEquals(Optional.of("growing"), reason.subject());
+        assertTrue(reason.hasFix());
+    }
+
+    @Test
+    void theTimerObserverHearsEachMoveTheTimerMakesAsTheCoreAnnouncesIt() throws Exception {
+        TestScheduler scheduler = new TestScheduler();
+        List<OptionalLong> moves = Collections.synchronizedList(new ArrayList<OptionalLong>());
+        Host observed = value(Host.create(CoreProbes.binary(), HostOptions.defaults().withScheduler(scheduler)
+                .withTimerObserver(moves::add).withErrorSink(fixture.failures::add)));
+        TestEntry waiting = new TestEntry("waiting", new ArrayList<String>());
+        long plugin = value(observed.register(consuming("waiting", "absent:service"), waiting));
+        observed.activate(Collections.singletonList(plugin), EdgeSource.SERVICES);
+
+        waiting.context.want("absent:service", WantLimits.timeout(1000));
+        scheduler.moveTo(1000);
+
+        assertEquals(Arrays.asList(OptionalLong.of(1000), OptionalLong.empty()), moves);
+        observed.destroy().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        observed.close();
+        assertTrue(fixture.failures.isEmpty());
     }
 
     @Test

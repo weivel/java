@@ -750,6 +750,40 @@ final class Wrapper {
                 : DeferredStep.Deferral.LEFT_TO_THE_DISPATCH;
     }
 
+    /**
+     * Runs {@code step} as the dispatcher, behind whatever is queued, when no dispatch runs and no fenced event
+     * waits; otherwise queues nothing and runs nothing.
+     *
+     * @implNote The dispatch is claimed in the same hold that found none running, so no other thread can take the
+     * step between, and no {@code follow} is told here: that is left to the next thread to leave a call, the step's
+     * own calls among them. Following here would let the lock go with the step queued and the dispatch unclaimed.
+     */
+    boolean runAsTheDispatcher(DeferredStep step) {
+        Objects.requireNonNull(step, "step");
+        if (!enter()) {
+            return false;
+        }
+        if (dispatching || holdsAFencedEvent()) {
+            lock.unlock();
+            return false;
+        }
+        QueueEntry.StepEntry entry = new QueueEntry.StepEntry(step);
+        queue.addLast(entry);
+        dispatching = true;
+        lock.unlock();
+        dispatch(entry);
+        return true;
+    }
+
+    private boolean holdsAFencedEvent() {
+        for (QueueEntry entry : queue) {
+            if (entry instanceof QueueEntry.EventEntry && ((QueueEntry.EventEntry) entry).fence() > followedSerial) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Installs deadline hooks where none are; hooks installed while a deadline is recorded are told it at once. */
     Answer<Void> installDeadlineHooks(DeadlineHooks installing) {
         Objects.requireNonNull(installing, "hooks");

@@ -92,15 +92,20 @@ stage completing exceptionally is a failure. `Entries.load` makes an entry by it
 loader, and `Host.loadEntry` from a JAR in a class loader of the host's own, whose parent is the loader of `Entry`;
 the host never assumes a name. `activate` asks the core for the plan and starts each plugin of its order in that order
 on the calling thread, never waiting for an activate, and answers the plan at once with each plugin's outcome as a
-stage: active, quarantined, refused, released or failed. A settled activate is verified, and a refused verification
+stage: active, quarantined, refused, released or failed. Where no dispatch runs it starts them as one step of a
+dispatch, so what an activate's own calls queue is heard once that activate has returned, as inside any dispatch. An
+activate therefore runs while its thread is the dispatcher: one that blocks on an event another thread causes
+deadlocks, so an activate that must wait answers a stage and completes it later. A settled activate is verified, and a refused verification
 quarantined in the same hold of the layer lock; a failed one is quarantined with a reason saying so. `release` calls
 the deactivate while the plugin is whole, releases it in the core, and ends its entries and forgets it only once that
 release's events are dispatched, as a step behind them inside a dispatch. `registerHostService` offers a service of
 the host's own under `WEIVEL_HOST`, which an activation plan counts as provided. `destroy` answers one
 `CompletionStage<DestroyResult>`: it releases every plugin opened, the last opened first, waits for the opens and
 settlings under way, then disarms the timer and destroys the core, and every other call answers `Destroyed` from the
-moment it is called. `close` frees what the host holds, the class loaders it opened among them, and is refused until
-the destroy has finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
+moment it is called. `ledger` answers the core's ledger, where a plugin quarantined for a refused verification shows
+the core's refusal, and `HostOptions.withTimerObserver` hears each move of the host's timer, armed or disarmed.
+`close` frees what the host holds, the class loaders it opened among them, and is refused until the destroy has
+finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
 
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
 path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
@@ -124,7 +129,14 @@ lays its plugins out otherwise registers `manifest()` with an entry of its own, 
 `ForeignMemory.manifest` reads a manifest another library laid out up to the size it declares, as the core does. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
 interfaces, a refusal thrown as a `ServiceRefusal`.
 
-The other packages hold only their purpose so far.
+`com.weivel.conformance` is the driver for the layer suite. `LayerDriver` reads the pinned kit's layer vectors
+through the standard's JSON reader, bound through `ForeignLibrary`, and writes no file; it builds each vector's plugins
+as manifest values and entries, drives them through the host's public surface on the real core, a `want` vector on a
+clock and scheduler of the suite's own, and answers a `LayerWitness` in the shape of the vector's `then`. The suite
+has one test per vector, its display name the vector's id, and a coverage test that discovers those names through
+the JUnit Platform Launcher and fails on a vector none names.
+
+`com.weivel.benchmarks` holds only its purpose so far.
 
 ## Using it
 

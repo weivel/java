@@ -4,6 +4,7 @@ import com.weivel.context.HostLog;
 import com.weivel.core.CoreOptions;
 import com.weivel.core.ErrorSink;
 import com.weivel.timer.Scheduler;
+import com.weivel.timer.TimerObserver;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -16,12 +17,15 @@ public final class HostOptions {
     private final Optional<Scheduler> scheduler;
     private final HostLog log;
     private final ErrorSink sink;
+    private final TimerObserver timerObserver;
 
-    private HostOptions(CoreOptions core, Optional<Scheduler> scheduler, HostLog log, ErrorSink sink) {
+    private HostOptions(CoreOptions core, Optional<Scheduler> scheduler, HostLog log, ErrorSink sink,
+                        TimerObserver timerObserver) {
         this.core = core;
         this.scheduler = scheduler;
         this.log = log;
         this.sink = sink;
+        this.timerObserver = timerObserver;
     }
 
     /**
@@ -32,7 +36,7 @@ public final class HostOptions {
      */
     public static HostOptions defaults() {
         return new HostOptions(CoreOptions.defaults(), Optional.<Scheduler>empty(), STANDARD_ERROR_LOG,
-                ErrorSink.STANDARD_ERROR);
+                ErrorSink.STANDARD_ERROR, TimerObserver.NONE);
     }
 
     /**
@@ -42,7 +46,7 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withCore(CoreOptions chosen) {
-        return new HostOptions(Objects.requireNonNull(chosen, "chosen"), scheduler, log, sink);
+        return new HostOptions(Objects.requireNonNull(chosen, "chosen"), scheduler, log, sink, timerObserver);
     }
 
     /**
@@ -52,7 +56,8 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withScheduler(Scheduler chosen) {
-        return new HostOptions(core, Optional.of(Objects.requireNonNull(chosen, "chosen")), log, sink);
+        return new HostOptions(core, Optional.of(Objects.requireNonNull(chosen, "chosen")), log, sink,
+                timerObserver);
     }
 
     /**
@@ -62,7 +67,7 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withLog(HostLog chosen) {
-        return new HostOptions(core, scheduler, Objects.requireNonNull(chosen, "chosen"), sink);
+        return new HostOptions(core, scheduler, Objects.requireNonNull(chosen, "chosen"), sink, timerObserver);
     }
 
     /**
@@ -72,7 +77,26 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withErrorSink(ErrorSink chosen) {
-        return new HostOptions(core, scheduler, log, Objects.requireNonNull(chosen, "chosen"));
+        return new HostOptions(core, scheduler, log, Objects.requireNonNull(chosen, "chosen"), timerObserver);
+    }
+
+    /**
+     * Gives the host what hears each move of its timer, armed for a deadline or disarmed, as the core announces it.
+     *
+     * @param chosen the observer, called outside every lock of the layer's; {@link TimerObserver#NONE} for none
+     * @return the copy
+     */
+    public HostOptions withTimerObserver(TimerObserver chosen) {
+        return new HostOptions(core, scheduler, log, sink, Objects.requireNonNull(chosen, "chosen"));
+    }
+
+    /**
+     * Answers {@code timerObserver}.
+     *
+     * @return what hears each move of the host's timer
+     */
+    public TimerObserver timerObserver() {
+        return timerObserver;
     }
 
     /**

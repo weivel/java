@@ -13,5 +13,5 @@ jobs:
       kit_ref: 6bd2497b149fb552a53f77834c8110e72faf570b
       role: java
       language: java
-      checks: purity names parity
+      checks: purity names parity layers
       runners: '["ubuntu-latest","windows-latest","macos-latest"]'

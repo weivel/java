@@ -14,6 +14,7 @@ import com.weivel.core.DeferredStep;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
+import com.weivel.core.LedgerRow;
 import com.weivel.core.LibraryBinary;
 import com.weivel.core.LibraryFunction;
 import com.weivel.core.Manifest;
@@ -132,7 +133,7 @@ public final class Host implements AutoCloseable {
                 ? Optional.<SystemScheduler>empty()
                 : Optional.of(Schedulers.system());
         Scheduler scheduler = own.isPresent() ? own.get() : options.scheduler().get();
-        Answer<CoreTimer> started = CoreTimer.start(core, scheduler);
+        Answer<CoreTimer> started = CoreTimer.start(core, scheduler, options.timerObserver());
         if (!(started instanceof Answer.Ok)) {
             core.destroy();
             core.close();
@@ -190,6 +191,22 @@ public final class Host implements AutoCloseable {
      */
     public Optional<PluginContext> context(long plugin) {
         return record(plugin).map(PluginRecord::context);
+    }
+
+    /**
+     * The core's ledger as it stands now: one row per plugin registered and not forgotten, a quarantined plugin's
+     * reason among what each row shows.
+     *
+     * @return the rows, in the order the plugins were registered; {@link Answer.Destroyed} once the destroy has been
+     *     called
+     * @implNote The host quarantines a plugin whose verification the core refused with no reason of its own, so that
+     * plugin's row shows the core's refusal; this read is how the host's caller sees it.
+     */
+    public Answer<List<LedgerRow>> ledger() {
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
+        }
+        return core.call(CoreCalls.ledger());
     }
 
     /**
@@ -645,10 +662,30 @@ public final class Host implements AutoCloseable {
         }
         ActivationPlan plan = ((Answer.Ok<ActivationPlan>) planned).value();
         List<CompletableFuture<Outcome>> outcomes = new ArrayList<>(plan.order().size());
+        DeferredStep startingEvery = () -> {
+            startEvery(plan, outcomes);
+            return DeferredStep.Status.DONE;
+        };
+        if (!CoreInternals.runAsTheDispatcher(core, startingEvery)) {
+            startEvery(plan, outcomes);
+        }
+        return new Answer.Ok<>(new Activation(plan, outcomes));
+    }
+
+    /**
+     * Starts every plugin of the plan's order, in that order, on the calling thread.
+     *
+     * @implNote {@link #activate} runs it as a step of a dispatch wherever it can, so what an activate's own calls
+     * queue is heard once that activate has returned, as everywhere else inside a dispatch, and a plugin waiting on a
+     * service another's activate registers is served after that registration returns, never inside it. Where a
+     * dispatch runs already, the calls queue behind it the same way. So an activate runs while its thread is the
+     * dispatcher: one that blocks on an event another thread causes waits for an event only its own thread would
+     * dispatch, and deadlocks, as it does in the C layer. An activate that waits does so through the stage it answers.
+     */
+    private void startEvery(ActivationPlan plan, List<CompletableFuture<Outcome>> outcomes) {
         for (long plugin : plan.order()) {
             outcomes.add(start(plugin));
         }
-        return new Answer.Ok<>(new Activation(plan, outcomes));
     }
 
     private CompletableFuture<Outcome> start(long plugin) {
