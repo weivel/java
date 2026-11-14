@@ -171,6 +171,9 @@ tasks.named('test', Test) {
         inputs.file(location).withPropertyName(property)
         systemProperty property, location.absolutePath
     }
+    def coreSources = file('src/main/java/com/weivel/core')
+    inputs.dir(coreSources).withPropertyName('weivel.test.coreSources')
+    systemProperty 'weivel.test.coreSources', coreSources.absolutePath
     def layerVectors = new File(siblingsDirectory, 'conformance/vectors/layer')
     inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
     systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath

@@ -21,16 +21,33 @@ are in `src/test/java/com/weivel/<module>/`.
 ## What is built
 
 `CoreBinary.load` opens the core's shared binary from the path its caller gives and resolves every function the
-core's header declares into one table of downcall handles, which nothing else in the layer names. A path that is no
-library, and a library that lacks one of the core's functions, are each answered as a value, the second naming the
-first function missing. `CoreBinary.close` closes what the load opened.
+core's header declares into one table of downcall handles. A path that is no library, and a library that lacks one of
+the core's functions, are each answered as a value, the second naming the first function missing.
+`CoreBinary.close` closes what the load opened.
+
+`Core.create` creates a core through that table, and every call into it goes through one wrapper, which nothing else
+in the layer bypasses: `CoreCalls` builds each call, `Core.call` makes it. A call is made under one `ReentrantLock`
+and its events are drained under the same hold, each copied into a `CoreEvent` record and released in the core
+before the next is drained; an event that cannot be copied whole is still heard, marked incomplete, with fixed
+sentences in place of its texts. The events are dispatched to the listeners first in, first out, outside the lock, by
+one thread at a time: a call made while a dispatch runs, from a listener or another thread, joins the end of the
+queue and returns. Every call answers an `Answer`: `Ok`, `Absent`, `Refused` with the refusal the core queued for it
+(never one the layer invents), `Detached`, `Destroyed`, or `Defect`, which also goes to the error sink. What a
+listener or a deferred step throws goes to the error sink, never to a caller, and a sink that throws goes to the
+standard error output.
+
+The wrapper also holds what the `timer`, `context` and `host` packages build on, reached through `CoreInternals`:
+a call with a guard and a step run under the lock, a deferred step on the dispatch queue, and the deadline hooks, the
+latest deadline announcement recorded at drain time, the timer told of it before any event of its call is dispatched,
+and a deadline that fell due handed to the core before the next call.
 
 The other packages hold only their purpose so far.
 
 ## Using it
 
 The layer needs Java 25 and the core's shared binary. Java refuses, or warns about, native access a launch did not
-grant, so a process using the layer from the class path runs with `--enable-native-access=ALL-UNNAMED`.
+grant, so a process using the layer from the class path runs with `--enable-native-access=ALL-UNNAMED`. Any thread
+may call; a call into the core is a short downcall, during which a virtual thread pins its carrier.
 
 ## Building
 
