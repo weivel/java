@@ -5,6 +5,7 @@ import com.weivel.core.Core;
 import com.weivel.core.CoreCalls;
 import com.weivel.core.CoreInternals;
 import com.weivel.core.Manifest;
+import com.weivel.core.QuarantineReason;
 import com.weivel.handles.HandleEntry;
 import com.weivel.handles.HandleKind;
 import com.weivel.handles.Handles;
@@ -28,10 +29,9 @@ import java.util.Set;
  *   a quarantined plugin opened again included.</li>
  *   <li>Every event is routed to the plugin it concerns through one listener on the core, added once for all the
  *   contexts, by the handle the event names.</li>
- *   <li>{@link #endEntries} ends a plugin's watches, listeners, registrations, implementations and answerers in the
- *   layer's tables, calling nothing in the core, once the events its release or quarantine call queued have been
- *   dispatched; a host makes it a step deferred behind that call's events. From then on the plugin hears nothing
- *   until it is opened again.</li>
+ *   <li>{@link #release} and {@link #quarantine} make that call in the core and, in the same hold of the layer lock,
+ *   queue the end of the plugin's watches, listeners, registrations, implementations and answerers in the layer's
+ *   tables right behind the call's own events. From then on the plugin hears nothing until it is opened again.</li>
  *   <li>{@link #forget} forgets the plugin in the core and detaches its context in the same hold of the layer lock,
  *   so no call through the context reaches the core after the forget, and ends its entries once the events drained
  *   before the forget have been dispatched.</li>
@@ -110,6 +110,33 @@ public final class PluginContexts implements AutoCloseable {
     }
 
     /**
+     * Releases the plugin in the core and ends its entries once the release's own events have been dispatched.
+     *
+     * @param context the context
+     * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} once the plugin is forgotten
+     */
+    public Answer<Void> release(PluginContext context) {
+        Objects.requireNonNull(context, "context");
+        return state.callThenDefer(context, CoreCalls.releasePlugin(context.plugin()), Answer.Ok::new,
+                () -> endEntries(context));
+    }
+
+    /**
+     * Quarantines the plugin in the core and ends its entries once the quarantine's own events have been dispatched.
+     * The plugin keeps its context, and {@link #open} opens it again.
+     *
+     * @param context the context
+     * @param reason why, as the caller knows it; empty for none
+     * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} once the plugin is forgotten
+     */
+    public Answer<Void> quarantine(PluginContext context, Optional<QuarantineReason> reason) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(reason, "reason");
+        return state.callThenDefer(context, CoreCalls.quarantinePlugin(context.plugin(), reason), Answer.Ok::new,
+                () -> endEntries(context));
+    }
+
+    /**
      * The payload the host opens the plugin with, which leads back to its context without a search.
      *
      * @param context the context
@@ -141,8 +168,10 @@ public final class PluginContexts implements AutoCloseable {
      * plugin again.
      *
      * @param context the context
+     * @implNote Only {@link #release} and {@link #quarantine} queue it, in the hold of their call, so an open made
+     * from another thread meanwhile is always ordered after it.
      */
-    public void endEntries(PluginContext context) {
+    void endEntries(PluginContext context) {
         context.silence();
         state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
         context.dropListeners();

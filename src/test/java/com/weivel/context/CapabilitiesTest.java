@@ -189,4 +189,30 @@ class CapabilitiesTest {
         assertSame(screen, heard.get(3));
         assertEquals(Collections.emptyList(), fixture.failures);
     }
+
+    @Test
+    void aCapabilityWatchStoppedInsideADispatchStillHearsWhatTheCoreReportedBeforeTheStop() {
+        PluginContext first = fixture.opened(capabilities("first", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
+        PluginContext second = fixture.opened(capabilities("second", Collections.singletonList(SCREENS),
+                Collections.emptyList()));
+        Object firstScreen = new Object();
+        Object secondScreen = new Object();
+        value(first.provide(SCREENS, firstScreen));
+        value(second.provide(SCREENS, secondScreen));
+        List<Object> heard = new ArrayList<>();
+        Watching watching = value(consumer.watchCapability(SCREENS, recording(heard)));
+        AtomicBoolean once = new AtomicBoolean(true);
+        fixture.core.addListener(event -> {
+            if (once.getAndSet(false)) {
+                fixture.verify(second);
+                value(watching.stop());
+            }
+        });
+
+        fixture.verify(first);
+
+        assertEquals(Arrays.asList("provided", firstScreen, "provided", secondScreen), heard);
+        assertEquals(Collections.emptyList(), fixture.failures);
+    }
 }

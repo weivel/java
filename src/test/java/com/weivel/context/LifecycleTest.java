@@ -316,4 +316,43 @@ class LifecycleTest {
 
         assertInstanceOf(Answer.Destroyed.class, settlement.getNow(null));
     }
+
+    @Test
+    void anOpenFromAnotherThreadLandingBetweenAQuarantineAndItsDrainLeavesThePluginHearing() throws Exception {
+        try (ContextFixture fixture = new ContextFixture()) {
+            PluginContext consumer = fixture.opened(consuming("consumer", GREETER));
+            ok(fixture.core.call(CoreCalls.wantService(CoreConstants.HOST, "later", WantOptions.timed(0, 200))));
+            consumer.want(GREETER, WantLimits.timeout(100));
+            ExecutorService threads = Executors.newSingleThreadExecutor();
+            try {
+                AtomicBoolean once = new AtomicBoolean(true);
+                List<Answer<Void>> opened = new ArrayList<>();
+                fixture.scheduler.whenScheduled(at -> {
+                    if (at == 200 && once.getAndSet(false)) {
+                        opened.add(getWithin(threads.submit(() -> fixture.contexts.open(consumer))));
+                    }
+                });
+
+                fixture.quarantine(consumer);
+                List<PluginEvent> heard = new ArrayList<>();
+                consumer.listen(heard::add);
+                consumer.get("undeclared-once-open");
+
+                assertInstanceOf(Answer.Ok.class, opened.get(0));
+                assertEquals(1, heard.size());
+                assertEquals("undeclared-once-open",
+                        assertInstanceOf(PluginEvent.ReachRefused.class, heard.get(0)).id());
+            } finally {
+                threads.shutdownNow();
+            }
+        }
+    }
+
+    private static <T> T getWithin(Future<T> future) {
+        try {
+            return future.get(GATE_SECONDS, TimeUnit.SECONDS);
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
+        }
+    }
 }

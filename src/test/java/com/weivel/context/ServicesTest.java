@@ -192,4 +192,25 @@ class ServicesTest {
         assertEquals(Arrays.asList(greeter, "unregistered"), heard);
         assertSame(greeter, heard.get(0));
     }
+
+    @Test
+    void aWatchStoppedInsideADispatchStillHearsWhatTheCoreReportedBeforeTheStop() {
+        List<Object> heard = new ArrayList<>();
+        Watching watching = value(consumer.watch(GREETER, recording(heard)));
+        Object greeter = new Object();
+        Object registeredAgain = new Object();
+        ServiceRegistration registration = value(provider.register(GREETER, greeter));
+        AtomicBoolean first = new AtomicBoolean(true);
+        fixture.core.addListener(event -> {
+            if (first.getAndSet(false)) {
+                value(registration.unregister());
+                value(provider.register(GREETER, registeredAgain));
+                value(watching.stop());
+            }
+        });
+
+        fixture.core.call(CoreCalls.unregister(UNKNOWN_HANDLE));
+
+        assertEquals(Arrays.asList(greeter, "unregistered", registeredAgain), heard);
+    }
 }
