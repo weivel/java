@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -43,14 +45,22 @@ class NativeCallAllocationTest {
             callRepeatedly(release, WARM_UP_CALLS);
 
             long least = Long.MAX_VALUE;
-            for (int round = 0; round < MOST_ROUNDS && least > ALLOWED_BYTES; round++) {
+            List<Long> firstRounds = new ArrayList<>();
+            int rounds = 0;
+            for (; rounds < MOST_ROUNDS && least > ALLOWED_BYTES; rounds++) {
                 long before = threads.getThreadAllocatedBytes(thread);
                 callRepeatedly(release, MEASURED_CALLS);
-                least = Math.min(least, threads.getThreadAllocatedBytes(thread) - before);
+                long allocated = threads.getThreadAllocatedBytes(thread) - before;
+                least = Math.min(least, allocated);
+                if (firstRounds.size() < 8) {
+                    firstRounds.add(allocated);
+                }
             }
 
-            System.out.println(MEASURED_CALLS + " calls allocated at least " + least + " bytes");
-            assertTrue(least <= ALLOWED_BYTES, MEASURED_CALLS + " calls allocated at least " + least + " bytes");
+            String measured = MEASURED_CALLS + " calls allocated at least " + least + " bytes over " + rounds
+                    + " rounds, the first " + firstRounds;
+            System.out.println(measured);
+            assertTrue(least <= ALLOWED_BYTES, measured);
         }
     }
 

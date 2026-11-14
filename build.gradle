@@ -93,6 +93,13 @@ def javadocJava22 = tasks.register('javadocJava22', Javadoc) {
     options.memberLevel = JavadocMemberLevel.PACKAGE
 }
 
+tasks.withType(Test).configureEach {
+    testLogging {
+        events 'failed'
+        exceptionFormat = 'full'
+    }
+}
+
 tasks.named('check') {
     dependsOn tasks.named('javadoc'), javadocJava22
 }
