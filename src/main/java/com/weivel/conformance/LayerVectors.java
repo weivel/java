@@ -54,9 +54,17 @@ final class LayerVectors {
         } catch (IOException unread) {
             throw new UncheckedIOException("the layer vector " + file + " could not be read", unread);
         }
+        return vector(json, document, id);
+    }
+
+    /** Reads one vector's document, which must name itself {@code id}. */
+    static LayerVector vector(StandardJson json, byte[] document, String id) {
         String where = "the layer vector " + id;
         Map<String, Object> vector = Shapes.object(where, json.read(document, where));
         Shapes.refuseUnknownKeys(where, vector, "id", "op", "covers", "given", "then");
+        if (vector.containsKey("covers")) {
+            Shapes.text(where, vector, "covers");
+        }
         String named = Shapes.text(where, vector, "id");
         if (!named.equals(id)) {
             throw new IllegalArgumentException(where + " names itself " + named + ", which is not its path");

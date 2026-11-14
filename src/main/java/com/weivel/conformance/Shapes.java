@@ -105,6 +105,14 @@ final class Shapes {
         return (Boolean) value;
     }
 
+    /** Checks that a step's flag is {@code true}, the only value it is driven with. */
+    static void requireTrue(String where, Map<String, Object> owner, String key) {
+        if (!Boolean.TRUE.equals(required(where, owner, key))) {
+            throw new IllegalArgumentException(where + "'s " + key + " is " + owner.get(key)
+                    + ", where only true is driven");
+        }
+    }
+
     /** The one key of {@code candidates} a step or an action names. */
     static String theOneNamed(String where, Map<String, Object> value, String... candidates) {
         List<String> named = new ArrayList<>();

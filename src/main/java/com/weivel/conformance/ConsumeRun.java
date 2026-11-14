@@ -80,8 +80,10 @@ final class ConsumeRun {
         } else if (action.equals(PROVIDE)) {
             answered(world.context(plugin).provide(Shapes.text(where, step, PROVIDE), new Implementation(plugin)));
         } else if (action.equals(VERIFY)) {
+            Shapes.requireTrue(where, step, VERIFY);
             answered(world.host.verify(world.plugin(plugin)));
         } else {
+            Shapes.requireTrue(where, step, RELEASE);
             CompletableFuture<Answer<Boolean>> release = world.host.release(world.plugin(plugin))
                     .toCompletableFuture();
             if (!release.isDone()) {

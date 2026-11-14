@@ -176,7 +176,7 @@ final class LifecycleRun {
         try {
             perform(where, named, step, source);
         } catch (RuntimeException thrown) {
-            if (!destroying) {
+            if (!destroying || thrown instanceof IllegalArgumentException) {
                 throw thrown;
             }
             thrownSinceTheDestroy++;
@@ -189,6 +189,7 @@ final class LifecycleRun {
         } else if (named.equals("release")) {
             world.host.release(world.plugin(Shapes.text(where, step, "release")));
         } else if (named.equals("destroy")) {
+            Shapes.requireTrue(where, step, "destroy");
             destroying = true;
             loudBeforeTheDestroy = world.written(true);
             world.host.destroy();
