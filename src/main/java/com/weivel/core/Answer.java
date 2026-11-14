@@ -14,6 +14,37 @@ public abstract class Answer<T> {
     }
 
     /**
+     * Reads an answer that carries no value as an answer of another result type.
+     *
+     * @param answer any answer but a success, which carries its own value
+     * @param <U> the result type to read it as
+     * @return the same answer, of the other type
+     * @throws IllegalArgumentException for a success
+     */
+    public static <U> Answer<U> retyped(Answer<?> answer) {
+        if (answer instanceof Ok) {
+            throw new IllegalArgumentException("a success carries its own value");
+        }
+        if (answer instanceof Absent) {
+            return new Absent<>();
+        }
+        if (answer instanceof Refused) {
+            Refused<?> refused = (Refused<?>) answer;
+            return new Refused<>(refused.status(), refused.refusal());
+        }
+        if (answer instanceof Detached) {
+            return new Detached<>();
+        }
+        if (answer instanceof Destroyed) {
+            return new Destroyed<>();
+        }
+        if (answer instanceof Defect) {
+            return new Defect<>(((Defect<?>) answer).detail());
+        }
+        return new Mistake<>(((Mistake<?>) answer).detail());
+    }
+
+    /**
      * The core did what it was asked.
      *
      * @param <T> the result's type
