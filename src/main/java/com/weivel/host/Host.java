@@ -14,6 +14,7 @@ import com.weivel.core.DeferredStep;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
+import com.weivel.core.LedgerRow;
 import com.weivel.core.LibraryBinary;
 import com.weivel.core.LibraryFunction;
 import com.weivel.core.Manifest;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -190,6 +192,32 @@ public final class Host implements AutoCloseable {
      */
     public Optional<PluginContext> context(long plugin) {
         return record(plugin).map(PluginRecord::context);
+    }
+
+    /**
+     * The core's ledger as it stands now: one row per plugin registered and not forgotten, a quarantined plugin's
+     * reason among what each row shows.
+     *
+     * @return the rows, in the order the plugins were registered; {@link Answer.Destroyed} once the destroy has been
+     *     called
+     * @implNote The host quarantines a plugin whose verification the core refused with no reason of its own, so that
+     * plugin's row shows the core's refusal; this read is how the host's caller sees it.
+     */
+    public Answer<List<LedgerRow>> ledger() {
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
+        }
+        return core.call(CoreCalls.ledger());
+    }
+
+    /**
+     * The deadline the host's timer is armed for, as the core last announced it.
+     *
+     * @return the deadline on the scheduler's clock; empty while no deadline is announced, on {@link Scheduler#none()}
+     *     and once the destroy has disarmed the timer
+     */
+    public OptionalLong timerDeadline() {
+        return timer.armed();
     }
 
     /**

@@ -22,6 +22,7 @@ import com.weivel.core.Answer;
 import com.weivel.core.CoreConstants;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.FailureKind;
+import com.weivel.core.LedgerRow;
 import com.weivel.core.Manifest;
 import com.weivel.core.Refusal;
 import com.weivel.core.RefusalStatus;
@@ -30,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -207,6 +209,40 @@ class HostTest {
         Refusal refusal = (Refusal) assertInstanceOf(Answer.Refused.class, verified).refusal().get();
         assertEquals(CoreConstants.REFUSAL_PLUGIN_STATE, refusal.code());
         assertEquals(ActivationState.ACTIVE, done(fixture.activate(plugin).outcomes().get(0)).state());
+    }
+
+    @Test
+    void theLedgerShowsAPluginQuarantinedForARefusedVerificationWithTheCoresRefusal() {
+        TestEntry growing = fixture.entry("growing");
+        long plugin = fixture.register(named("growing"), growing);
+        long bystander = fixture.register(named("bystander"), fixture.entry("bystander"));
+        fixture.activate(plugin);
+        value(growing.context.provide("screens", new Object()));
+        value(host.verify(plugin));
+
+        List<LedgerRow> rows = value(host.ledger());
+
+        assertEquals(Arrays.asList(plugin, bystander), Arrays.asList(rows.get(0).plugin(), rows.get(1).plugin()));
+        assertEquals(LedgerRow.Status.QUARANTINED, rows.get(0).status());
+        assertEquals(LedgerRow.Status.REGISTERED, rows.get(1).status());
+        Refusal reason = rows.get(0).reason().get();
+        assertEquals(CoreConstants.REFUSAL_ACTIVATION_MISMATCH, reason.code());
+        assertEquals(Optional.of("growing"), reason.subject());
+        assertTrue(reason.hasFix());
+    }
+
+    @Test
+    void theTimerDeadlineIsTheLatestTheCoreAnnouncedUntilItAnnouncesNone() {
+        TestEntry waiting = fixture.entry("waiting");
+        long plugin = fixture.register(consuming("waiting", "absent:service"), waiting);
+        fixture.activate(plugin);
+        assertEquals(OptionalLong.empty(), host.timerDeadline());
+
+        waiting.context.want("absent:service", WantLimits.timeout(1000));
+
+        assertEquals(OptionalLong.of(1000), host.timerDeadline());
+        fixture.scheduler.moveTo(1000);
+        assertEquals(OptionalLong.empty(), host.timerDeadline());
     }
 
     @Test

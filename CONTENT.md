@@ -99,7 +99,8 @@ release's events are dispatched, as a step behind them inside a dispatch. `regis
 the host's own under `WEIVEL_HOST`, which an activation plan counts as provided. `destroy` answers one
 `CompletionStage<DestroyResult>`: it releases every plugin opened, the last opened first, waits for the opens and
 settlings under way, then disarms the timer and destroys the core, and every other call answers `Destroyed` from the
-moment it is called. `close` frees what the host holds, the class loaders it opened among them, and is refused until
+moment it is called. `ledger` answers the core's ledger, where a plugin quarantined for a refused verification shows
+the core's refusal, and `timerDeadline` the deadline the host's timer is armed for. `close` frees what the host holds, the class loaders it opened among them, and is refused until
 the destroy has finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
 
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
