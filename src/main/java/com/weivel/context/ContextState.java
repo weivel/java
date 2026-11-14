@@ -54,6 +54,18 @@ final class ContextState {
         return CoreInternals.call(core, call, new CallSteps<>(context::guarded, answered));
     }
 
+    /** Makes one call for {@code context} as {@link #call} does, the call made only when {@code guard} lets it. */
+    <T> Answer<T> call(PluginContext context, CoreCall<T> call, CallSteps.CallGuard<T> guard,
+                       CallSteps.AnsweredStep<T> answered) {
+        if (context.isDetached()) {
+            return new Answer.Detached<>();
+        }
+        return CoreInternals.call(core, call, new CallSteps<>(() -> {
+            Optional<Answer<T>> detached = context.guarded();
+            return detached.isPresent() ? detached : guard.check();
+        }, answered));
+    }
+
     /**
      * Makes one call for {@code context} as {@link #call} does and, when the core answers it OK, queues {@code step}
      * right behind the call's own events, so it runs once every event drained before it has been dispatched.

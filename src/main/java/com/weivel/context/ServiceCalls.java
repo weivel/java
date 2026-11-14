@@ -1,6 +1,7 @@
 package com.weivel.context;
 
 import com.weivel.core.Answer;
+import com.weivel.core.CallSteps;
 import com.weivel.core.Choice;
 import com.weivel.core.CoreCalls;
 import com.weivel.core.FailureKind;
@@ -93,13 +94,20 @@ final class ServiceCalls {
 
     static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
                                                 Optional<CapacityAnswerer> answerer, Runnable registered) {
+        return register(state, context, id, service, answerer, () -> Optional.<Answer<Long>>empty(), registered);
+    }
+
+    static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
+                                                Optional<CapacityAnswerer> answerer, CallSteps.CallGuard<Long> guard,
+                                                Runnable registered) {
         Handles.Reservation room = state.handles.reserve();
         Records.Service record = new Records.Service(id, service, answerer);
-        Answer<Long> answer = state.call(context, CoreCalls.registerService(context.plugin(), id), registration -> {
-            room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
-            registered.run();
-            return new Answer.Ok<>(registration);
-        });
+        Answer<Long> answer = state.call(context, CoreCalls.registerService(context.plugin(), id), guard,
+                registration -> {
+                    room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
+                    registered.run();
+                    return new Answer.Ok<>(registration);
+                });
         room.cancel();
         return answer instanceof Answer.Ok
                 ? new Answer.Ok<>(new ServiceRegistration(state, context, ((Answer.Ok<Long>) answer).value()))

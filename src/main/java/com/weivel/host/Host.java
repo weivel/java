@@ -14,6 +14,8 @@ import com.weivel.core.DeferredStep;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
+import com.weivel.core.LibraryBinary;
+import com.weivel.core.LibraryFunction;
 import com.weivel.core.Manifest;
 import com.weivel.core.QuarantineReason;
 import com.weivel.core.RefusalStatus;
@@ -83,6 +85,8 @@ public final class Host implements AutoCloseable {
     private final Map<Long, PluginRecord> plugins = new HashMap<>();
     private final List<PluginRecord> opened = new ArrayList<>();
     private final Map<String, Integer> hostServices = new LinkedHashMap<>();
+    private final Map<String, Integer> hostServiceClaims = new HashMap<>();
+    private final List<LoadedLibrary> libraries = new ArrayList<>();
     private final List<URLClassLoader> loaders = new ArrayList<>();
     private final List<PluginRecord> leftForTheDestroy = new ArrayList<>();
     private final List<Long> releasedByTheDestroy = new ArrayList<>();
@@ -92,6 +96,7 @@ public final class Host implements AutoCloseable {
     private boolean destroyCalled;
     private boolean destroyWalked;
     private boolean destroyEnding;
+    private boolean destroyFinished;
     private boolean closed;
 
     private Host(Core core, CoreTimer timer, PluginContexts contexts, Optional<SystemScheduler> ownScheduler,
@@ -201,15 +206,55 @@ public final class Host implements AutoCloseable {
         if (isDestroyCalled()) {
             return new Answer.Destroyed<>();
         }
-        Answer<ServiceRegistration> registered = contexts.registerHostService(id, service,
-                () -> countHostService(id, 1));
+        AtomicBoolean claimed = new AtomicBoolean();
+        Answer<ServiceRegistration> registered;
+        try {
+            registered = contexts.registerHostService(id, service, () -> claimHostService(id, claimed),
+                    () -> countHostService(id, 1));
+        } finally {
+            if (claimed.get()) {
+                changeCount(hostServiceClaims, id, -1);
+            }
+        }
         if (!(registered instanceof Answer.Ok)) {
             return Answer.retyped(registered);
         }
         pauses.afterAHostServiceIsRegistered(id);
-        ServiceRegistration registration = ((Answer.Ok<ServiceRegistration>) registered).value();
-        return new Answer.Ok<>(new HostService(id, () -> contexts.unregisterHostService(registration,
-                () -> countHostService(id, -1))));
+        return new Answer.Ok<>(hostService(id, ((Answer.Ok<ServiceRegistration>) registered).value()));
+    }
+
+    private HostService hostService(String id, ServiceRegistration registration) {
+        return new HostService(id, () -> contexts.unregisterHostService(registration,
+                () -> countHostService(id, -1)));
+    }
+
+    /**
+     * Under the layer lock, before the core is asked: refuses an id a live library declares, and otherwise claims it
+     * until the registration is answered, so a library load that finds the claim is refused in its turn.
+     */
+    private Optional<Answer<Long>> claimHostService(String id, AtomicBoolean claimed) {
+        lock.lock();
+        try {
+            if (aLiveLibraryDeclares(id)) {
+                return Optional.of(new Answer.Mistake<>("the service id " + id
+                        + " is declared by a C library the host has loaded"));
+            }
+            changeCount(hostServiceClaims, id, 1);
+            claimed.set(true);
+            return Optional.empty();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Under the host's lock. */
+    private boolean aLiveLibraryDeclares(String id) {
+        for (LoadedLibrary library : libraries) {
+            if (library.isLive() && library.declares(id)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> hostProvided() {
@@ -222,14 +267,286 @@ public final class Host implements AutoCloseable {
     }
 
     private void countHostService(String id, int change) {
+        changeCount(hostServices, id, change);
+    }
+
+    private void changeCount(Map<String, Integer> counts, String id, int change) {
         lock.lock();
         try {
-            int count = hostServices.getOrDefault(id, 0) + change;
+            int count = counts.getOrDefault(id, 0) + change;
             if (count > 0) {
-                hostServices.put(id, count);
+                counts.put(id, count);
             } else {
-                hostServices.remove(id);
+                counts.remove(id);
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Loads a C library and registers each service it declares under {@code WEIVEL_HOST} as a
+     * {@link LibraryService}: an activation plan counts each as provided by the host, and a consumer resolving one
+     * receives that very object. The host never reads a declaration from a file: the standard does, or the caller
+     * builds it.
+     *
+     * <p>A load that fails once a service is registered is undone as an unload: what it registered is unregistered,
+     * and its binary is closed once nothing of it can run.
+     *
+     * @param path the library, the caller's path; the declaration names none
+     * @param declaration what the library offers
+     * @return the library; {@link Answer.Mistake}, told to no sink, for a declaration of no service, a service of no
+     *     function, a function of a kind other than {@link LibraryDeclaration#BYTES}, an id or a function name listed
+     *     twice, an id a registration under this host holds already (a plugin's, another live library's or the
+     *     host's own), a path that names no library, or a library lacking a declared symbol; the core's refusal of a
+     *     registration; {@link Answer.Destroyed} once the destroy has been called
+     * @implNote An id is found registered already from the layer's own records, never by asking the core. One a
+     *     plugin registers on another thread while the load runs can still be replaced by the library's registration,
+     *     since the core lets {@code WEIVEL_HOST} replace one; closing that needs a register-if-absent call for the
+     *     host in the core. The host's own registrations hold both ways: each claims its id before it asks the core.
+     */
+    public Answer<LoadedLibrary> loadLibrary(Path path, LibraryDeclaration declaration) {
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(declaration, "declaration");
+        Optional<String> mistake = LibraryChecks.mistakeIn(declaration);
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
+        }
+        Optional<String> registered = registeredAlready(declaration);
+        if (registered.isPresent()) {
+            return new Answer.Mistake<>(takenIdText(registered.get()));
+        }
+        Answer<LibraryBinary> opened = LibraryBinary.open(path, declaration.release());
+        if (!(opened instanceof Answer.Ok)) {
+            return Answer.retyped(opened);
+        }
+        Answer<LoadedLibrary> built = built(((Answer.Ok<LibraryBinary>) opened).value(), declaration);
+        if (!(built instanceof Answer.Ok)) {
+            return built;
+        }
+        LoadedLibrary library = ((Answer.Ok<LoadedLibrary>) built).value();
+        Answer<LoadedLibrary> kept = kept(library);
+        if (!(kept instanceof Answer.Ok)) {
+            library.lifetime().closeToCalls();
+            return kept;
+        }
+        Answer<Void> registration = registerServices(library);
+        if (!(registration instanceof Answer.Ok) || isDestroyCalled()) {
+            undo(library);
+            return registration instanceof Answer.Ok ? new Answer.Destroyed<>() : Answer.retyped(registration);
+        }
+        return kept;
+    }
+
+    private static String takenIdText(String id) {
+        return "the service id " + id + " is registered under this host already, and a registration under "
+                + "WEIVEL_HOST would replace it";
+    }
+
+    private Optional<String> registeredAlready(LibraryDeclaration declaration) {
+        for (LibraryDeclaration.Service service : declaration.services()) {
+            if (contexts.holdsARegistrationOf(service.id()) || isHeldByTheHost(service.id())) {
+                return Optional.of(service.id());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean isHeldByTheHost(String id) {
+        lock.lock();
+        try {
+            return isTakenUnderTheLock(id);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Under the host's lock: whether a service of the host's own, or its claim, or a live library holds the id. */
+    private boolean isTakenUnderTheLock(String id) {
+        return hostServices.containsKey(id) || hostServiceClaims.containsKey(id) || aLiveLibraryDeclares(id);
+    }
+
+    /** Binds every declared function, closing the binary again when one is missing. */
+    private Answer<LoadedLibrary> built(LibraryBinary binary, LibraryDeclaration declaration) {
+        LibraryLifetime lifetime = new LibraryLifetime(() -> closeBinary(declaration.importName(), binary));
+        List<LibraryService> services = new ArrayList<>();
+        for (LibraryDeclaration.Service service : declaration.services()) {
+            Map<String, LibraryFunction> functions = new LinkedHashMap<>();
+            for (LibraryDeclaration.Function function : service.functions()) {
+                Answer<LibraryFunction> bound = binary.function(function.symbol());
+                if (!(bound instanceof Answer.Ok)) {
+                    lifetime.closeToCalls();
+                    return Answer.retyped(bound);
+                }
+                functions.put(function.name(), ((Answer.Ok<LibraryFunction>) bound).value());
+            }
+            services.add(new LibraryService(service.id(), functions, lifetime, pauses));
+        }
+        return new Answer.Ok<>(new LoadedLibrary(this, declaration, services, lifetime));
+    }
+
+    /**
+     * Keeps the library among the host's before anything of it is registered, so every later ending of it finds it,
+     * the destroy's among them, unless the destroy was called, or a live library or the host's own registration holds
+     * one of its ids: the check and the keeping are one step under the host's lock.
+     */
+    private Answer<LoadedLibrary> kept(LoadedLibrary library) {
+        lock.lock();
+        try {
+            if (destroyCalled) {
+                return new Answer.Destroyed<>();
+            }
+            for (LibraryDeclaration.Service service : library.declaration().services()) {
+                if (isTakenUnderTheLock(service.id())) {
+                    return new Answer.Mistake<>(takenIdText(service.id()));
+                }
+            }
+            libraries.add(library);
+            return new Answer.Ok<>(library);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private Answer<Void> registerServices(LoadedLibrary library) {
+        for (LibraryService service : library.services()) {
+            String id = service.id();
+            Answer<ServiceRegistration> registered = contexts.registerHostService(id, service,
+                    () -> countHostService(id, 1));
+            if (!(registered instanceof Answer.Ok)) {
+                return Answer.retyped(registered);
+            }
+            HostService registration = hostService(id, ((Answer.Ok<ServiceRegistration>) registered).value());
+            if (!keepRegistration(library, registration)) {
+                unregister(registration);
+            }
+        }
+        return new Answer.Ok<>(null);
+    }
+
+    private boolean keepRegistration(LoadedLibrary library, HostService registration) {
+        lock.lock();
+        try {
+            return library.keep(registration);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Undoes a load the host kept, through the unload, unless an unload or the destroy took the library first. */
+    private void undo(LoadedLibrary library) {
+        List<HostService> taken = takeForUnloading(library);
+        if (taken != null) {
+            unloadTaken(library, taken);
+        }
+    }
+
+    /**
+     * Unloads a library: closes it to calls at once, so every later call through one of its services answers
+     * {@link LibraryAnswer.Unloaded}, unregisters every service it registered, and closes its binary once no call
+     * runs in it, at once when none does, else as the last one returns. A close the platform refuses is told to the
+     * error sink, since it may come long after this answers.
+     *
+     * @param library a library this host loaded
+     * @return true; false, doing nothing, for a library unloaded already; {@link Answer.Mistake} for another host's;
+     *     {@link Answer.Destroyed} once the destroy has been called, since the destroy unloads every library itself
+     */
+    public Answer<Boolean> unloadLibrary(LoadedLibrary library) {
+        Objects.requireNonNull(library, "library");
+        if (library.host() != this) {
+            return new Answer.Mistake<>("the library was loaded by another host");
+        }
+        List<HostService> taken;
+        lock.lock();
+        try {
+            if (destroyCalled) {
+                return new Answer.Destroyed<>();
+            }
+            taken = library.takeForUnloading();
+        } finally {
+            lock.unlock();
+        }
+        if (taken == null) {
+            return new Answer.Ok<>(false);
+        }
+        unloadTaken(library, taken);
+        return new Answer.Ok<>(true);
+    }
+
+    private List<HostService> takeForUnloading(LoadedLibrary library) {
+        lock.lock();
+        try {
+            return library.takeForUnloading();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void unloadTaken(LoadedLibrary library, List<HostService> registrations) {
+        library.lifetime().closeToCalls();
+        for (HostService registration : registrations) {
+            unregister(registration);
+        }
+    }
+
+    private void unregister(HostService registration) {
+        Answer<Void> unregistered = registration.unregister();
+        if (!(unregistered instanceof Answer.Ok) && !(unregistered instanceof Answer.Destroyed)) {
+            report(FailureKind.LAYER_DEFECT, "the host did not unregister a service of a C library it unloaded: "
+                    + unregistered, Optional.<Throwable>empty());
+        }
+    }
+
+    /**
+     * Destroy step 3: closes every live library to calls, each binary closing once no call runs in it.
+     *
+     * @implNote Its services are not unregistered one by one: the core is destroyed in the next step, which ends every
+     *     registration, and an unregistration here would queue revocations no dispatch is left to deliver.
+     */
+    private void unloadEveryLibrary() {
+        LoadedLibrary next;
+        while ((next = nextToUnload()) != null) {
+            next.lifetime().closeToCalls();
+        }
+    }
+
+    private LoadedLibrary nextToUnload() {
+        lock.lock();
+        try {
+            for (LoadedLibrary library : libraries) {
+                if (library.takeForUnloading() != null) {
+                    return library;
+                }
+            }
+            return null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Closes a library's binary once nothing holds it, telling the error sink when the platform refuses, unless the
+     * host is destroyed, after which nothing more is reported.
+     */
+    private void closeBinary(String importName, LibraryBinary binary) {
+        try {
+            pauses.beforeALibraryCloses(importName);
+            binary.close();
+        } catch (RuntimeException refused) {
+            if (!isDestroyFinished()) {
+                report(FailureKind.LIBRARY_UNLOAD, "the C library " + importName + " could not be closed",
+                        Optional.<Throwable>of(refused));
+            }
+        }
+    }
+
+    private boolean isDestroyFinished() {
+        lock.lock();
+        try {
+            return destroyFinished;
         } finally {
             lock.unlock();
         }
@@ -853,12 +1170,21 @@ public final class Host implements AutoCloseable {
 
     private void finishTheDestroy() {
         try {
+            unloadEveryLibrary();
+        } finally {
+            disarmAndDestroyTheCore();
+        }
+    }
+
+    private void disarmAndDestroyTheCore() {
+        try {
             timer.destroy();
         } finally {
             core.destroy();
             List<Long> released;
             lock.lock();
             try {
+                destroyFinished = true;
                 released = new ArrayList<>(releasedByTheDestroy);
             } finally {
                 lock.unlock();

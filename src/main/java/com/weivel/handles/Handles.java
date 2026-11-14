@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
 
 /**
  * The table from the core's handles to the layer's objects: an entry per handle the core answered, kept until what
@@ -177,6 +178,23 @@ public final class Handles {
                     entry.owner() == owner && kinds.contains(entry.kind()));
             ended.forEach(this::freeToken);
             return ended;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Whether the table holds an entry {@code matches} accepts, read by walking every entry, so for a rare question
+     * such as whether a service id is registered at all.
+     *
+     * @param matches what an entry must be; it may not call into the table
+     * @return whether one is held
+     */
+    public boolean holdsAny(Predicate<HandleEntry> matches) {
+        Objects.requireNonNull(matches, "matches");
+        lock.lock();
+        try {
+            return entries.any((handle, unused, entry) -> matches.test(entry));
         } finally {
             lock.unlock();
         }

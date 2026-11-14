@@ -116,6 +116,17 @@ final class PairTable<V> {
         return removed;
     }
 
+    /** Whether {@code matches} accepts any value. */
+    @SuppressWarnings("unchecked")
+    boolean any(Match<V> matches) {
+        for (int slot = 0; slot < values.length; slot++) {
+            if (values[slot] != null && matches.matches(firsts[slot], seconds[slot], (V) values[slot])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Which entries {@link #removeAll} removes. */
     @FunctionalInterface
     interface Match<V> {

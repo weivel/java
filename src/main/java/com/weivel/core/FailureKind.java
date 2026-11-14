@@ -25,5 +25,7 @@ public enum FailureKind {
     /** A capacity question was left unanswered: the core did not take its answer, or no clock could time it. */
     CAPACITY_UNANSWERED,
     /** A plugin's deactivate threw, answered no stage, or its stage completed exceptionally; the release went on. */
-    PLUGIN_DEACTIVATE
+    PLUGIN_DEACTIVATE,
+    /** A C library the host loaded as host services could not be closed; the host went on. */
+    LIBRARY_UNLOAD
 }
