@@ -23,5 +23,7 @@ public enum FailureKind {
     /** The core answered a handle the layer holds no object for, so it was left out. */
     OBJECT_UNKNOWN,
     /** A capacity question was left unanswered: the core did not take its answer, or no clock could time it. */
-    CAPACITY_UNANSWERED
+    CAPACITY_UNANSWERED,
+    /** A plugin's deactivate threw, answered no stage, or its stage completed exceptionally; the release went on. */
+    PLUGIN_DEACTIVATE
 }

@@ -24,6 +24,20 @@ sourceSets {
         java.srcDir 'src/main/java22'
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
     }
+    plugins {
+        java.srcDir 'src/plugins/java'
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+    }
+}
+
+def pluginsJarFile = layout.buildDirectory.file('test-plugins/test-plugins.jar').get().asFile
+
+def pluginsJar = tasks.register('pluginsJar', Jar) {
+    group = 'build'
+    description = 'Packs the plugins the host tests load from a JAR, which stay off the test class path.'
+    from sourceSets.plugins.output
+    destinationDirectory = pluginsJarFile.parentFile
+    archiveFileName = pluginsJarFile.name
 }
 
 dependencies {
@@ -216,6 +230,8 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
             'weivel.test.standardLayouts': standardLayouts,
             'weivel.test.coreHeader'     : new File(siblingsDirectory, 'core/include/weivel/core.h'),
     ]
+    task.dependsOn pluginsJar
+    testFiles['weivel.test.pluginsJar'] = pluginsJarFile
     testFiles.each { String property, File location ->
         task.inputs.file(location).withPropertyName(property)
         task.systemProperty property, location.absolutePath

@@ -146,6 +146,73 @@ final class CoreLayouts {
             ADDRESS.withName("detail"),
             ADDRESS.withName("fix")).withName("weivel_refusal");
 
+    static final Layout EDGE = Layout.struct(
+            LONG.withName("provider"),
+            LONG.withName("consumer")).withName("weivel_edge");
+
+    static final Layout CYCLE = Layout.struct(
+            ADDRESS.withName("members"),
+            INT.withName("count"),
+            Layout.padding(4)).withName("weivel_cycle");
+
+    static final Layout PLUGIN_REFUSAL = Layout.struct(
+            LONG.withName("plugin"),
+            REFUSAL.withName("refusal")).withName("weivel_plugin_refusal");
+
+    static final Layout REFUSAL_SUBJECT = Layout.struct(
+            ADDRESS.withName("subject"),
+            INT.withName("has_fix"),
+            Layout.padding(4)).withName("weivel_refusal_subject");
+
+    static final Layout ACTIVATION_PLAN = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("order"),
+            INT.withName("order_count"),
+            Layout.padding(4),
+            ADDRESS.withName("edges"),
+            INT.withName("edge_count"),
+            Layout.padding(4),
+            ADDRESS.withName("cycles"),
+            INT.withName("cycle_count"),
+            Layout.padding(4),
+            ADDRESS.withName("refusals"),
+            INT.withName("refusal_count"),
+            Layout.padding(4),
+            ADDRESS.withName("storage"),
+            ADDRESS.withName("refusal_subjects")).withName("weivel_activation_plan");
+
+    static final Layout LEDGER_ROW = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            LONG.withName("plugin"),
+            ADDRESS.withName("import_name"),
+            ADDRESS.withName("identity"),
+            INT.withName("status"),
+            INT.withName("verified"),
+            REFUSAL.withName("refusal"),
+            STRINGS.withName("capabilities_declared"),
+            STRINGS.withName("permissions"),
+            STRINGS.withName("services_provided"),
+            STRINGS.withName("capabilities_provided"),
+            STRINGS.withName("services_consumed"),
+            ADDRESS.withName("storage"),
+            STRINGS.withName("capabilities_consumed"),
+            ADDRESS.withName("subject"),
+            INT.withName("has_fix"),
+            Layout.padding(4)).withName("weivel_ledger_row");
+
+    static final Layout LEDGER_SNAPSHOT = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("rows"),
+            INT.withName("row_count"),
+            Layout.padding(4),
+            ADDRESS.withName("refusals"),
+            INT.withName("refusal_count"),
+            Layout.padding(4),
+            ADDRESS.withName("storage")).withName("weivel_ledger_snapshot");
+
     static final Layout LOG_EVENT = Layout.struct(
             INT.withName("level"),
             Layout.padding(4),

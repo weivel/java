@@ -26,7 +26,7 @@ final class CapabilityCalls {
             return new Answer.Ok<>(provided);
         });
         room.cancel();
-        return answer instanceof Answer.Ok ? new Answer.Ok<>(null) : Answers.retyped(answer);
+        return answer instanceof Answer.Ok ? new Answer.Ok<>(null) : Answer.retyped(answer);
     }
 
     /**
@@ -47,7 +47,7 @@ final class CapabilityCalls {
                     });
             listing.giveBackUnusedRoom();
             if (!(answer instanceof Answer.Ok)) {
-                return Answers.retyped(answer);
+                return Answer.retyped(answer);
             }
             if (listing.shortOf > 0) {
                 roomWanted = listing.shortOf;
@@ -70,7 +70,7 @@ final class CapabilityCalls {
         room.cancel();
         return answer instanceof Answer.Ok
                 ? new Answer.Ok<>(new Watching(state, context, ((Answer.Ok<Long>) answer).value()))
-                : Answers.retyped(answer);
+                : Answer.retyped(answer);
     }
 
     /** One asking of the core for a listing: the room taken for it, and what its answered step found. */

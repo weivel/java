@@ -3,9 +3,11 @@ package com.weivel.context;
 import com.weivel.core.Answer;
 import com.weivel.core.Core;
 import com.weivel.core.CoreCalls;
+import com.weivel.core.CoreConstants;
 import com.weivel.core.CoreInternals;
 import com.weivel.core.Manifest;
 import com.weivel.core.QuarantineReason;
+import com.weivel.core.Verification;
 import com.weivel.handles.HandleEntry;
 import com.weivel.handles.HandleKind;
 import com.weivel.handles.Handles;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The contexts of every plugin of one host, over what they share: the core, the table of its handles, its timer and
@@ -29,6 +32,10 @@ import java.util.Set;
  *   a quarantined plugin opened again included.</li>
  *   <li>Every event is routed to the plugin it concerns through one listener on the core, added once for all the
  *   contexts, by the handle the event names.</li>
+ *   <li>{@link #verify} verifies the plugin's activation and, when the core refuses it, quarantines the plugin in the
+ *   same hold of the layer lock, so no other call and no dispatch comes between them.</li>
+ *   <li>{@link #registerHostService} registers a service of the host's own under {@code WEIVEL_HOST}, whose object a
+ *   consumer resolves as any provider's.</li>
  *   <li>{@link #release} and {@link #quarantine} make that call in the core and, in the same hold of the layer lock,
  *   queue the end of the plugin's watches, listeners, registrations, implementations and answerers in the layer's
  *   tables right behind the call's own events. From then on the plugin hears nothing until it is opened again.</li>
@@ -46,11 +53,13 @@ public final class PluginContexts implements AutoCloseable {
 
     private final ContextState state;
     private final EventRouting routing;
+    private final PluginContext hostContext;
     private volatile boolean closed;
 
     private PluginContexts(ContextState state, EventRouting routing) {
         this.state = state;
         this.routing = routing;
+        this.hostContext = new PluginContext(state, CoreConstants.HOST, Manifest.named("host"), 0);
     }
 
     /**
@@ -104,9 +113,74 @@ public final class PluginContexts implements AutoCloseable {
      * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} once the plugin is forgotten
      */
     public Answer<Void> open(PluginContext context) {
+        return open(context, () -> { });
+    }
+
+    /**
+     * Opens the plugin as {@link #open(PluginContext)} does, and runs {@code opened} once the core has answered the
+     * open OK, under the layer lock and before any event of the open is dispatched.
+     *
+     * @param context the context
+     * @param opened the layer's own record that the core holds the plugin open; it may not call into the core
+     * @return nothing beyond its success, the core's refusal, or {@link Answer.Detached} once the plugin is forgotten
+     */
+    public Answer<Void> open(PluginContext context, Runnable opened) {
         Objects.requireNonNull(context, "context");
-        return state.callThenDefer(context, CoreCalls.openPlugin(context.plugin(), context.token()), Answer.Ok::new,
-                context::unsilence);
+        Objects.requireNonNull(opened, "opened");
+        return state.callThenDefer(context, CoreCalls.openPlugin(context.plugin(), context.token()), nothing -> {
+            opened.run();
+            return new Answer.Ok<>(nothing);
+        }, context::unsilence);
+    }
+
+    /**
+     * Verifies the plugin's activation and, when the core refuses it, quarantines the plugin in the same hold of the
+     * layer lock, with no reason of the layer's, ending its entries once the quarantine's own events are dispatched.
+     *
+     * @param context the context
+     * @return whether it was verified or quarantined, the core's answer when it refused the verification for another
+     *     reason, or {@link Answer.Detached} once the plugin is forgotten
+     */
+    public Answer<Verification> verify(PluginContext context) {
+        Objects.requireNonNull(context, "context");
+        AtomicReference<Verification> answered = new AtomicReference<>();
+        return state.callThenDefer(context, CoreCalls.verifyOrQuarantine(context.plugin()), verification -> {
+            answered.set(verification);
+            return new Answer.Ok<>(verification);
+        }, () -> {
+            if (!answered.get().verified()) {
+                endEntries(context);
+            }
+        });
+    }
+
+    /**
+     * Registers a service the host itself supplies, under {@code WEIVEL_HOST}, whose object is answered to a consumer
+     * as any provider's is. No release or quarantine ends it; only its unregistration or the core's destroy does.
+     *
+     * @param id the service id
+     * @param service the host's own object
+     * @param registered the host's own record of the registration, run under the layer lock once the core has
+     *     answered it OK; it may not call into the core
+     * @return the registration; the core's refusal
+     */
+    public Answer<ServiceRegistration> registerHostService(String id, Object service, Runnable registered) {
+        Objects.requireNonNull(registered, "registered");
+        return ServiceCalls.register(state, hostContext, Objects.requireNonNull(id, "id"),
+                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(), registered);
+    }
+
+    /**
+     * Unregisters a service {@link #registerHostService} registered.
+     *
+     * @param registration the registration
+     * @param unregistered the host's own record of the unregistration, run under the layer lock once the core has
+     *     answered it OK; it may not call into the core
+     * @return nothing beyond its success, or the core's refusal
+     */
+    public Answer<Void> unregisterHostService(ServiceRegistration registration, Runnable unregistered) {
+        return Objects.requireNonNull(registration, "registration")
+                .unregister(Objects.requireNonNull(unregistered, "unregistered"));
     }
 
     /**

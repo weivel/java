@@ -68,7 +68,7 @@ final class CallerTexts {
         return text.flatMap(present -> inText(what, present));
     }
 
-    private static Optional<String> inTexts(String what, List<String> texts) {
+    static Optional<String> inTexts(String what, List<String> texts) {
         return firstOf(texts.stream().map(text -> inText(what, text)));
     }
 

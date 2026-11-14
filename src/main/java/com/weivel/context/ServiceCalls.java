@@ -31,7 +31,7 @@ final class ServiceCalls {
         });
         room.cancel();
         if (!(answer instanceof Answer.Ok)) {
-            return Answers.retyped(answer);
+            return Answer.retyped(answer);
         }
         if (!resolution.found.isPresent()) {
             String detail = "the core answered a get with a registration the layer holds no object for";
@@ -70,7 +70,7 @@ final class ServiceCalls {
         }
         entryRoom.cancel();
         holdingRoom.cancel();
-        state.settleLater(settlement, Answers.retyped(answer));
+        state.settleLater(settlement, Answer.retyped(answer));
         return new PendingWant(state, context, 0, settlement);
     }
 
@@ -83,21 +83,27 @@ final class ServiceCalls {
         room.cancel();
         return answer instanceof Answer.Ok
                 ? new Answer.Ok<>(new Watching(state, context, ((Answer.Ok<Long>) answer).value()))
-                : Answers.retyped(answer);
+                : Answer.retyped(answer);
     }
 
     static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
                                                 Optional<CapacityAnswerer> answerer) {
+        return register(state, context, id, service, answerer, () -> { });
+    }
+
+    static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
+                                                Optional<CapacityAnswerer> answerer, Runnable registered) {
         Handles.Reservation room = state.handles.reserve();
         Records.Service record = new Records.Service(id, service, answerer);
         Answer<Long> answer = state.call(context, CoreCalls.registerService(context.plugin(), id), registration -> {
             room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
+            registered.run();
             return new Answer.Ok<>(registration);
         });
         room.cancel();
         return answer instanceof Answer.Ok
                 ? new Answer.Ok<>(new ServiceRegistration(state, context, ((Answer.Ok<Long>) answer).value()))
-                : Answers.retyped(answer);
+                : Answer.retyped(answer);
     }
 
     /** The want's options, each limit as the plugin gave it; empty when it needs a time no clock can give. */

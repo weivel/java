@@ -86,6 +86,22 @@ once the core is destroyed. One listener on the core routes every event to the p
 names through the table, and the core's own log events to the host's log at their level. A context takes the layer
 lock through the wrapper and the table's lock inside it, never the other way, and has no lock of its own.
 
+`Host` registers plugins written in Java from a manifest value and an `Entry`, the plugin's
+`CompletionStage<?> activate(PluginContext)`, which may also implement `Deactivating`; a throw, a `null` stage or a
+stage completing exceptionally is a failure. `Entries.load` makes an entry by its class name from the caller's class
+loader, and `Host.loadEntry` from a JAR in a class loader of the host's own, whose parent is the loader of `Entry`;
+the host never assumes a name. `activate` asks the core for the plan and starts each plugin of its order in that order
+on the calling thread, never waiting for an activate, and answers the plan at once with each plugin's outcome as a
+stage: active, quarantined, refused, released or failed. A settled activate is verified, and a refused verification
+quarantined in the same hold of the layer lock; a failed one is quarantined with a reason saying so. `release` calls
+the deactivate while the plugin is whole, releases it in the core, and ends its entries and forgets it only once that
+release's events are dispatched, as a step behind them inside a dispatch. `registerHostService` offers a service of
+the host's own under `WEIVEL_HOST`, which an activation plan counts as provided. `destroy` answers one
+`CompletionStage<DestroyResult>`: it releases every plugin opened, the last opened first, waits for the opens and
+settlings under way, then disarms the timer and destroys the core, and every other call answers `Destroyed` from the
+moment it is called. `close` frees what the host holds, the class loaders it opened among them, and is refused until
+the destroy has finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
+
 The other packages hold only their purpose so far.
 
 ## Using it
