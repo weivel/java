@@ -102,6 +102,13 @@ settlings under way, then disarms the timer and destroys the core, and every oth
 moment it is called. `close` frees what the host holds, the class loaders it opened among them, and is refused until
 the destroy has finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
 
+`loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
+path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
+by name as plain Java calls. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
+once into native memory, because lending the heap would hold off garbage collection for the whole C call. The body
+the library answers is copied once into a Java array and released before the call answers. `unloadLibrary`, and the
+destroy, close a library to calls at once and close its binary once no call runs in it.
+
 The other packages hold only their purpose so far.
 
 ## Using it

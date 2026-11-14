@@ -17,6 +17,8 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.ref.Reference;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -144,6 +146,24 @@ final class FfmAccess implements NativeAccess {
     @Override
     public String readText(long address) {
         return EVERYTHING.getString(address, StandardCharsets.UTF_8);
+    }
+
+    @Override
+    public long addressOf(ByteBuffer direct) {
+        if (!direct.isDirect()) {
+            throw new IllegalArgumentException("a heap buffer has no native address");
+        }
+        return MemorySegment.ofBuffer(direct).address();
+    }
+
+    @Override
+    public void writeBytes(long address, long offset, byte[] bytes, int from, int length) {
+        MemorySegment.copy(bytes, from, EVERYTHING, JAVA_BYTE, address + offset, length);
+    }
+
+    @Override
+    public void keepReachable(Object object) {
+        Reference.reachabilityFence(object);
     }
 
     private static MethodHandle standardFunction(String symbol, FunctionDescriptor descriptor) {

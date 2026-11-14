@@ -1,6 +1,7 @@
 package com.weivel.context;
 
 import com.weivel.core.Answer;
+import com.weivel.core.CallSteps;
 import com.weivel.core.Core;
 import com.weivel.core.CoreCalls;
 import com.weivel.core.CoreConstants;
@@ -165,9 +166,41 @@ public final class PluginContexts implements AutoCloseable {
      * @return the registration; the core's refusal
      */
     public Answer<ServiceRegistration> registerHostService(String id, Object service, Runnable registered) {
+        return registerHostService(id, service, () -> Optional.<Answer<Long>>empty(), registered);
+    }
+
+    /**
+     * Registers a service of the host's own under {@code WEIVEL_HOST} as {@link #registerHostService(String, Object,
+     * Runnable)} does, once {@code guard} has let it through in the same hold of the layer lock as the record.
+     *
+     * @param id the service id
+     * @param service the host's own object
+     * @param guard the host's own check, run under the layer lock before the core is called: an answer it gives is
+     *     the registration's answer, the core not called; it may not call into the core
+     * @param registered the host's own record of the registration, as above
+     * @return the registration; the core's refusal; what the guard answered
+     */
+    public Answer<ServiceRegistration> registerHostService(String id, Object service, CallSteps.CallGuard<Long> guard,
+                                                           Runnable registered) {
+        Objects.requireNonNull(guard, "guard");
         Objects.requireNonNull(registered, "registered");
         return ServiceCalls.register(state, hostContext, Objects.requireNonNull(id, "id"),
-                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(), registered);
+                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(), guard, registered);
+    }
+
+    /**
+     * Whether any registration of {@code id} the layer recorded still stands: a plugin's or one under
+     * {@code WEIVEL_HOST}. It is read from the layer's own table, never by asking the core, so asking it makes the
+     * host hold nothing it would later hear revoked.
+     *
+     * @param id the service id
+     * @return whether one stands
+     */
+    public boolean holdsARegistrationOf(String id) {
+        Objects.requireNonNull(id, "id");
+        return state.handles.holdsAny(entry -> entry.kind() == HandleKind.SERVICE_REGISTRATION
+                && entry.object() instanceof Records.Service
+                && id.equals(((Records.Service) entry.object()).id()));
     }
 
     /**

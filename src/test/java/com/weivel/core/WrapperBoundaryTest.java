@@ -35,11 +35,12 @@ class WrapperBoundaryTest {
             "CoreBinary.java", "Wrapper.java", "CoreCalls.java", "CoreCall.java");
     private static final Set<String> SEAM_SOURCES = setOf("NativeAccess.java", "NativeBackends.java",
             "OpenLibrary.java", "NativeFunction.java", "NativeSignature.java", "NativeType.java", "NativeArena.java",
-            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java");
+            "NativeRegion.java", "JnaAccess.java", "FfmAccess.java", "LibraryBinary.java", "LibraryFunction.java");
     private static final Set<String> FORBIDDEN = setOf("CoreFunction", "CoreFunctions", "MethodHandle",
             "MethodHandles", "invoke", "invokeExact", "invokeWithArguments", "downcallHandle", "functions", "crossing",
             "cross", "NativeAccess", "NativeBackends", "OpenLibrary", "NativeFunction", "NativeSignature", "NativeType",
-            "JnaAccess", "FfmAccess");
+            "JnaAccess", "FfmAccess", "addressOf", "keepReachable",
+            "LibraryBinary", "LibraryFunction");
     private static final Pattern COMMENTS_AND_LITERALS = Pattern.compile(
             "/\\*.*?\\*/|//[^\\n]*|\"\"\"(?s:.*?)\"\"\"|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'",
             Pattern.DOTALL);

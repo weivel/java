@@ -25,6 +25,15 @@ public final class CoreProbes {
     }
 
     /**
+     * The core's echo test library, built beside it.
+     *
+     * @return its path
+     */
+    public static java.nio.file.Path echoBinary() {
+        return NativeFiles.echoBinary();
+    }
+
+    /**
      * A real core with a first listener and a sink.
      *
      * @param listener the first listener

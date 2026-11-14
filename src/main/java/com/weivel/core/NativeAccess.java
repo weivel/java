@@ -1,5 +1,6 @@
 package com.weivel.core;
 
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 
 /**
@@ -49,9 +50,25 @@ interface NativeAccess {
 
     void writeBytes(long address, long offset, byte[] bytes);
 
+    /** Writes {@code length} bytes of {@code bytes} from {@code from} at {@code address} plus {@code offset}. */
+    void writeBytes(long address, long offset, byte[] bytes, int from, int length);
+
     /** Sets {@code length} bytes from {@code address} plus {@code offset} to zero. */
     void clear(long address, long offset, long length);
 
     /** Reads the UTF-8 text starting at {@code address}, up to its terminating zero byte. */
     String readText(long address);
+
+    /**
+     * The address of the byte at a direct buffer's position.
+     *
+     * @throws IllegalArgumentException for a buffer that is not direct
+     */
+    long addressOf(ByteBuffer direct);
+
+    /**
+     * Keeps {@code object} reachable up to this call, so memory it owns, as a direct buffer owns its native memory,
+     * is not freed by its cleaner while native code still reads it through a raw address.
+     */
+    void keepReachable(Object object);
 }

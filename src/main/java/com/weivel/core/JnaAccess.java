@@ -4,6 +4,7 @@ import com.sun.jna.Function;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ final class JnaAccess implements NativeAccess {
     private static final String DISTINCT_LOAD_OPTION = "weivel.distinct-load";
 
     private final AtomicLong loads = new AtomicLong();
+    private volatile Object reachable;
 
     private JnaAccess() {
     }
@@ -116,6 +118,29 @@ final class JnaAccess implements NativeAccess {
     @Override
     public String readText(long address) {
         return new Pointer(address).getString(0, StandardCharsets.UTF_8.name());
+    }
+
+    @Override
+    public long addressOf(ByteBuffer direct) {
+        if (!direct.isDirect()) {
+            throw new IllegalArgumentException("a heap buffer has no native address");
+        }
+        return Pointer.nativeValue(Native.getDirectBufferPointer(direct)) + direct.position();
+    }
+
+    @Override
+    public void writeBytes(long address, long offset, byte[] bytes, int from, int length) {
+        new Pointer(address).write(offset, bytes, from, length);
+    }
+
+    /**
+     * @implNote Java 8 has no {@code Reference.reachabilityFence}, so the object is written to a volatile field,
+     * which no compiler may drop or move before the native call, and the field is cleared again.
+     */
+    @Override
+    public void keepReachable(Object object) {
+        reachable = object;
+        reachable = null;
     }
 
     /**
