@@ -107,7 +107,7 @@ class HostRacesTest {
         CompletionStage<DestroyResult> destroyed = fixture.host.destroy();
         int logged = fixture.logs.size();
 
-        Answer<ActivationState> verified = fixture.host.verify(plugin);
+        Answer<Outcome> verified = fixture.host.verify(plugin);
 
         assertInstanceOf(Answer.Destroyed.class, verified);
         assertEquals(logged, fixture.logs.size());
@@ -129,7 +129,7 @@ class HostRacesTest {
         })) {
             long plugin = fixture.register(named("released"), fixture.entry("released"));
             fixture.activate(plugin);
-            AtomicReference<Answer<ActivationState>> verified = new AtomicReference<>();
+            AtomicReference<Answer<Outcome>> verified = new AtomicReference<>();
             Thread verifier = new Thread(() -> verified.set(fixture.host.verify(plugin)));
             verifier.start();
             verifying.awaitReached();
