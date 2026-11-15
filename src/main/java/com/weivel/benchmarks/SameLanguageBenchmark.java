@@ -50,7 +50,7 @@ public final class SameLanguageBenchmark {
         return whileResolved(binary, resolution -> measure(resolution, sampling));
     }
 
-    private static SameLanguageMeasurement measure(Resolution resolution, Sampling sampling) {
+    static SameLanguageMeasurement measure(Resolution resolution, Sampling sampling) {
         if (!resolution.isTheProvidersObject()) {
             throw new IllegalStateException("the consumer was not answered the provider's own object");
         }
