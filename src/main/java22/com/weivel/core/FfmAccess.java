@@ -36,11 +36,9 @@ final class FfmAccess implements NativeAccess {
     private static final Linker LINKER = Linker.nativeLinker();
     private static final MemorySegment EVERYTHING = MemorySegment.NULL.reinterpret(Long.MAX_VALUE);
     private static final MemoryLayout SIZE_T = LINKER.canonicalLayouts().get("size_t");
-    private static final MethodHandle CALLOC = standardFunction("calloc", FunctionDescriptor.of(ADDRESS, SIZE_T,
+    private static final MethodHandle CALLOC = standardFunction("calloc", FunctionDescriptor.of(JAVA_LONG, SIZE_T,
             SIZE_T));
-    private static final MethodHandle FREE = standardFunction("free", FunctionDescriptor.ofVoid(ADDRESS));
-    private static final MethodHandle SEGMENT_AT = segmentAtHandle();
-    private static final MethodHandle ADDRESS_OF = addressOfHandle();
+    private static final MethodHandle FREE = standardFunction("free", FunctionDescriptor.ofVoid(JAVA_LONG));
     private static final int MOST_PARAMETERS = 7;
 
     private FfmAccess() {
@@ -75,22 +73,22 @@ final class FfmAccess implements NativeAccess {
 
     @Override
     public long allocate(long size) {
-        MemorySegment allocated;
+        long allocated;
         try {
-            allocated = (MemorySegment) CALLOC.invokeExact(1L, Math.max(1, size));
+            allocated = (long) CALLOC.invokeExact(1L, Math.max(1, size));
         } catch (Throwable thrown) {
             throw rethrown(thrown);
         }
-        if (allocated.address() == 0) {
+        if (allocated == 0) {
             throw new OutOfMemoryError("no native memory for " + size + " bytes");
         }
-        return allocated.address();
+        return allocated;
     }
 
     @Override
     public void free(long address) {
         try {
-            FREE.invokeExact(MemorySegment.ofAddress(address));
+            FREE.invokeExact(address);
         } catch (Throwable thrown) {
             throw rethrown(thrown);
         }
@@ -170,24 +168,6 @@ final class FfmAccess implements NativeAccess {
         return LINKER.downcallHandle(LINKER.defaultLookup().find(symbol).get(), descriptor);
     }
 
-    private static MethodHandle segmentAtHandle() {
-        try {
-            return MethodHandles.lookup().findStatic(MemorySegment.class, "ofAddress",
-                    MethodType.methodType(MemorySegment.class, long.class));
-        } catch (ReflectiveOperationException unreachable) {
-            throw new AssertionError(unreachable);
-        }
-    }
-
-    private static MethodHandle addressOfHandle() {
-        try {
-            return MethodHandles.lookup().findVirtual(MemorySegment.class, "address",
-                    MethodType.methodType(long.class));
-        } catch (ReflectiveOperationException unreachable) {
-            throw new AssertionError(unreachable);
-        }
-    }
-
     private static RuntimeException rethrown(Throwable thrown) {
         if (thrown instanceof RuntimeException runtime) {
             return runtime;
@@ -242,20 +222,12 @@ final class FfmAccess implements NativeAccess {
         }
 
         /**
-         * Adapts a downcall handle to take every argument as a {@code long} and answer a {@code long}: a pointer made
-         * from its address, an {@code int} narrowed, an {@code int} answer widened, a {@code void} answered 0.
+         * Adapts a downcall handle to take every argument as a {@code long} and answer a {@code long}: an {@code int}
+         * narrowed, an {@code int} answer widened, a {@code void} answered 0.
          */
         private static MethodHandle adapted(MethodHandle downcall, NativeSignature signature) {
             MethodHandle adapted = downcall;
             List<NativeType> parameters = signature.parameters();
-            for (int index = 0; index < parameters.size(); index++) {
-                if (parameters.get(index) == NativeType.ADDRESS) {
-                    adapted = MethodHandles.filterArguments(adapted, index, SEGMENT_AT);
-                }
-            }
-            if (signature.returned() == NativeType.ADDRESS) {
-                adapted = MethodHandles.filterReturnValue(adapted, ADDRESS_OF);
-            }
             Class<?>[] longs = new Class<?>[parameters.size()];
             Arrays.fill(longs, long.class);
             return MethodHandles.explicitCastArguments(adapted, MethodType.methodType(long.class, longs));
@@ -269,11 +241,19 @@ final class FfmAccess implements NativeAccess {
                     : FunctionDescriptor.of(layoutOf(signature.returned()), parameters);
         }
 
+        /**
+         * The layout a type crosses as.
+         *
+         * @implNote A pointer crosses as its 64-bit address, which every 64-bit C calling convention the layer runs on
+         *     passes and answers as it does a pointer. Crossing it as a {@code MemorySegment} made one segment a
+         *     call, gone only where the JIT inlined the whole call: on macOS runners it was not, and each pointer
+         *     argument cost an allocation.
+         */
         private static MemoryLayout layoutOf(NativeType type) {
             return switch (type) {
                 case INT -> JAVA_INT;
                 case LONG -> JAVA_LONG;
-                case ADDRESS -> ADDRESS;
+                case ADDRESS -> JAVA_LONG;
                 case VOID -> throw new IllegalArgumentException("void is no parameter");
             };
         }
