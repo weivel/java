@@ -120,6 +120,27 @@ public final class CoreProbes {
         return TestCores.ok(answer);
     }
 
+    /**
+     * Asks the core for its next deadline.
+     *
+     * @param core the core
+     * @return the deadline; {@link Answer.Absent} when none is set
+     */
+    public static Answer<Long> nextDeadline(Core core) {
+        return core.call(CoreCalls.nextDeadline());
+    }
+
+    /**
+     * Asks the core for the payload a plugin was last opened with.
+     *
+     * @param core the core
+     * @param plugin the plugin
+     * @return the payload
+     */
+    public static Answer<Long> pluginPayload(Core core, long plugin) {
+        return core.call(CoreCalls.pluginPayload(plugin));
+    }
+
     /** Every crossing a counted core made, by symbol, and every time it handed {@code weivel_advance}. */
     public static final class Crossings {
         private final List<WantOptions> wantOptions = Collections.synchronizedList(new ArrayList<>());

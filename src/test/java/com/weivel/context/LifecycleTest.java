@@ -112,12 +112,12 @@ class LifecycleTest {
             value(provider.watch(GREETER, ServicesTest.recording(new ArrayList<>())));
             ok(fixture.core.call(CoreCalls.releasePlugin(fixture.plugin(provider))));
             long before = fixture.crossings.total();
-            int entriesBefore = fixture.handles.entryCount();
+            int entriesBefore = com.weivel.handles.HandlesProbes.entryCount(fixture.handles);
 
             fixture.contexts.endEntries(provider);
 
             assertEquals(before, fixture.crossings.total());
-            assertEquals(entriesBefore - 2, fixture.handles.entryCount());
+            assertEquals(entriesBefore - 2, com.weivel.handles.HandlesProbes.entryCount(fixture.handles));
         }
     }
 
@@ -260,6 +260,29 @@ class LifecycleTest {
 
             fixture.open(consumer);
             consumer.get("undeclared-once-open");
+
+            assertEquals(1, heard.size());
+            assertEquals("undeclared-once-open",
+                    assertInstanceOf(PluginEvent.ReachRefused.class, heard.get(0)).id());
+        }
+    }
+
+    @Test
+    void aQuarantinedPluginOpenedAgainInsideADispatchHearsWhatItsCallsQueueRightAfterTheOpen() {
+        try (ContextFixture fixture = new ContextFixture()) {
+            PluginContext consumer = fixture.opened(consuming("consumer", GREETER));
+            fixture.quarantine(consumer);
+            List<PluginEvent> heard = new ArrayList<>();
+            consumer.listen(heard::add);
+            AtomicBoolean first = new AtomicBoolean(true);
+            fixture.core.addListener(event -> {
+                if (first.getAndSet(false)) {
+                    fixture.open(consumer);
+                    consumer.get("undeclared-once-open");
+                }
+            });
+
+            fixture.core.call(CoreCalls.unregister(424242L));
 
             assertEquals(1, heard.size());
             assertEquals("undeclared-once-open",

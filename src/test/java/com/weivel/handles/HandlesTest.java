@@ -349,7 +349,7 @@ class HandlesTest {
         assertNotEquals(0, token);
 
         ok(core.call(CoreCalls.openPlugin(plugin, token)));
-        long payload = ok(core.call(CoreCalls.pluginPayload(plugin)));
+        long payload = ok(CoreProbes.pluginPayload(core, plugin));
 
         assertEquals(token, payload);
         assertSame(record, handles.findByToken(payload).object());

@@ -317,7 +317,7 @@ public final class Host implements AutoCloseable {
      *     function, a function of a kind other than {@link LibraryDeclaration#BYTES}, an id or a function name listed
      *     twice, an id a registration under this host holds already (a plugin's, another live library's or the
      *     host's own), a path that names no library, or a library lacking a declared symbol; the core's refusal of a
-     *     registration; {@link Answer.Destroyed} once the destroy has been called
+     *     registration; {@link Answer.Destroyed} once the destroy has been called, before any mistake is judged
      * @implNote An id is found registered already from the layer's own records, never by asking the core. One a
      *     plugin registers on another thread while the load runs can still be replaced by the library's registration,
      *     since the core lets {@code WEIVEL_HOST} replace one; closing that needs a register-if-absent call for the
@@ -326,12 +326,12 @@ public final class Host implements AutoCloseable {
     public Answer<LoadedLibrary> loadLibrary(Path path, LibraryDeclaration declaration) {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(declaration, "declaration");
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
+        }
         Optional<String> mistake = LibraryChecks.mistakeIn(declaration);
         if (mistake.isPresent()) {
             return new Answer.Mistake<>(mistake.get());
-        }
-        if (isDestroyCalled()) {
-            return new Answer.Destroyed<>();
         }
         Optional<String> registered = registeredAlready(declaration);
         if (registered.isPresent()) {
@@ -479,18 +479,19 @@ public final class Host implements AutoCloseable {
      *
      * @param library a library this host loaded
      * @return true; false, doing nothing, for a library unloaded already; {@link Answer.Mistake} for another host's;
-     *     {@link Answer.Destroyed} once the destroy has been called, since the destroy unloads every library itself
+     *     {@link Answer.Destroyed} once the destroy has been called, since the destroy unloads every library itself,
+     *     before a library of another host's is judged
      */
     public Answer<Boolean> unloadLibrary(LoadedLibrary library) {
         Objects.requireNonNull(library, "library");
-        if (library.host() != this) {
-            return new Answer.Mistake<>("the library was loaded by another host");
-        }
         List<HostService> taken;
         lock.lock();
         try {
             if (destroyCalled) {
                 return new Answer.Destroyed<>();
+            }
+            if (library.host() != this) {
+                return new Answer.Mistake<>("the library was loaded by another host");
             }
             taken = library.takeForUnloading();
         } finally {
@@ -615,11 +616,15 @@ public final class Host implements AutoCloseable {
      *
      * @param jar the JAR's path
      * @param className the entry's binary class name
-     * @return the entry; {@link Answer.Mistake} as {@link Entries#load} answers it
+     * @return the entry; {@link Answer.Mistake} as {@link Entries#load} answers it, or for a path that is no URL;
+     *     {@link Answer.Destroyed} once the destroy has been called, before any mistake is judged
      */
     public Answer<Entry> loadEntry(Path jar, String className) {
         Objects.requireNonNull(jar, "jar");
         Objects.requireNonNull(className, "className");
+        if (isDestroyCalled()) {
+            return new Answer.Destroyed<>();
+        }
         URL location;
         try {
             location = jar.toUri().toURL();

@@ -24,6 +24,7 @@ public final class BareServiceGet implements AutoCloseable {
     private final long id;
     private final long implementation;
     private final long pending;
+    private boolean closed;
 
     BareServiceGet(Wrapper wrapper, ForeignFunction getService, ForeignMemory memory, long core, long plugin,
                    String id) {
@@ -41,10 +42,13 @@ public final class BareServiceGet implements AutoCloseable {
      * Makes the call.
      *
      * @return the implementation handle the core answered
-     * @throws IllegalStateException once the core is destroyed, or when it answers anything but OK or leaves an
-     *     event waiting
+     * @throws IllegalStateException once this is closed or the core is destroyed, or when it answers anything but OK
+     *     or leaves an event waiting
      */
     public long call() {
+        if (closed) {
+            throw new IllegalStateException("the bare call is closed, so its arguments are freed");
+        }
         if (wrapper.isDestroyed()) {
             throw new IllegalStateException("the core is destroyed, so the bare call reaches it no more");
         }
@@ -60,6 +64,7 @@ public final class BareServiceGet implements AutoCloseable {
     /** Frees the arguments laid out for the call. */
     @Override
     public void close() {
+        closed = true;
         memory.close();
     }
 }

@@ -43,6 +43,11 @@ throws goes to the error sink, never to a caller, and a sink that throws goes to
 `VirtualMachineError` is rethrown instead, once the dispatcher is free again, and the events and steps still queued
 behind it are delivered by the next call that dispatches.
 
+`CoreInternals`, `ForeignLibrary`, `ForeignMemory` and `BareServiceGet` are public only so the layer's own packages
+can reach them, since Java offers no narrower scope without a module descriptor; they are unsafe for a caller, who can
+run code under the layer lock through `CoreInternals`, call into native code past the wrapper through
+`BareServiceGet`, and read or write any native address through `ForeignMemory`.
+
 The wrapper also holds what the `timer`, `context` and `host` packages build on, reached through `CoreInternals`:
 a call with a guard and a step run under the lock, a call whose deferred step joins the queue right behind its own
 events in the same hold, a deferred step on the dispatch queue, how many events have been drained, and the deadline
@@ -65,8 +70,8 @@ in steps on a scheduler that cannot wait as long, and gives the wrapper the cloc
 One timer follows one core: a second started while one follows is the caller's mistake, and a timer's destroy takes
 off its own hooks and nothing else.
 `Schedulers.system()` makes a scheduler of its own on one daemon thread reading `System.nanoTime()`, owned and closed
-by whoever made it, its thread running the listeners of the core it fires for; a scheduler that can wait no time is
-refused. `Scheduler.none()` arms nothing and reads no clock.
+by whoever made it, its thread running the listeners of the core it fires for. `CoreTimer.start` refuses a scheduler
+that can wait no time. `Scheduler.none()` arms nothing and reads no clock.
 
 `PluginContext` is what a plugin sees of the core, and the only way it reaches any of it: it gets, wants, watches, lists
 and registers services, provides, lists and watches capabilities, listens to what the core reports about it (a
@@ -112,8 +117,11 @@ finished. A host given no scheduler makes one with `Schedulers.system()` and clo
 path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
 by name as plain Java calls. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
 once into native memory, because lending the heap would hold off garbage collection for the whole C call. The copy and
-the cells the answer comes back in share one block, and each library keeps one such block spare for whichever call
-takes it first, so a call that finds it free allocates nothing and one that finds it taken allocates its own. The body
+the cells the answer comes back in share one block, and each library keeps one such block of 256 bytes spare for
+whichever call takes it first. A call allocates no native memory when it finds the spare free and needs no more than
+it: the 16 bytes of answer cells, plus the copy of a heap input, so a `byte[]` or heap buffer of up to 240 bytes, or
+any direct buffer. A larger heap input, or a call that finds the spare taken, allocates a block of its own and frees
+it. The body
 the library answers is copied once into a Java array and released before the call answers. `unloadLibrary`, and the
 destroy, close a library to calls at once and close its binary once no call runs in it.
 
@@ -145,7 +153,7 @@ get answers the provider's own object, and the timing beside it, three paths run
 judged only against the platform's noise. `control-call` is `weivel_get_service` through the wrapper, with the core's
 timer armed as a host arms it, over the same function of the core's table on the same core, plugin and id called bare
 through `CoreInternals.bareServiceGet`, the one route past the wrapper, which reaches that function alone and is
-refused once the core is destroyed.
+refused once it is closed or the core is destroyed.
 `library-call` is the echo library's `echo_echo` through the host's `LibraryService` with a `byte[]`, over the same
 function called bare with the same bytes copied in and its answer copied out and released as the host does. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,

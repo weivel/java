@@ -38,4 +38,21 @@ class BareServiceGetTest {
                     world.consumerPlugin(), CoreWorld.ARITHMETIC));
         }
     }
+
+    @Test
+    void isRefusedOnceClosedWhileTheCoreStillRuns() {
+        try (CoreBinary binary = assertInstanceOf(CoreLoad.Loaded.class,
+                CoreBinary.load(Paths.get(System.getProperty("weivel.test.coreBinary")))).binary();
+             CoreWorld world = CoreWorld.open(binary)) {
+            world.provide(Long::sum);
+            BareServiceGet bare = CoreWorld.ok(CoreInternals.bareServiceGet(world.core(), world.consumerPlugin(),
+                    CoreWorld.ARITHMETIC), "the bare call's preparation");
+            bare.call();
+
+            bare.close();
+
+            IllegalStateException refused = assertThrows(IllegalStateException.class, bare::call);
+            assertTrue(refused.getMessage().contains("closed"), refused.getMessage());
+        }
+    }
 }

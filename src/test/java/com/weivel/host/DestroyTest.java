@@ -17,6 +17,9 @@ import com.weivel.core.Answer;
 import com.weivel.core.CoreConstants;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.Refusal;
+import java.lang.reflect.Proxy;
+import java.net.URI;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
@@ -177,6 +180,59 @@ class DestroyTest {
         assertTrue(fixture.failures.isEmpty());
         done(destroyed);
         host.close();
+    }
+
+    @Test
+    void everyCallMadeWhileTheDestroyIsStillPendingIsAnsweredDestroyedBeforeAnyMistakeIsJudged() throws Exception {
+        HostFixture fixture = new HostFixture();
+        HostFixture elsewhere = new HostFixture();
+        Host host = fixture.host;
+        LoadedLibrary othersLibrary = value(elsewhere.host.loadLibrary(LibrariesTest.echoBinary(),
+                LibrariesTest.declaring("elsewhere")));
+        LoadedLibrary library = value(host.loadLibrary(LibrariesTest.echoBinary(), LibrariesTest.declaring("echo")));
+        TestEntry slow = fixture.entry("slow");
+        CompletableFuture<Void> deactivated = new CompletableFuture<>();
+        slow.onDeactivate = () -> deactivated;
+        long plugin = fixture.register(named("slow"), slow);
+        fixture.activate(plugin);
+
+        CompletionStage<DestroyResult> destroyed = host.destroy();
+        int logged = fixture.logs.size();
+
+        assertFalse(destroyed.toCompletableFuture().isDone(), "the destroy waits for the deactivate");
+        assertSame(destroyed, host.destroy());
+        assertInstanceOf(Answer.Destroyed.class, host.register(named("late"), fixture.entry("late")));
+        assertInstanceOf(Answer.Destroyed.class, host.ledger());
+        assertInstanceOf(Answer.Destroyed.class, host.registerHostService("late", new Object()));
+        assertInstanceOf(Answer.Destroyed.class, host.loadLibrary(LibrariesTest.echoBinary(),
+                LibrariesTest.declaring("late")));
+        assertInstanceOf(Answer.Destroyed.class, host.loadLibrary(LibrariesTest.echoBinary(),
+                LibrariesTest.declaring("twice", "twice")));
+        assertInstanceOf(Answer.Destroyed.class, host.unloadLibrary(library));
+        assertInstanceOf(Answer.Destroyed.class, host.unloadLibrary(othersLibrary));
+        assertInstanceOf(Answer.Destroyed.class, host.loadEntry(Paths.get("absent.jar"), "absent.Entry"));
+        assertInstanceOf(Answer.Destroyed.class, host.loadEntry(pathOfNoUrl(), "absent.Entry"));
+        assertInstanceOf(Answer.Destroyed.class, host.activate(Collections.singletonList(plugin),
+                EdgeSource.SERVICES));
+        assertInstanceOf(Answer.Destroyed.class, host.verify(plugin));
+        assertInstanceOf(Answer.Destroyed.class, done(host.release(plugin)));
+        assertEquals(logged, fixture.logs.size());
+        assertTrue(fixture.failures.isEmpty());
+        deactivated.complete(null);
+        assertEquals(Collections.singletonList(plugin), done(destroyed).released());
+        host.close();
+        elsewhere.close();
+    }
+
+    /** A path whose URI names a scheme no URL handler knows, so it is no URL. */
+    private static Path pathOfNoUrl() {
+        return (Path) Proxy.newProxyInstance(Path.class.getClassLoader(), new Class<?>[] {Path.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("toUri")) {
+                        return URI.create("nowhere:plugin.jar");
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     @Test
