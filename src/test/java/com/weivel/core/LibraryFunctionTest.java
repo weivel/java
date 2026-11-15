@@ -44,6 +44,21 @@ class LibraryFunctionTest {
     }
 
     @Test
+    void aDirectBufferLentFromAPositionHandsTheLibraryExactlyTheBytesFromThere() {
+        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
+            ByteBuffer input = ByteBuffer.allocateDirect(16);
+            input.put(bytes("skipped-"));
+            input.put(bytes("lent"));
+            input.flip();
+            input.position(8);
+
+            byte[] echoed = ok(echo.function("echo_echo", new RecordedCopies())).call(input).body();
+
+            assertArrayEquals(bytes("lent"), echoed);
+        }
+    }
+
+    @Test
     void aBodyWhoseCopyFailsIsStillReleasedExactlyOnce() {
         RecordedCopies copies = new RecordedCopies();
         try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
