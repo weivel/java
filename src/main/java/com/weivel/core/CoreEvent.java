@@ -1061,4 +1061,96 @@ public interface CoreEvent {
                     + "]";
         }
     }
+
+    /**
+     * Nothing holds a registration made awaiting releases any more ({@code WEIVEL_EVENT_HOLDINGS_RELEASED}).
+     */
+    final class HoldingsReleasedEvent implements CoreEvent {
+        private final long sequence;
+        private final boolean incomplete;
+        private final long owner;
+        private final long registration;
+
+        /**
+         * Makes the value.
+         *
+         * @param sequence the drain sequence number
+         * @param incomplete always false, since the event carries no text
+         * @param owner the registration's owner, {@code WEIVEL_HOST} or a plugin possibly forgotten since
+         * @param registration the registration, already stale as a handle to call with
+         */
+        public HoldingsReleasedEvent(long sequence, boolean incomplete, long owner, long registration) {
+            this.sequence = sequence;
+            this.incomplete = incomplete;
+            this.owner = owner;
+            this.registration = registration;
+        }
+
+        /**
+         * Answers {@code sequence}.
+         *
+         * @return the drain sequence number
+         */
+        public long sequence() {
+            return sequence;
+        }
+
+        /**
+         * Answers {@code incomplete}.
+         *
+         * @return always false, since the event carries no text
+         */
+        public boolean incomplete() {
+            return incomplete;
+        }
+
+        /**
+         * Answers {@code owner}.
+         *
+         * @return the registration's owner, {@code WEIVEL_HOST} or a plugin possibly forgotten since
+         */
+        public long owner() {
+            return owner;
+        }
+
+        /**
+         * Answers {@code registration}.
+         *
+         * @return the registration, already stale as a handle to call with
+         */
+        public long registration() {
+            return registration;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof HoldingsReleasedEvent)) {
+                return false;
+            }
+            HoldingsReleasedEvent that = (HoldingsReleasedEvent) other;
+            return sequence == that.sequence
+                    && incomplete == that.incomplete
+                    && owner == that.owner
+                    && registration == that.registration;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 0;
+            hash = 31 * hash + Long.hashCode(sequence);
+            hash = 31 * hash + Boolean.hashCode(incomplete);
+            hash = 31 * hash + Long.hashCode(owner);
+            hash = 31 * hash + Long.hashCode(registration);
+            return hash;
+        }
+
+        @Override
+        public String toString() {
+            return "HoldingsReleasedEvent[sequence=" + sequence + ", incomplete=" + incomplete + ", owner=" + owner
+                    + ", registration=" + registration + "]";
+        }
+    }
 }

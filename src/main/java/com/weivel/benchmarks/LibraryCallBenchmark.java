@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -93,7 +94,7 @@ public final class LibraryCallBenchmark {
     }
 
     private static LibraryDeclaration declaration() {
-        return new LibraryDeclaration(ECHO, "0.1.0", RELEASE_SYMBOL, Collections.singletonList(
+        return new LibraryDeclaration(ECHO, "0.1.0", Optional.of(RELEASE_SYMBOL), Collections.singletonList(
                 new LibraryDeclaration.Service(ECHO, Collections.singletonList(
                         LibraryDeclaration.Function.bytes(ECHO, ECHO_SYMBOL)))));
     }

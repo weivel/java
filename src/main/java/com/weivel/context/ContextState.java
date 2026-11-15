@@ -32,6 +32,7 @@ final class ContextState {
     final CoreTimer timer;
     final HostLog hostLog;
     final Set<PluginContext> contexts = ConcurrentHashMap.newKeySet();
+    final Releases releases = new Releases();
 
     ContextState(Core core, Handles handles, CoreTimer timer, HostLog hostLog) {
         this.core = core;
@@ -147,6 +148,9 @@ final class ContextState {
         }
         if (event instanceof CoreEvent.CapabilityEvent) {
             return CoreConstants.EVENT_CAPABILITY;
+        }
+        if (event instanceof CoreEvent.HoldingsReleasedEvent) {
+            return CoreConstants.EVENT_HOLDINGS_RELEASED;
         }
         return CoreConstants.EVENT_DEADLINE;
     }

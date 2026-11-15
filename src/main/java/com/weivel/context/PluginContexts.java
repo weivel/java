@@ -189,6 +189,26 @@ public final class PluginContexts implements AutoCloseable {
     }
 
     /**
+     * Registers a service of the host's own under {@code WEIVEL_HOST} as {@link #registerHostService(String, Object,
+     * Runnable)} does, awaiting releases: unregistering it revokes it to every holder, and each holding lasts until
+     * its holder lets go of the object, by {@link PluginContext#releaseHolding}, or is released, quarantined or
+     * forgotten. Once the last has ended {@code released} runs, from the dispatch.
+     *
+     * @param id the service id
+     * @param service the host's own object
+     * @param registered the host's own record of the registration, as above
+     * @param released what runs once nothing holds the registration any more; it may call into the core
+     * @return the registration; the core's refusal
+     */
+    public Answer<ServiceRegistration> registerHostServiceAwaitingReleases(String id, Object service,
+                                                                           Runnable registered, Runnable released) {
+        return ServiceCalls.register(state, hostContext, Objects.requireNonNull(id, "id"),
+                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(),
+                () -> Optional.<Answer<Long>>empty(), Objects.requireNonNull(registered, "registered"),
+                Optional.of(Objects.requireNonNull(released, "released")));
+    }
+
+    /**
      * Whether any registration of {@code id} the layer recorded still stands: a plugin's or one under
      * {@code WEIVEL_HOST}. It is read from the layer's own table, never by asking the core, so asking it makes the
      * host hold nothing it would later hear revoked.
@@ -281,6 +301,7 @@ public final class PluginContexts implements AutoCloseable {
     void endEntries(PluginContext context) {
         context.silence();
         state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
+        state.releases.dropRevokedOf(context.plugin());
         context.dropListeners();
     }
 
@@ -302,6 +323,7 @@ public final class PluginContexts implements AutoCloseable {
     private void endForgotten(PluginContext context) {
         state.handles.endOwned(context.plugin(), ENDED_WITH_THE_PLUGIN);
         state.handles.end(context.plugin());
+        state.releases.dropRevokedOf(context.plugin());
         context.dropListeners();
         state.contexts.remove(context);
     }

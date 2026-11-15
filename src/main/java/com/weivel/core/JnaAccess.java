@@ -153,6 +153,24 @@ final class JnaAccess implements NativeAccess {
         reachable = null;
     }
 
+    @Override
+    public Object addressed(long address, long size) {
+        return new Pointer(address);
+    }
+
+    @Override
+    public long addressOf(Object addressed) {
+        if (!(addressed instanceof Pointer)) {
+            throw new IllegalArgumentException("a " + addressed.getClass().getName() + " carries no native address");
+        }
+        return Pointer.nativeValue((Pointer) addressed);
+    }
+
+    @Override
+    public NativeFunction function(long address, NativeSignature signature) {
+        return new JnaFunction(null, Function.getFunction(new Pointer(address)), signature);
+    }
+
     /**
      * A library JNA opened, which this object alone holds and closes.
      *
@@ -225,6 +243,7 @@ final class JnaAccess implements NativeAccess {
         }
     }
 
+    /** A function JNA calls, counted into and out of its library; a function pointer has no library to count in. */
     private static final class JnaFunction implements NativeFunction {
         private final JnaLibrary library;
         private final Function function;
@@ -239,6 +258,9 @@ final class JnaAccess implements NativeAccess {
         @Override
         public long call(long... arguments) {
             Object[] boxed = boxed(arguments);
+            if (library == null) {
+                return answered(boxed);
+            }
             library.enter();
             try {
                 return answered(boxed);

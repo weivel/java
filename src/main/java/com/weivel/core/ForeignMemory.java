@@ -1,5 +1,7 @@
 package com.weivel.core;
 
+import java.util.Objects;
+
 /**
  * Native memory a {@link ForeignLibrary}'s caller holds for its calls, freed all at once when it closes, and reads of
  * the memory such a library answers with, which stays the library's to free. Only one thread at a time may use one.
@@ -17,6 +19,26 @@ public final class ForeignMemory implements AutoCloseable {
     ForeignMemory(NativeArena arena) {
         this.arena = arena;
         this.access = arena.access();
+    }
+
+    /**
+     * Memory of the layer's one native seam, held by no library.
+     *
+     * @return memory of its own, freed when it is closed
+     */
+    public static ForeignMemory open() {
+        return new ForeignMemory(new NativeArena(NativeBackends.current()));
+    }
+
+    /**
+     * The native address a definition's object carries, as a host registers a library's definition.
+     *
+     * @param addressed a {@code MemorySegment} on the foreign function API, a JNA {@code Pointer} on JNA
+     * @return its address
+     * @throws IllegalArgumentException for an object of another kind
+     */
+    public static long addressOf(Object addressed) {
+        return NativeBackends.current().addressOf(Objects.requireNonNull(addressed, "addressed"));
     }
 
     /**

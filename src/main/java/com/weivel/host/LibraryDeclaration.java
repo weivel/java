@@ -4,19 +4,26 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A C library's declaration, the standard's {@code weivel_standard_library} as a Java value: the name plugins import
- * it by, its version, the symbol that frees what it answers, and the services its functions offer. The standard's
- * reader fills one, or the caller builds it; the declaration names no path, which the caller hands the host beside it.
+ * it by, its version, the symbol that frees what its bytes functions answer, and the services its functions offer.
+ * The standard's reader fills one, or the caller builds it; the declaration names no path, which the caller hands the
+ * host beside it.
  */
 public final class LibraryDeclaration {
-    /** {@code WEIVEL_STANDARD_FUNCTION_BYTES}: opaque bytes in, opaque bytes out, the one function kind there is. */
+    /** {@code WEIVEL_STANDARD_FUNCTION_BYTES}: opaque bytes in, opaque bytes out. */
     public static final int BYTES = 2;
+    /**
+     * {@code WEIVEL_STANDARD_FUNCTION_DEFINITION}: one service's whole definition, {@code const void *f(void)}
+     * answering a static struct of function pointers that begins with its {@code uint32_t size}.
+     */
+    public static final int DEFINITION = 3;
 
     private final String importName;
     private final String version;
-    private final String release;
+    private final Optional<String> release;
     private final List<Service> services;
 
     /**
@@ -24,10 +31,11 @@ public final class LibraryDeclaration {
      *
      * @param importName the name plugins import the library by
      * @param version its version
-     * @param release the symbol that frees every body its functions answer
+     * @param release the symbol that frees every body its bytes functions answer; empty for a library whose every
+     *     service is a definition
      * @param services the services its functions offer, in the declaration's order
      */
-    public LibraryDeclaration(String importName, String version, String release, List<Service> services) {
+    public LibraryDeclaration(String importName, String version, Optional<String> release, List<Service> services) {
         this.importName = Objects.requireNonNull(importName, "importName");
         this.version = Objects.requireNonNull(version, "version");
         this.release = Objects.requireNonNull(release, "release");
@@ -55,9 +63,9 @@ public final class LibraryDeclaration {
     /**
      * Answers {@code release}.
      *
-     * @return the symbol that frees every body the library's functions answer
+     * @return the symbol that frees every body the library's bytes functions answer; empty when it declares none
      */
-    public String release() {
+    public Optional<String> release() {
         return release;
     }
 
@@ -163,7 +171,7 @@ public final class LibraryDeclaration {
          *
          * @param name the name a plugin calls the function by
          * @param symbol the exported C symbol that implements it
-         * @param kind how it is called; {@link #BYTES} is the one kind the host binds
+         * @param kind how it is called: {@link #BYTES} or {@link #DEFINITION}
          * @param context the facts of the calling process it reads, as the standard's context bits; 0 for none
          */
         public Function(String name, String symbol, int kind, int context) {
@@ -182,6 +190,18 @@ public final class LibraryDeclaration {
          */
         public static Function bytes(String name, String symbol) {
             return new Function(name, symbol, BYTES, 0);
+        }
+
+        /**
+         * A function of the definition kind, which reads no fact of the calling process, since its struct carries
+         * its own context.
+         *
+         * @param name the name a plugin calls it by
+         * @param symbol its C symbol
+         * @return the function
+         */
+        public static Function definition(String name, String symbol) {
+            return new Function(name, symbol, DEFINITION, 0);
         }
 
         /**

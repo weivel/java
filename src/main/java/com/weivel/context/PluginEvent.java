@@ -12,15 +12,18 @@ public interface PluginEvent {
      */
     final class Revoked implements PluginEvent {
         private final Object object;
+        private final boolean awaitsRelease;
 
         /**
          * Checks that the object is present.
          *
          * @param object the object
+         * @param awaitsRelease whether its provider awaits the plugin's release of it
          */
-        public Revoked(Object object) {
+        public Revoked(Object object, boolean awaitsRelease) {
             Objects.requireNonNull(object, "object");
             this.object = object;
+            this.awaitsRelease = awaitsRelease;
         }
 
         /**
@@ -32,6 +35,16 @@ public interface PluginEvent {
             return object;
         }
 
+        /**
+         * Answers {@code awaitsRelease}.
+         *
+         * @return whether its provider awaits each holder's release, so the plugin lets go of the object with
+         *     {@link PluginContext#releaseHolding} once it no longer uses it or anything it answered
+         */
+        public boolean awaitsRelease() {
+            return awaitsRelease;
+        }
+
         @Override
         public boolean equals(Object other) {
             if (this == other) {
@@ -41,19 +54,61 @@ public interface PluginEvent {
                 return false;
             }
             Revoked that = (Revoked) other;
-            return Objects.equals(object, that.object);
+            return Objects.equals(object, that.object) && awaitsRelease == that.awaitsRelease;
         }
 
         @Override
         public int hashCode() {
             int hash = 0;
             hash = 31 * hash + Objects.hashCode(object);
+            hash = 31 * hash + Boolean.hashCode(awaitsRelease);
             return hash;
         }
 
         @Override
         public String toString() {
-            return "Revoked[object=" + object + "]";
+            return "Revoked[object=" + object + ", awaitsRelease=" + awaitsRelease + "]";
+        }
+    }
+
+    /**
+     * Nothing holds a service the plugin registered awaiting releases any more, so whatever stood behind it may be
+     * freed.
+     */
+    final class HoldingsReleased implements PluginEvent {
+        private final Object service;
+
+        /**
+         * Checks that the object is present.
+         *
+         * @param service the object the plugin registered
+         */
+        public HoldingsReleased(Object service) {
+            this.service = Objects.requireNonNull(service, "service");
+        }
+
+        /**
+         * Answers {@code service}.
+         *
+         * @return the object the plugin registered
+         */
+        public Object service() {
+            return service;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof HoldingsReleased && service == ((HoldingsReleased) other).service;
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(service);
+        }
+
+        @Override
+        public String toString() {
+            return "HoldingsReleased[service=" + service + "]";
         }
     }
 

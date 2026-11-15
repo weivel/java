@@ -37,6 +37,8 @@ final class EventRouting implements CoreListener {
             capabilityChanged((CoreEvent.CapabilityEvent) event);
         } else if (event instanceof CoreEvent.RevokedEvent) {
             revoked((CoreEvent.RevokedEvent) event);
+        } else if (event instanceof CoreEvent.HoldingsReleasedEvent) {
+            holdingsReleased((CoreEvent.HoldingsReleasedEvent) event);
         } else if (event instanceof CoreEvent.ReachRefusedEvent) {
             CoreEvent.ReachRefusedEvent reach = (CoreEvent.ReachRefusedEvent) event;
             contextOf(reach.plugin(), reach).ifPresent(context ->
@@ -119,12 +121,38 @@ final class EventRouting implements CoreListener {
         }
     }
 
-    /** Drops the holding the revocation names, even for a plugin forgotten, and tells the plugin of it. */
+    /**
+     * Drops the holding the revocation names, even for a plugin forgotten, and tells the plugin of it. A holding of a
+     * registration made awaiting releases is kept, revoked, until the plugin lets go of the object.
+     */
     private void revoked(CoreEvent.RevokedEvent event) {
         Object object = state.handles.revoke(event);
-        if (object != null) {
-            contextOf(event.plugin(), event).ifPresent(context -> context.tell(new PluginEvent.Revoked(object)));
+        if (object == null) {
+            return;
         }
+        boolean awaitsRelease = state.releases.awaits(event.implementation());
+        if (awaitsRelease) {
+            state.releases.keepRevoked(event.plugin(), event.implementation(), object);
+        }
+        contextOf(event.plugin(), event).ifPresent(context -> context.tell(new PluginEvent.Revoked(object,
+                awaitsRelease)));
+    }
+
+    /**
+     * Hands the end of a registration's last holding to its owner: the host's own record runs, and a plugin hears it
+     * unless it was released or forgotten since.
+     */
+    private void holdingsReleased(CoreEvent.HoldingsReleasedEvent event) {
+        state.releases.released(event.registration()).ifPresent(awaiting -> {
+            if (awaiting.owner() == CoreConstants.HOST) {
+                state.callBack(awaiting.released(), FailureKind.LAYER_DEFECT,
+                        "the host's record of a released registration threw", Optional.of(event));
+                return;
+            }
+            awaiting.released().run();
+            contextOf(event.owner(), event).ifPresent(context -> context.tell(
+                    new PluginEvent.HoldingsReleased(awaiting.service())));
+        });
     }
 
     private Optional<Object> serviceOf(long registration, CoreEvent event) {

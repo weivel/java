@@ -13,6 +13,33 @@ public final class ForeignFunction {
     }
 
     /**
+     * The function a function pointer names, as one a definition's struct carries, called through the layer's one
+     * native seam. Nothing checks that the address names a function, or one taking {@code parameters}.
+     *
+     * @param address the function pointer
+     * @param returned what it answers
+     * @param parameters what it takes, in order
+     * @return the function
+     */
+    public static ForeignFunction at(long address, NativeType returned, NativeType... parameters) {
+        return new ForeignFunction(NativeBackends.current().function(address, NativeSignature.of(returned,
+                parameters)));
+    }
+
+    /**
+     * Calls a function of two parameters, handing the backend no argument array.
+     *
+     * @param first its first argument
+     * @param second its second argument
+     * @return what it answered
+     * @throws IllegalStateException when its library is closed
+     * @throws IllegalArgumentException when it takes another number of parameters
+     */
+    public long call(long first, long second) {
+        return function.call(first, second);
+    }
+
+    /**
      * Calls the function.
      *
      * @param arguments one per parameter, in order

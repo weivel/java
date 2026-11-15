@@ -109,4 +109,19 @@ final class CountingAccess implements NativeAccess {
     public void keepReachable(Object object) {
         backend.keepReachable(object);
     }
+
+    @Override
+    public Object addressed(long address, long size) {
+        return backend.addressed(address, size);
+    }
+
+    @Override
+    public long addressOf(Object addressed) {
+        return backend.addressOf(addressed);
+    }
+
+    @Override
+    public NativeFunction function(long address, NativeSignature signature) {
+        return backend.function(address, signature);
+    }
 }

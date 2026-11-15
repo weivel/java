@@ -185,6 +185,28 @@ final class FfmAccess implements NativeAccess {
         Reference.reachabilityFence(object);
     }
 
+    @Override
+    public Object addressed(long address, long size) {
+        return MemorySegment.ofAddress(address).reinterpret(size);
+    }
+
+    @Override
+    public long addressOf(Object addressed) {
+        if (!(addressed instanceof MemorySegment segment)) {
+            throw new IllegalArgumentException("a " + addressed.getClass().getName() + " carries no native address");
+        }
+        return segment.address();
+    }
+
+    @Override
+    public NativeFunction function(long address, NativeSignature signature) {
+        if (signature.parameters().size() > MOST_PARAMETERS) {
+            throw new IllegalArgumentException("a function pointer of more than " + MOST_PARAMETERS + " parameters");
+        }
+        return new FfmFunction(FfmLibrary.adapted(LINKER.downcallHandle(MemorySegment.ofAddress(address),
+                FfmLibrary.descriptorOf(signature)), signature), signature.parameters().size());
+    }
+
     private static MethodHandle standardFunction(String symbol, FunctionDescriptor descriptor) {
         return LINKER.downcallHandle(LINKER.defaultLookup().find(symbol).get(), descriptor);
     }

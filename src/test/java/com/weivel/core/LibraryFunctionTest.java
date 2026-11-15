@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /** A C library's bytes functions through the native seam, against the core's echo library. */
@@ -18,7 +19,7 @@ class LibraryFunctionTest {
     @Test
     void aHeapArrayIsCopiedOnceAndTheCopyIsWhatTheLibraryIsHanded() {
         RecordedCopies copies = new RecordedCopies();
-        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
+        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), Optional.of("echo_release")))) {
             long seen = addressIn(ok(echo.function("echo_where", copies)).call(new byte[16]));
             byte[] echoed = ok(echo.function("echo_echo", copies)).call(bytes("copied")).body();
 
@@ -31,7 +32,7 @@ class LibraryFunctionTest {
     @Test
     void aDirectBufferIsLentAtTheBackendsOwnAddressOfIt() {
         RecordedCopies copies = new RecordedCopies();
-        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
+        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), Optional.of("echo_release")))) {
             ByteBuffer input = ByteBuffer.allocateDirect(32);
             input.position(8);
 
@@ -45,7 +46,7 @@ class LibraryFunctionTest {
 
     @Test
     void aDirectBufferLentFromAPositionHandsTheLibraryExactlyTheBytesFromThere() {
-        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
+        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), Optional.of("echo_release")))) {
             ByteBuffer input = ByteBuffer.allocateDirect(16);
             input.put(bytes("skipped-"));
             input.put(bytes("lent"));
@@ -61,7 +62,7 @@ class LibraryFunctionTest {
     @Test
     void aBodyWhoseCopyFailsIsStillReleasedExactlyOnce() {
         RecordedCopies copies = new RecordedCopies();
-        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), "echo_release"))) {
+        try (LibraryBinary echo = ok(LibraryBinary.open(NativeFiles.echoBinary(), Optional.of("echo_release")))) {
             LibraryFunction released = ok(echo.function("echo_released", copies));
             LibraryFunction echoed = ok(echo.function("echo_echo", copies));
             long before = addressIn(released.call(new byte[0]));

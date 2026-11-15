@@ -49,7 +49,8 @@ marked returned, so a release still deactivates and releases its plugin.
 can reach them: Java 8 has no module system, so it has no way to hide a type its own packages share, and as the
 contract asks of such a language it keeps them public and documents them as unsafe for a caller, who can
 run code under the layer lock through `CoreInternals`, call into native code past the wrapper through
-`BareServiceGet`, and read or write any native address through `ForeignMemory`.
+`BareServiceGet`, read or write any native address through `ForeignMemory`, and call any native address through
+`ForeignFunction.at`.
 
 The wrapper also holds what the `timer`, `context` and `host` packages build on, reached through `CoreInternals`:
 a call with a guard and a step run under the lock, a call whose deferred step joins the queue right behind its own
@@ -124,16 +125,26 @@ finished. A host its caller gives no scheduler arms the language's own timer rat
 `Schedulers.system()` and closes it when it is closed, so a want that needs the time is never the caller's mistake.
 
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
-path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
-by name as plain Java calls. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
+path, and registers each declared service under `WEIVEL_HOST`: a service of bytes functions as a `LibraryService`,
+whose functions a consumer calls by name as plain Java calls, and a definition service as the language's own object
+carrying the very address its definition's symbol answered, called once at the load: a `MemorySegment` of the
+struct's `size` bytes on the foreign function backend, a JNA `Pointer` on JNA. A definition answering NULL, or a
+struct whose `size` is below `2 * sizeof(void *)`, refuses the load as the caller's mistake before anything is
+registered. A definition is registered awaiting releases: `unloadLibrary` unregisters it at once, each holder hears a
+`PluginEvent.Revoked` that `awaitsRelease`, and lets go with `PluginContext.releaseHolding` once it no longer uses the
+object, however it came to hold it, by a get, a want or a watch; a holder released, quarantined or forgotten has let
+go with it. The binary closes once the core's `WEIVEL_EVENT_HOLDINGS_RELEASED` of every definition service has been
+dispatched and no bytes call runs in it, and a definition the destroy finds still registered keeps it open until
+`close`. A plugin registers awaiting releases with `PluginContext.registerAwaitingReleases`, and hears
+`PluginEvent.HoldingsReleased` once nothing holds what it registered. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
 once into native memory, because lending the heap would hold off garbage collection for the whole C call. The copy and
 the cells the answer comes back in share one block, and each library keeps one such block of 256 bytes spare for
 whichever call takes it first. A call allocates no native memory when it finds the spare free and needs no more than
 it: the 16 bytes of answer cells, plus the copy of a heap input, so a `byte[]` or heap buffer of up to 240 bytes, or
 any direct buffer. A larger heap input, or a call that finds the spare taken, allocates a block of its own and frees
 it. The body
-the library answers is copied once into a Java array and released before the call answers. `unloadLibrary`, and the
-destroy, close a library to calls at once and close its binary once no call runs in it.
+the library answers is copied once into a Java array and released before the call answers, so no bytes it answered
+are ever held past a call. `unloadLibrary`, and the destroy, close a library to calls at once.
 
 `com.weivel.standard` is optional, and no class of the packages above depends on it, which a test reads off the
 built jar with `jdeps`. `StandardBinary.load` opens the standard's binary from the caller's path through the same
@@ -153,7 +164,7 @@ interfaces, a refusal thrown as a `ServiceRefusal`.
 `com.weivel.conformance` is the driver for the layer suite. `LayerDriver` reads the pinned kit's layer vectors
 through the standard's JSON reader, bound through `ForeignLibrary`, and writes no file; it builds each vector's plugins
 as manifest values and entries, drives them through the host's public surface on the real core, a `want` vector on a
-clock and scheduler of the suite's own, and answers a `LayerWitness` in the shape of the vector's `then`. The suite
+clock and scheduler of the suite's own and a `library` vector with the core's echo library, and answers a `LayerWitness` in the shape of the vector's `then`. The suite
 has one test per vector, its display name the vector's id, and a coverage test that discovers those names through
 the JUnit Platform Launcher and fails on a vector none names.
 
@@ -165,7 +176,11 @@ timer armed as a host arms it, over the same function of the core's table on the
 through `CoreInternals.bareServiceGet`, the one route past the wrapper, which reaches that function alone and is
 refused once it is closed or the core is destroyed.
 `library-call` is the echo library's `echo_echo` through the host's `LibraryService` with a `byte[]`, over the same
-function called bare with the same bytes copied in and its answer copied out and released as the host does. Paths are
+function called bare with the same bytes copied in and its answer copied out and released as the host does. Its
+definition row is the echo definition's `echo` called through the definition a consumer resolved, over the same
+operation called through the pointer `echo_service_definition` answered, each path reading the operation's function
+pointer out of the struct once before its timed loop; it is judged by the platform's noise, as the same-language pair
+is. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,
 and judged on the median of the per-round ratios. A run with nothing measured fails, and so does a backend or platform
 the budget gives no line: no bound is never a pass. "Next to no overhead" is judged on the foreign function backend;

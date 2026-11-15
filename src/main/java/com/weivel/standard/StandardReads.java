@@ -148,9 +148,10 @@ final class StandardReads {
         for (long index = 0; index < serviceCount; index++) {
             declared.add(service(memory, services + index * StandardLayouts.LIBRARY_SERVICE.byteSize()));
         }
+        long release = memory.getLong(library, offset(layout, "release"));
         return new LibraryDeclaration(memory.readText(memory.getLong(library, offset(layout, "import_name"))),
                 memory.readText(memory.getLong(library, offset(layout, "version"))),
-                memory.readText(memory.getLong(library, offset(layout, "release"))), declared);
+                release == 0 ? Optional.<String>empty() : Optional.of(memory.readText(release)), declared);
     }
 
     private static LibraryDeclaration.Service service(ForeignMemory memory, long service) {
