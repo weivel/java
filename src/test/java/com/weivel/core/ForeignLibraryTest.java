@@ -55,4 +55,25 @@ class ForeignLibraryTest {
             assertEquals(manifest, memory.manifest(laidOut.address()));
         }
     }
+
+    @Test
+    void closedMemoryRefusesEveryAccess() {
+        ForeignMemory memory = new ForeignMemory(new NativeArena(NativeBackends.current()));
+        long address = memory.allocate(16);
+        long text = memory.text("closed");
+        memory.close();
+
+        assertThrows(IllegalStateException.class, () -> memory.allocate(8));
+        assertThrows(IllegalStateException.class, () -> memory.text("late"));
+        assertThrows(IllegalStateException.class, () -> memory.bytes(new byte[1]));
+        assertThrows(IllegalStateException.class, () -> memory.write(address, 0, new byte[1]));
+        assertThrows(IllegalStateException.class, () -> memory.getInt(address, 0));
+        assertThrows(IllegalStateException.class, () -> memory.putInt(address, 0, 1));
+        assertThrows(IllegalStateException.class, () -> memory.getLong(address, 0));
+        assertThrows(IllegalStateException.class, () -> memory.putLong(address, 0, 1));
+        assertThrows(IllegalStateException.class, () -> memory.readBytes(address, 0, 1));
+        assertThrows(IllegalStateException.class, () -> memory.readText(text));
+        assertThrows(IllegalStateException.class, () -> memory.manifest(address));
+        assertThrows(IllegalStateException.class, memory::close);
+    }
 }

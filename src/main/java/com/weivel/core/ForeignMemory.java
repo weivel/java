@@ -3,10 +3,16 @@ package com.weivel.core;
 /**
  * Native memory a {@link ForeignLibrary}'s caller holds for its calls, freed all at once when it closes, and reads of
  * the memory such a library answers with, which stays the library's to free. Only one thread at a time may use one.
+ * Once closed it refuses every access, its own memory and the library's alike, with an {@link IllegalStateException}.
+ *
+ * <p>It is public for the layer's own packages, {@code standard}, {@code conformance} and {@code benchmarks}: an
+ * address it is handed is read or written unchecked, so a caller outside them can corrupt any native memory through
+ * it.
  */
 public final class ForeignMemory implements AutoCloseable {
     private final NativeArena arena;
     private final NativeAccess access;
+    private boolean closed;
 
     ForeignMemory(NativeArena arena) {
         this.arena = arena;
@@ -20,6 +26,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return its address
      */
     public long allocate(long size) {
+        requireOpen();
         return arena.allocate(size).address();
     }
 
@@ -31,6 +38,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @throws IllegalArgumentException for a text holding a NUL character, which C would read cut short
      */
     public long text(String text) {
+        requireOpen();
         if (text.indexOf('\0') >= 0) {
             throw new IllegalArgumentException("a text holding a NUL character cannot cross as C text");
         }
@@ -44,6 +52,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return the copy's address
      */
     public long bytes(byte[] bytes) {
+        requireOpen();
         long address = allocate(bytes.length);
         access.writeBytes(address, 0, bytes);
         return address;
@@ -57,6 +66,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @param bytes the bytes
      */
     public void write(long address, long offset, byte[] bytes) {
+        requireOpen();
         access.writeBytes(address, offset, bytes);
     }
 
@@ -68,6 +78,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return the value
      */
     public int getInt(long address, long offset) {
+        requireOpen();
         return access.getInt(address, offset);
     }
 
@@ -79,6 +90,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @param value the value
      */
     public void putInt(long address, long offset, int value) {
+        requireOpen();
         access.putInt(address, offset, value);
     }
 
@@ -90,6 +102,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return the value
      */
     public long getLong(long address, long offset) {
+        requireOpen();
         return access.getLong(address, offset);
     }
 
@@ -101,6 +114,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @param value the value
      */
     public void putLong(long address, long offset, long value) {
+        requireOpen();
         access.putLong(address, offset, value);
     }
 
@@ -113,6 +127,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return a copy
      */
     public byte[] readBytes(long address, long offset, int length) {
+        requireOpen();
         return access.readBytes(address, offset, length);
     }
 
@@ -123,6 +138,7 @@ public final class ForeignMemory implements AutoCloseable {
      * @return the text
      */
     public String readText(long address) {
+        requireOpen();
         if (address == 0) {
             throw new IllegalArgumentException("a NULL pointer holds no text");
         }
@@ -141,6 +157,7 @@ public final class ForeignMemory implements AutoCloseable {
      *     element whose size is below its first published shape, naming the struct
      */
     public Manifest manifest(long address) {
+        requireOpen();
         if (address == 0) {
             throw new IllegalArgumentException("a NULL pointer holds no manifest");
         }
@@ -155,6 +172,14 @@ public final class ForeignMemory implements AutoCloseable {
      */
     @Override
     public void close() {
+        requireOpen();
+        closed = true;
         arena.close();
+    }
+
+    private void requireOpen() {
+        if (closed) {
+            throw new IllegalStateException("the foreign memory is closed");
+        }
     }
 }
