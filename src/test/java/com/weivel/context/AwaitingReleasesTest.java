@@ -69,6 +69,7 @@ class AwaitingReleasesTest {
 
             assertTrue(value(consumer.releaseHolding(revoked.get(first))));
             List<PluginEvent> heardAfterTheFirst = new ArrayList<>(heard);
+            assertEquals(false, value(consumer.releaseHolding(revoked.get(first))));
             assertTrue(value(consumer.releaseHolding(revoked.get(second))));
 
             assertEquals(2, revoked.size());
