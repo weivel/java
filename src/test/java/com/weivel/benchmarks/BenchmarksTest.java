@@ -93,6 +93,25 @@ class BenchmarksTest {
         }
     }
 
+    @Test
+    void timesTheDefinitionCallWithinItsNoise() {
+        Path echo = existing("weivel.test.echoBinary");
+        for (int repetition = 1; repetition <= repetitions(); repetition++) {
+            SameLanguageMeasurement measured = DefinitionCallBenchmark.measure(binary, echo,
+                    DefinitionCallBenchmark.DEFAULT_SAMPLING);
+            double noise = Gates.deviation(Summary.of(measured.noiseRatios()).median());
+            double deviation = Gates.deviation(Summary.of(measured.sameLanguageRatios()).median());
+            report(RatioGate.LIBRARY_CALL.kitNameFor(binary.backend()) + "-definition", repetition,
+                    String.format(Locale.ROOT, "noise=%.6f deviation=%.6f direct_ns=%.4f direct_again_ns=%.4f "
+                            + "through_weivel_ns=%.4f", noise, deviation, measured.direct().median(),
+                            measured.directAgain().median(), measured.throughWeivel().median()));
+            if (isGating()) {
+                assertPassed(Gates.sameLanguage(budget(), KitPlatform.current(), measured.noiseRatios(),
+                        measured.sameLanguageRatios()));
+            }
+        }
+    }
+
     private static long roundsOver(double[] ratios, double deviation) {
         long over = 0;
         for (double ratio : ratios) {
