@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Samples paths side by side: every path warmed up first, then one batch of each per round, so a change in the
@@ -17,9 +18,27 @@ final class Interleaved {
 
     /** Each path's nanoseconds per call, one batch a round, in round order, keyed as {@code paths} is. */
     static Map<String, double[]> sample(LinkedHashMap<String, MeasuredPath> paths, Sampling sampling) {
+        LinkedHashMap<String, Supplier<MeasuredPath>> fixed = new LinkedHashMap<>();
+        for (Map.Entry<String, MeasuredPath> path : paths.entrySet()) {
+            MeasuredPath measured = path.getValue();
+            fixed.put(path.getKey(), () -> measured);
+        }
+        return sampleFresh(fixed, sampling);
+    }
+
+    /**
+     * As {@link #sample}, each batch timing a path its supplier made for that batch.
+     *
+     * @implNote A same-language path is one call on one small object, and on CI runners a path ran a constant third
+     *     of a nanosecond slower than the other two for every round of one run, the same object all run long; an
+     *     object made each batch moves whatever its placement costs onto a different path each round, where the
+     *     median of the rounds leaves it out.
+     */
+    static Map<String, double[]> sampleFresh(LinkedHashMap<String, Supplier<MeasuredPath>> paths,
+                                             Sampling sampling) {
         List<String> names = new ArrayList<>(paths.keySet());
         for (String name : names) {
-            timeBatch(paths.get(name), sampling.warmupCalls());
+            timeBatch(paths.get(name).get(), sampling.warmupCalls());
         }
         Map<String, double[]> samples = new LinkedHashMap<>();
         for (String name : names) {
@@ -27,7 +46,7 @@ final class Interleaved {
         }
         for (int round = 0; round < sampling.rounds(); round++) {
             for (String name : roundOrder(names, round)) {
-                samples.get(name)[round] = timeBatch(paths.get(name), sampling.callsPerBatch());
+                samples.get(name)[round] = timeBatch(paths.get(name).get(), sampling.callsPerBatch());
             }
         }
         return samples;

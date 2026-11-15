@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
 /** How paths are sampled side by side and summarised. */
@@ -43,6 +44,23 @@ class MeasuringTest {
         assertEquals(Integer.valueOf(22), calls.get("second"));
         assertEquals(3, samples.get("first").length);
         assertEquals(3, samples.get("second").length);
+    }
+
+    @Test
+    void timesEachBatchOnAPathItsSupplierMadeForIt() {
+        Map<String, Integer> made = new HashMap<>();
+        LinkedHashMap<String, Supplier<MeasuredPath>> paths = new LinkedHashMap<>();
+        for (String name : new String[] {"first", "second"}) {
+            paths.put(name, () -> {
+                made.merge(name, 1, Integer::sum);
+                return call -> call;
+            });
+        }
+
+        Interleaved.sampleFresh(paths, new Sampling(7, 5, 3));
+
+        assertEquals(Integer.valueOf(4), made.get("first"));
+        assertEquals(Integer.valueOf(4), made.get("second"));
     }
 
     @Test
