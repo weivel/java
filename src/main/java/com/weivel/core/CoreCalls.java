@@ -179,6 +179,29 @@ public final class CoreCalls {
     }
 
     /**
+     * {@code weivel_register_service_awaiting_releases}.
+     *
+     * @param owner a plugin's handle, or {@link CoreConstants#HOST}
+     * @param id the service id
+     * @return the call, answering the registration handle
+     */
+    public static CoreCall<Long> registerServiceAwaitingReleases(long owner, String id) {
+        return answeringAHandle(CoreFunction.REGISTER_SERVICE_AWAITING_RELEASES, owner, id);
+    }
+
+    /**
+     * {@code weivel_release_holding}.
+     *
+     * @param holder the plugin, or {@link CoreConstants#HOST}, that held the registration when it was unregistered
+     * @param registration the registration the holding was of
+     * @return the call, answering nothing beyond its success
+     */
+    public static CoreCall<Void> releaseHolding(long holder, long registration) {
+        return builtByTheLayer((functions, arena, core, pending, crossed) -> crossed.answered(
+                functions.status(CoreFunction.RELEASE_HOLDING, core, holder, registration, pending), null));
+    }
+
+    /**
      * {@code weivel_unregister}.
      *
      * @param handle a registration, watch or want handle

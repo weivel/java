@@ -100,11 +100,25 @@ final class ServiceCalls {
     static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
                                                 Optional<CapacityAnswerer> answerer, CallSteps.CallGuard<Long> guard,
                                                 Runnable registered) {
+        return register(state, context, id, service, answerer, guard, registered, Optional.<Runnable>empty());
+    }
+
+    /**
+     * Registers as the other registrations do and, when {@code released} is present, awaiting releases: the core
+     * keeps each holding past the unregistration until its holder lets go, and {@code released} runs from the
+     * dispatch of the registration's {@code WEIVEL_EVENT_HOLDINGS_RELEASED}.
+     */
+    static Answer<ServiceRegistration> register(ContextState state, PluginContext context, String id, Object service,
+                                                Optional<CapacityAnswerer> answerer, CallSteps.CallGuard<Long> guard,
+                                                Runnable registered, Optional<Runnable> released) {
         Handles.Reservation room = state.handles.reserve();
         Records.Service record = new Records.Service(id, service, answerer);
-        Answer<Long> answer = state.call(context, CoreCalls.registerService(context.plugin(), id), guard,
+        Answer<Long> answer = state.call(context, released.isPresent()
+                ? CoreCalls.registerServiceAwaitingReleases(context.plugin(), id)
+                : CoreCalls.registerService(context.plugin(), id), guard,
                 registration -> {
                     room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
+                    released.ifPresent(then -> state.releases.await(registration, context.plugin(), service, then));
                     registered.run();
                     return new Answer.Ok<>(registration);
                 });
@@ -112,6 +126,21 @@ final class ServiceCalls {
         return answer instanceof Answer.Ok
                 ? new Answer.Ok<>(new ServiceRegistration(state, context, ((Answer.Ok<Long>) answer).value()))
                 : Answer.retyped(answer);
+    }
+
+    /**
+     * Ends the plugin's revoked holding of {@code service} in the core, for a registration made awaiting releases.
+     *
+     * @return true; false, calling nothing, when the plugin keeps no revoked holding of that very object
+     */
+    static Answer<Boolean> releaseHolding(ContextState state, PluginContext context, Object service) {
+        OptionalLong registration = state.releases.takeRevoked(context.plugin(), service);
+        if (!registration.isPresent()) {
+            return new Answer.Ok<>(false);
+        }
+        Answer<Void> released = state.call(context, CoreCalls.releaseHolding(context.plugin(),
+                registration.getAsLong()), Answer.Ok::new);
+        return released instanceof Answer.Ok ? new Answer.Ok<>(true) : Answer.retyped(released);
     }
 
     /** The want's options, each limit as the plugin gave it; empty when it needs a time no clock can give. */

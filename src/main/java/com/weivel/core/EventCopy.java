@@ -49,11 +49,14 @@ final class EventCopy implements EventCopying {
         if (event instanceof CoreEvent.DeadlineEvent) {
             return CoreConstants.EVENT_DEADLINE;
         }
+        if (event instanceof CoreEvent.HoldingsReleasedEvent) {
+            return CoreConstants.EVENT_HOLDINGS_RELEASED;
+        }
         throw new IllegalArgumentException("an event of a kind the layer does not know");
     }
 
     static boolean isKnownKind(int kind) {
-        return kind >= CoreConstants.EVENT_LOG && kind <= CoreConstants.EVENT_DEADLINE;
+        return kind >= CoreConstants.EVENT_LOG && kind <= CoreConstants.EVENT_HOLDINGS_RELEASED;
     }
 
     static long deadlineAt(NativeRegion event) {
@@ -95,6 +98,8 @@ final class EventCopy implements EventCopying {
                 return capability(payload, sequence);
             case CoreConstants.EVENT_DEADLINE:
                 return deadline(event, sequence);
+            case CoreConstants.EVENT_HOLDINGS_RELEASED:
+                return holdingsReleased(payload, sequence);
             default:
                 throw new IllegalArgumentException("an event of a kind the layer does not know");
         }
@@ -172,6 +177,12 @@ final class EventCopy implements EventCopying {
 
     private static CoreEvent deadline(NativeRegion event, long sequence) {
         return new CoreEvent.DeadlineEvent(sequence, false, deadlineAt(event), deadlineSet(event));
+    }
+
+    private static CoreEvent holdingsReleased(NativeRegion payload, long sequence) {
+        Layout layout = CoreLayouts.HOLDINGS_RELEASED_EVENT;
+        return new CoreEvent.HoldingsReleasedEvent(sequence, false, payload.getLong(offsetOf(layout, "owner")),
+                payload.getLong(offsetOf(layout, "registration")));
     }
 
     private static Refusal refusalAt(NativeRegion payload, long refusalOffset, long subjectOffset,

@@ -3,9 +3,10 @@ package com.weivel.host;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Who holds a C library's binary open: the host until it unloads the library, and each call running in it. Once the
- * library is closed to calls no call enters, and the binary closes when the last holder lets go, so nothing ever
- * calls into a closed binary and an unload never waits for a call.
+ * Who holds a C library's binary open: the host until it unloads the library, each call running in it, and each
+ * definition service until the core reports that nothing holds it any more. Once the library is closed to calls no
+ * call enters, and the binary closes when the last holder lets go, so nothing ever calls into a closed binary and an
+ * unload never waits for a call.
  *
  * @implNote One atomic word carries both: its high bit says the library is closed to calls, the rest counts the
  * holders, so entering, leaving and closing to calls take no lock, and exactly one of them sees the count reach none.
@@ -20,7 +21,7 @@ final class LibraryLifetime {
         this.closeBinary = closeBinary;
     }
 
-    /** Counts a call in, unless the library is closed to calls. */
+    /** Counts a call, or a definition service about to be registered, in, unless the library is closed to calls. */
     boolean enter() {
         long current;
         do {

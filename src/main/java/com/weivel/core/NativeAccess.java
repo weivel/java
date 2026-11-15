@@ -71,4 +71,20 @@ interface NativeAccess {
      * is not freed by its cleaner while native code still reads it through a raw address.
      */
     void keepReachable(Object object);
+
+    /**
+     * The language's own object carrying a native address, never a copy of what is there: a {@code MemorySegment} of
+     * {@code size} bytes on the foreign function API, a JNA {@code Pointer} on JNA.
+     */
+    Object addressed(long address, long size);
+
+    /**
+     * The native address an object {@link #addressed} answered carries.
+     *
+     * @throws IllegalArgumentException for an object of another kind
+     */
+    long addressOf(Object addressed);
+
+    /** The function at a native address, as a function pointer a library answered, called as {@code signature} says. */
+    NativeFunction function(long address, NativeSignature signature);
 }

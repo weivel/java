@@ -278,6 +278,10 @@ final class CoreLayouts {
             INT.withName("set"),
             Layout.padding(4)).withName("weivel_deadline_event");
 
+    static final Layout HOLDINGS_RELEASED_EVENT = Layout.struct(
+            LONG.withName("owner"),
+            LONG.withName("registration")).withName("weivel_holdings_released_event");
+
     static final Layout EVENT_DATA = Layout.union(
             LOG_EVENT.withName("log"),
             REFUSAL.withName("refusal"),
@@ -289,6 +293,7 @@ final class CoreLayouts {
             CAPABILITY_EVENT.withName("capability"),
             REFUSAL_EVENT.withName("refused"),
             DEADLINE_EVENT.withName("deadline"),
+            HOLDINGS_RELEASED_EVENT.withName("released"),
             Layout.sequence(16, LONG).withName("reserved"));
 
     static final Layout EVENT = Layout.struct(

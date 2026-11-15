@@ -13,6 +13,7 @@ import com.weivel.host.LoadedLibrary;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class LibraryDeclarationsTest {
@@ -22,7 +23,7 @@ class LibraryDeclarationsTest {
             + "  {\"name\": \"where\", \"symbol\": \"echo_where\", \"kind\": \"bytes\","
             + "   \"context\": [\"home\", \"arguments\"]}]}]}";
 
-    private static final LibraryDeclaration ECHO = new LibraryDeclaration("echo", "0.1.0", "echo_release",
+    private static final LibraryDeclaration ECHO = new LibraryDeclaration("echo", "0.1.0", Optional.of("echo_release"),
             Collections.singletonList(new LibraryDeclaration.Service("echo", Arrays.asList(
                     LibraryDeclaration.Function.bytes("echo", "echo_echo"),
                     new LibraryDeclaration.Function("where", "echo_where", LibraryDeclaration.BYTES, 2 | 4)))));
@@ -41,6 +42,25 @@ class LibraryDeclarationsTest {
             LibraryAnswer answer = loaded.services().get(0).call("echo", "hello".getBytes(StandardCharsets.UTF_8));
 
             assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), ((LibraryAnswer.Returned) answer).bytes());
+        }
+    }
+
+    @Test
+    void aDeclarationOfDefinitionsAloneIsReadWithNoReleaseAndLoadedThroughTheHost() throws Exception {
+        String definitions = "{\"importName\": \"echo\", \"version\": \"0.2.0\", \"services\": [{\"id\": \"echo\","
+                + " \"functions\": [{\"name\": \"definition\", \"symbol\": \"echo_service_definition\","
+                + " \"kind\": \"definition\"}]}]}";
+
+        LibraryDeclaration declaration = value(standard().readLibrary(definitions));
+
+        assertEquals(new LibraryDeclaration("echo", "0.2.0", Optional.<String>empty(), Collections.singletonList(
+                new LibraryDeclaration.Service("echo", Collections.singletonList(
+                        LibraryDeclaration.Function.definition("definition", "echo_service_definition"))))),
+                declaration);
+        try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
+            LoadedLibrary loaded = CoreProbes.ok(fixture.host.loadLibrary(CoreProbes.echoBinary(), declaration));
+
+            assertEquals(Collections.singleton("echo"), loaded.definitions().keySet());
         }
     }
 

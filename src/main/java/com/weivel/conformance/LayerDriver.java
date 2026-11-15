@@ -3,6 +3,7 @@ package com.weivel.conformance;
 import com.weivel.core.Answer;
 import com.weivel.core.CoreBinary;
 import com.weivel.core.CoreOptions;
+import com.weivel.core.ForeignMemory;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -12,17 +13,20 @@ import java.util.Objects;
  * The driver for the layer suite: it reads the kit's layer vectors through the standard's JSON reader, writing no
  * file, builds each vector's plugins as manifest values and entries, registers and drives them through the host's
  * public surface on the real core, and answers what the run shows in the vector's own shape. For a {@code want}
- * vector the suite's own clock and scheduler stand in for the language's.
+ * vector the suite's own clock and scheduler stand in for the language's, and a {@code library} vector loads the
+ * core's echo test library from the path the driver was loaded with.
  *
  * <p>One driver runs one vector at a time.
  */
 public final class LayerDriver implements AutoCloseable {
     private final CoreBinary core;
     private final StandardJson json;
+    private final Path echoBinary;
 
-    private LayerDriver(CoreBinary core, StandardJson json) {
+    private LayerDriver(CoreBinary core, StandardJson json, Path echoBinary) {
         this.core = core;
         this.json = json;
+        this.echoBinary = echoBinary;
     }
 
     /**
@@ -30,15 +34,17 @@ public final class LayerDriver implements AutoCloseable {
      *
      * @param core the core's binary, which its caller keeps open until the driver is closed
      * @param standardBinary the standard's binary, a path the caller chose
+     * @param echoBinary the core's echo test library, which a {@code library} vector loads through the host
      * @return the driver; {@link Answer.Mistake} for a path that names no library, or one lacking the reader
      */
-    public static Answer<LayerDriver> load(CoreBinary core, Path standardBinary) {
+    public static Answer<LayerDriver> load(CoreBinary core, Path standardBinary, Path echoBinary) {
         Objects.requireNonNull(core, "core");
+        Objects.requireNonNull(echoBinary, "echoBinary");
         Answer<StandardJson> json = StandardJson.load(standardBinary);
         if (!(json instanceof Answer.Ok)) {
             return Answer.retyped(json);
         }
-        return new Answer.Ok<>(new LayerDriver(core, ((Answer.Ok<StandardJson>) json).value()));
+        return new Answer.Ok<>(new LayerDriver(core, ((Answer.Ok<StandardJson>) json).value(), echoBinary));
     }
 
     /**
@@ -68,8 +74,8 @@ public final class LayerDriver implements AutoCloseable {
     public LayerWitness witness(LayerVector vector) {
         Objects.requireNonNull(vector, "vector");
         CoreOptions options = vector.op().equals("want") ? WantRun.coreOptions(vector) : CoreOptions.defaults();
-        try (DriverWorld world = new DriverWorld(core, options)) {
-            Map<String, Observations.Observer> observers = drive(vector, world);
+        try (ForeignMemory memory = ForeignMemory.open(); DriverWorld world = new DriverWorld(core, options)) {
+            Map<String, Observations.Observer> observers = drive(vector, world, memory);
             return new LayerWitness(vector.id(), Observations.observe(vector.id(), vector.then(), observers),
                     world.logs(), world.failures());
         } catch (RuntimeException failed) {
@@ -79,7 +85,7 @@ public final class LayerDriver implements AutoCloseable {
         }
     }
 
-    private static Map<String, Observations.Observer> drive(LayerVector vector, DriverWorld world) {
+    private Map<String, Observations.Observer> drive(LayerVector vector, DriverWorld world, ForeignMemory memory) {
         if (vector.op().equals("consume")) {
             return ConsumeRun.drive(vector, world);
         }
@@ -88,6 +94,9 @@ public final class LayerDriver implements AutoCloseable {
         }
         if (vector.op().equals("lifecycle")) {
             return LifecycleRun.drive(vector, world);
+        }
+        if (vector.op().equals("library")) {
+            return LibraryRun.drive(vector, world, echoBinary, memory);
         }
         throw new IllegalArgumentException("the vector " + vector.id() + " has the op " + vector.op()
                 + ", which this driver does not drive");

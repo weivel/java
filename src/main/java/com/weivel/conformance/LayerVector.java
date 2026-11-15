@@ -33,7 +33,7 @@ public final class LayerVector {
     /**
      * Answers {@code op}.
      *
-     * @return the op it drives: {@code consume}, {@code want} or {@code lifecycle}
+     * @return the op it drives: {@code consume}, {@code want}, {@code lifecycle} or {@code library}
      */
     public String op() {
         return op;

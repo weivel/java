@@ -66,11 +66,19 @@ final class DriverWorld implements AutoCloseable {
      * plan may place every plugin, so every one is opened and none is refused for a need.
      */
     void openInFlight(List<String> importNames) {
+        openInFlight(importNames, EdgeSource.SERVICES);
+    }
+
+    /**
+     * Opens registered plugins as {@link #openInFlight(List)} does, the plan drawn from {@code source}: from
+     * capabilities, a plugin consuming a service nothing provides yet is opened all the same.
+     */
+    void openInFlight(List<String> importNames, EdgeSource source) {
         List<Long> handles = new ArrayList<>();
         for (String importName : importNames) {
             handles.add(plugin(importName));
         }
-        Answer<Activation> activated = host.activate(handles, EdgeSource.SERVICES);
+        Answer<Activation> activated = host.activate(handles, source);
         if (!(activated instanceof Answer.Ok)
                 || !((Answer.Ok<Activation>) activated).value().plan().order().containsAll(handles)) {
             throw new IllegalStateException("the host did not open every plugin of " + importNames + ": " + activated);

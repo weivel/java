@@ -32,6 +32,8 @@ public final class CoreConstants {
     public static final int EVENT_CAPABILITY = 8;
     /** {@code WEIVEL_EVENT_DEADLINE}. */
     public static final int EVENT_DEADLINE = 9;
+    /** {@code WEIVEL_EVENT_HOLDINGS_RELEASED}. */
+    public static final int EVENT_HOLDINGS_RELEASED = 10;
 
     /** {@code WEIVEL_REFUSAL_NONE}. */
     public static final int REFUSAL_NONE = 0;

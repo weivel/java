@@ -216,7 +216,7 @@ class LibrariesTest {
     @Test
     void aCallerBuiltDeclarationOfAnotherKindIsTheCallersMistake() throws Exception {
         try (HostFixture fixture = new HostFixture()) {
-            LibraryDeclaration retired = new LibraryDeclaration("echo-test", "1.0.0", "echo_release",
+            LibraryDeclaration retired = new LibraryDeclaration("echo-test", "1.0.0", Optional.of("echo_release"),
                     Collections.singletonList(new LibraryDeclaration.Service("echo", Collections.singletonList(
                             new LibraryDeclaration.Function("echo", ECHO, 1, 0)))));
 
@@ -228,7 +228,7 @@ class LibrariesTest {
     @Test
     void aPathOfNoLibraryOrALibraryLackingASymbolIsTheCallersMistake() throws Exception {
         try (HostFixture fixture = new HostFixture()) {
-            LibraryDeclaration missing = new LibraryDeclaration("echo-test", "1.0.0", "echo_release",
+            LibraryDeclaration missing = new LibraryDeclaration("echo-test", "1.0.0", Optional.of("echo_release"),
                     Collections.singletonList(new LibraryDeclaration.Service("echo", Collections.singletonList(
                             LibraryDeclaration.Function.bytes("echo", "echo_nothing")))));
 
@@ -363,7 +363,7 @@ class LibrariesTest {
                     LibraryDeclaration.Function.bytes("where", "echo_where"),
                     LibraryDeclaration.Function.bytes("released", "echo_released"))));
         }
-        return new LibraryDeclaration(importName, "1.0.0", "echo_release", services);
+        return new LibraryDeclaration(importName, "1.0.0", Optional.of("echo_release"), services);
     }
 
     private static List<String> ids(LoadedLibrary library) {

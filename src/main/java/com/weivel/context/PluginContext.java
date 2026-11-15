@@ -116,6 +116,36 @@ public final class PluginContext {
     }
 
     /**
+     * Registers {@code service} under {@code id} as {@link #register(String, Object)} does, awaiting releases: once it
+     * is unregistered, by the plugin or by its stop, each holder keeps its holding until it lets go of the object, and
+     * once the last has, this plugin hears {@link PluginEvent.HoldingsReleased}, so whatever stood behind the object
+     * may be freed. A plugin released or forgotten since hears nothing.
+     *
+     * @param id the service id
+     * @param service the provider's own object
+     * @return the registration, or the core's refusal
+     */
+    public Answer<ServiceRegistration> registerAwaitingReleases(String id, Object service) {
+        return ServiceCalls.register(state, this, Objects.requireNonNull(id, "id"),
+                Objects.requireNonNull(service, "service"), Optional.<CapacityAnswerer>empty(),
+                () -> Optional.<Answer<Long>>empty(), () -> { }, Optional.<Runnable>of(() -> { }));
+    }
+
+    /**
+     * Lets go of a service revoked from this plugin whose provider awaits each holder's release, as a
+     * {@link PluginEvent.Revoked} that {@linkplain PluginEvent.Revoked#awaitsRelease() awaits it} says: the plugin no
+     * longer uses the object nor anything it answered, and the core ends the holding. However the plugin came to hold
+     * it, by a get, a want or a watch, it lets go once.
+     *
+     * @param service the object it had been handed, matched by reference
+     * @return true; false, calling nothing, when the plugin keeps no revoked holding of that very object, as before
+     *     its revocation or once it let go; the core's refusal
+     */
+    public Answer<Boolean> releaseHolding(Object service) {
+        return ServiceCalls.releaseHolding(state, this, Objects.requireNonNull(service, "service"));
+    }
+
+    /**
      * Provides {@code implementation} of the capability {@code id}; it reaches consumers once the plugin's activation
      * is verified.
      *
