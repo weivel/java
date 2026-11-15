@@ -212,7 +212,7 @@ public final class Handles {
      * @param implementation the registration or capability implementation it holds
      * @return the object; null when the plugin holds no such thing
      */
-    public Object held(long plugin, long implementation) {
+    Object held(long plugin, long implementation) {
         lock.lock();
         try {
             return holdings.get(plugin, implementation);
@@ -244,7 +244,7 @@ public final class Handles {
      *
      * @param plugin the plugin
      */
-    public void dropHoldings(long plugin) {
+    void dropHoldings(long plugin) {
         lock.lock();
         try {
             holdings.removeAll((holder, implementation, object) -> holder == plugin);
@@ -258,7 +258,7 @@ public final class Handles {
      *
      * @return the count
      */
-    public int entryCount() {
+    int entryCount() {
         lock.lock();
         try {
             return entries.size();
@@ -272,7 +272,7 @@ public final class Handles {
      *
      * @return the count
      */
-    public int holdingCount() {
+    int holdingCount() {
         lock.lock();
         try {
             return holdings.size();
@@ -399,7 +399,7 @@ public final class Handles {
          * @param object the layer's object for the handle
          * @return the steps for {@code CoreInternals.call}; the room stays open when the core does not answer OK
          */
-        public CallSteps<Long> making(HandleKind kind, long owner, Object object) {
+        CallSteps<Long> making(HandleKind kind, long owner, Object object) {
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(object, "object");
             return new CallSteps<Long>(() -> Optional.<Answer<Long>>empty(), handle -> {

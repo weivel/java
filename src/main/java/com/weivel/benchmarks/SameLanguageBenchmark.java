@@ -24,7 +24,7 @@ public final class SameLanguageBenchmark {
      * @param binary the core's loaded binary
      * @return the provider's object and the consumer's resolution of it
      */
-    public static Resolution resolve(CoreBinary binary) {
+    static Resolution resolve(CoreBinary binary) {
         return whileResolved(binary, resolution -> resolution);
     }
 
@@ -83,7 +83,7 @@ public final class SameLanguageBenchmark {
     }
 
     /** The object a provider registered, and what a consumer's get resolved under the same id. */
-    public static final class Resolution {
+    static final class Resolution {
         private final LongBinaryOperator provided;
         private final Object resolved;
 

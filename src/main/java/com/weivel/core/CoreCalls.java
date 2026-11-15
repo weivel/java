@@ -117,7 +117,7 @@ public final class CoreCalls {
      * @param plugin the plugin's handle
      * @return the call, answering the payload the plugin was last opened with, 0 for one never opened
      */
-    public static CoreCall<Long> pluginPayload(long plugin) {
+    static CoreCall<Long> pluginPayload(long plugin) {
         return builtByTheLayer((functions, arena, core, pending) -> {
             NativeRegion payload = arena.allocate(Layout.LONG);
             int status = functions.status(CoreFunction.PLUGIN_PAYLOAD, core, plugin, payload.address(), pending);
@@ -181,7 +181,7 @@ public final class CoreCalls {
      * @param handle a want or watch handle
      * @return the call, answering the handle's condition, a value of the core's header
      */
-    public static CoreCall<Integer> handleState(long handle) {
+    static CoreCall<Integer> handleState(long handle) {
         return builtByTheLayer((functions, arena, core, pending) -> {
             NativeRegion condition = arena.allocate(Layout.INT);
             int status = functions.status(CoreFunction.HANDLE_STATE, core, handle, condition.address(), pending);
@@ -446,7 +446,7 @@ public final class CoreCalls {
      *
      * @return the call, answering the deadline in the caller's milliseconds
      */
-    public static CoreCall<Long> nextDeadline() {
+    static CoreCall<Long> nextDeadline() {
         return builtByTheLayer((functions, arena, core, pending) -> {
             NativeRegion deadline = arena.allocate(Layout.LONG);
             int status = functions.status(CoreFunction.NEXT_DEADLINE, core, deadline.address(), pending);

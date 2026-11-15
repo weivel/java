@@ -112,12 +112,12 @@ class LifecycleTest {
             value(provider.watch(GREETER, ServicesTest.recording(new ArrayList<>())));
             ok(fixture.core.call(CoreCalls.releasePlugin(fixture.plugin(provider))));
             long before = fixture.crossings.total();
-            int entriesBefore = fixture.handles.entryCount();
+            int entriesBefore = com.weivel.handles.HandlesProbes.entryCount(fixture.handles);
 
             fixture.contexts.endEntries(provider);
 
             assertEquals(before, fixture.crossings.total());
-            assertEquals(entriesBefore - 2, fixture.handles.entryCount());
+            assertEquals(entriesBefore - 2, com.weivel.handles.HandlesProbes.entryCount(fixture.handles));
         }
     }
 

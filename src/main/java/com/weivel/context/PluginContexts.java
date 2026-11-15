@@ -259,7 +259,7 @@ public final class PluginContexts implements AutoCloseable {
      * @param payload a payload the core answered for a plugin
      * @return the context; empty once its plugin is forgotten, or for a payload no context was made with
      */
-    public Optional<PluginContext> byPayload(long payload) {
+    Optional<PluginContext> byPayload(long payload) {
         HandleEntry entry = state.handles.findByToken(payload);
         return entry != null && entry.object() instanceof PluginContext
                 ? Optional.of((PluginContext) entry.object())

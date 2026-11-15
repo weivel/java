@@ -165,7 +165,7 @@ class WantTest {
 
             assertEquals(Collections.singletonList(new WantOptions(Choice.DEFAULT, 0, 0, Choice.DEFAULT, 0, 0)),
                     fixture.crossings.wantOptions());
-            assertEquals(new Answer.Absent<Long>(), fixture.core.call(CoreCalls.nextDeadline()));
+            assertEquals(new Answer.Absent<Long>(), CoreProbes.nextDeadline(fixture.core));
         }
     }
 

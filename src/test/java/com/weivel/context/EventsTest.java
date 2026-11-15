@@ -69,7 +69,7 @@ class EventsTest {
 
             assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, wantingHeard.get(0)).object());
             assertSame(greeter, assertInstanceOf(PluginEvent.Revoked.class, watchingHeard.get(0)).object());
-            assertEquals(0, fixture.handles.holdingCount());
+            assertEquals(0, com.weivel.handles.HandlesProbes.holdingCount(fixture.handles));
         }
     }
 
