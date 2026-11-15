@@ -12,7 +12,7 @@ import java.util.function.LongBinaryOperator;
  */
 public final class SameLanguageBenchmark {
     /** A million calls a batch, so a batch outlasts the clock's resolution on every platform many times over. */
-    public static final Sampling DEFAULT_SAMPLING = new Sampling(2_000_000, 1_000_000, 101);
+    public static final Sampling DEFAULT_SAMPLING = new Sampling(20_000_000, 1_000_000, 101);
 
     private SameLanguageBenchmark() {
     }

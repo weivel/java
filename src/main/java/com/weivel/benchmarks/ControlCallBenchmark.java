@@ -13,8 +13,13 @@ import java.util.LinkedHashMap;
  * over the same function of the core's table on the same core, plugin and id, called bare.
  */
 public final class ControlCallBenchmark {
-    /** Enough batches that the median of the per-round ratios settles, at a fraction of a second a path on FFM. */
-    public static final Sampling DEFAULT_SAMPLING = new Sampling(100_000, 1_000, 201);
+    /**
+     * Enough batches that the median of the per-round ratios settles.
+     *
+     * @implNote A warm-up of 100 000 calls left the first run of a JVM up to twice as slow through the wrapper on FFM
+     * as the runs after it, on every CI runner: the JIT was still compiling the wrapper's call tree.
+     */
+    public static final Sampling DEFAULT_SAMPLING = new Sampling(1_000_000, 1_000, 201);
 
     private ControlCallBenchmark() {
     }

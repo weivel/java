@@ -30,8 +30,13 @@ import java.util.concurrent.TimeoutException;
  * answer copied out and released as the host does.
  */
 public final class LibraryCallBenchmark {
-    /** Enough batches that the median of the per-round ratios settles, at a fraction of a second a path on FFM. */
-    public static final Sampling DEFAULT_SAMPLING = new Sampling(100_000, 1_000, 201);
+    /**
+     * Enough batches that the median of the per-round ratios settles.
+     *
+     * @implNote The warm-up is ten times the 100 000 calls that left a JVM's first run slower, as
+     * {@link ControlCallBenchmark#DEFAULT_SAMPLING} records.
+     */
+    public static final Sampling DEFAULT_SAMPLING = new Sampling(1_000_000, 1_000, 201);
 
     private static final String ECHO = "echo";
     private static final String ECHO_SYMBOL = "echo_echo";
