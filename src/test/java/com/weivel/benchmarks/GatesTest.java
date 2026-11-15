@@ -106,6 +106,14 @@ class GatesTest {
     }
 
     @Test
+    void holdsEachPlatformsSameLanguagePairToThatPlatformsOwnMargin() {
+        Optional<String> macos = Optional.of("macos");
+
+        assertTrue(Gates.sameLanguage(BUDGET, macos, new double[] {1.0}, new double[] {1.179}).passed());
+        assertFalse(Gates.sameLanguage(BUDGET, macos, new double[] {1.0}, new double[] {1.181}).passed());
+    }
+
+    @Test
     void measuresDeviationTheSameEitherWay() {
         assertEquals(0.25, Gates.deviation(1.25), 1e-12);
         assertEquals(0.25, Gates.deviation(1 / 1.25), 1e-12);

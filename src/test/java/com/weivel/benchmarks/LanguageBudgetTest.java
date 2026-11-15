@@ -30,7 +30,9 @@ class LanguageBudgetTest {
             "worst-noise linux 0.1",
             "worst-noise windows 0.2",
             "worst-noise macos 0.3",
-            "noise-margin 4",
+            "noise-margin linux 4",
+            "noise-margin windows 5",
+            "noise-margin macos 6",
             "");
 
     @Test
@@ -55,12 +57,14 @@ class LanguageBudgetTest {
     }
 
     @Test
-    void readsEachPlatformsNoiseAndTheNoiseMargin() {
+    void readsEachPlatformsNoiseAndNoiseMargin() {
         LanguageBudget budget = LanguageBudget.parse(BUDGET);
 
-        assertEquals(Optional.of(new NoiseBounds(0.02, 0.2)), budget.noiseBounds("windows"));
-        assertEquals(4.0, budget.noiseMargin());
+        assertEquals(Optional.of(new NoiseBounds(0.02, 0.2, 5.0)), budget.noiseBounds("windows"));
+        assertEquals(Optional.of(new NoiseBounds(0.03, 0.3, 6.0)), budget.noiseBounds("macos"));
         assertFalse(LanguageBudget.parse(BUDGET.replace("worst-noise macos 0.3\n", "")).noiseBounds("macos")
+                .isPresent());
+        assertFalse(LanguageBudget.parse(BUDGET.replace("noise-margin macos 6\n", "")).noiseBounds("macos")
                 .isPresent());
         assertFalse(budget.noiseBounds("freebsd").isPresent());
     }
@@ -77,7 +81,18 @@ class LanguageBudgetTest {
     void refusesALineTheFormatDoesNotDefine() {
         assertThrows(IllegalArgumentException.class, () -> LanguageBudget.parse(BUDGET + "dispatch-ffm linux 3\n"));
         assertThrows(IllegalArgumentException.class, () -> LanguageBudget.parse(BUDGET + "control-call-ffm bsd 3\n"));
-        assertThrows(IllegalArgumentException.class, () -> LanguageBudget.parse(BUDGET + "noise-margin 3 4\n"));
+        assertThrows(IllegalArgumentException.class, () -> LanguageBudget.parse(BUDGET + "noise-margin bsd 4\n"));
+    }
+
+    @Test
+    void refusesANoiseMarginGivenForEveryPlatformAtOnce() {
+        String scalar = BUDGET.replace("noise-margin linux 4\nnoise-margin windows 5\nnoise-margin macos 6\n",
+                "noise-margin 4\n");
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> LanguageBudget.parse(scalar));
+
+        assertTrue(refused.getMessage().contains("\"noise-margin 4\""), refused.getMessage());
     }
 
     @Test
@@ -100,8 +115,8 @@ class LanguageBudgetTest {
     @Test
     void refusesABudgetMissingAMargin() {
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-                () -> LanguageBudget.parse(BUDGET.replace("noise-margin 4\n", "")));
+                () -> LanguageBudget.parse(BUDGET.replace("ratio-margin 2\n", "")));
 
-        assertTrue(refused.getMessage().contains("names no noise-margin"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("names no ratio-margin"), refused.getMessage());
     }
 }

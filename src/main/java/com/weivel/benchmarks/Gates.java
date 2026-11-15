@@ -70,7 +70,7 @@ public final class Gates {
                     + format(noise) + ", over the worst noise of " + format(bounds.get().worst()));
         }
         double ratio = Summary.of(sameLanguageRatios).median();
-        double bound = 1 + budget.noiseMargin() * Math.max(bounds.get().quiet(), noise);
+        double bound = 1 + bounds.get().margin() * Math.max(bounds.get().quiet(), noise);
         String measured = "the same-language call ran " + format(ratio) + " times the direct call, with noise "
                 + format(noise) + ", against a bound of " + format(bound);
         return ratio <= bound && ratio >= 1 / bound ? Verdict.passed(measured) : Verdict.failed(measured);
