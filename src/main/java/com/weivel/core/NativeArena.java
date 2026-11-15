@@ -50,6 +50,14 @@ final class NativeArena implements AutoCloseable {
 
     /** Zeroed memory of {@code size} bytes, freed when this arena closes, or for a reusable one at its reset. */
     NativeRegion allocate(long size) {
+        return new NativeRegion(access, allocateAddress(size), size, this);
+    }
+
+    /**
+     * The address of zeroed memory of {@code size} bytes, as {@link #allocate(long)} holds it: for a crossing that
+     * only hands the address on, so no region is made.
+     */
+    long allocateAddress(long size) {
         checkAlive();
         if (reusable) {
             long aligned = (size + ALIGNMENT - 1) & -ALIGNMENT;
@@ -58,12 +66,12 @@ final class NativeArena implements AutoCloseable {
                 long address = block + used;
                 used += aligned;
                 access.clear(address, 0, size);
-                return new NativeRegion(access, address, size, this);
+                return address;
             }
         }
         long address = access.allocate(size);
         allocations.add(address);
-        return new NativeRegion(access, address, size, this);
+        return address;
     }
 
     /**
@@ -106,21 +114,32 @@ final class NativeArena implements AutoCloseable {
         return allocate(element.byteSize() * Math.max(1, count));
     }
 
-    /**
-     * {@code text} encoded as UTF-8 and terminated by a zero byte.
-     *
-     * @implNote It is encoded through an array this arena keeps and grows, so a reusable arena's texts allocate
-     * nothing on the Java heap once the array holds the longest.
-     */
+    /** {@code text} encoded as UTF-8 and terminated by a zero byte. */
     NativeRegion text(String text) {
         int length = Utf8.encodedLength(text);
+        return new NativeRegion(access, textAddress(text, length), length + 1L, this);
+    }
+
+    /**
+     * The address of {@code text} laid out as {@link #text} lays it out: for a crossing that only hands the address
+     * on, so no region is made.
+     */
+    long textAddress(String text) {
+        return textAddress(text, Utf8.encodedLength(text));
+    }
+
+    /**
+     * @implNote The text is encoded through an array this arena keeps and grows, so a reusable arena's texts allocate
+     * nothing on the Java heap once the array holds the longest.
+     */
+    private long textAddress(String text, int length) {
         if (encoding.length < length) {
             encoding = new byte[Math.max(length, encoding.length * 2)];
         }
         Utf8.encode(text, encoding);
-        NativeRegion region = allocate(length + 1L);
-        access.writeBytes(region.address(), 0, encoding, 0, length);
-        return region;
+        long address = allocateAddress(length + 1L);
+        access.writeBytes(address, 0, encoding, 0, length);
+        return address;
     }
 
     boolean isAlive() {
@@ -142,9 +161,10 @@ final class NativeArena implements AutoCloseable {
         }
     }
 
+    /** @implNote Indexed, so a reset with nothing to free makes no iterator. */
     private void freeAllocations() {
-        for (long address : allocations) {
-            access.free(address);
+        for (int index = 0; index < allocations.size(); index++) {
+            access.free(allocations.get(index));
         }
         allocations.clear();
     }

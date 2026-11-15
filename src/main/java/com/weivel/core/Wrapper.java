@@ -49,6 +49,7 @@ final class Wrapper {
     private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
     private final OwnRefusal own = new OwnRefusal();
     private final CallNotes notes = new CallNotes();
+    private final CoreCalls.Crossed<Object> crossingAnswer = new CoreCalls.Crossed<>();
     private boolean dispatching;
     private boolean closed;
     private long sequence;
@@ -183,6 +184,14 @@ final class Wrapper {
     }
 
     private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps) throws Throwable {
+        try {
+            return answered(call, steps);
+        } finally {
+            crossingAnswer.clear();
+        }
+    }
+
+    private <T> Answer<T> answered(CoreCall<T> call, CallSteps<T> steps) throws Throwable {
         CoreCalls.Crossed<T> crossed;
         Optional<Throwable> unread = Optional.empty();
         try {
@@ -209,10 +218,12 @@ final class Wrapper {
      * free again once the crossing returns: the one place a call's crossing is made, so nothing else in the package
      * needs the table of the core's functions.
      */
+    @SuppressWarnings("unchecked")
     <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
         pending.putInt(0, 0);
         try {
-            return crossing.cross(functions, scratch, core, pending.address());
+            return crossing.cross(functions, scratch, core, pending.address(),
+                    (CoreCalls.Crossed<T>) (CoreCalls.Crossed<?>) crossingAnswer);
         } finally {
             scratch.reset();
         }
@@ -456,10 +467,11 @@ final class Wrapper {
     }
 
     private void advanceHeld(long now) throws Throwable {
-        CoreCalls.Crossed<Void> crossed = cross(CoreCalls.advanceCrossing(now));
-        if (crossed.status() == STATUS_MALFORMED) {
+        int status = cross(CoreCalls.advanceCrossing(now)).status();
+        crossingAnswer.clear();
+        if (status == STATUS_MALFORMED) {
             notes.noteDefect("the core called the advance made for a due deadline malformed", Optional.empty());
-        } else if (crossed.status() != STATUS_OK) {
+        } else if (status != STATUS_OK) {
             notes.note(FailureKind.DUE_ADVANCE,
                     "the core did not take the time of a deadline that fell due, which stays due", 0, 0,
                     Optional.empty());
