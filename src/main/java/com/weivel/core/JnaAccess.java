@@ -18,6 +18,13 @@ final class JnaAccess implements NativeAccess {
     static final JnaAccess INSTANCE = new JnaAccess();
 
     private static final String DISTINCT_LOAD_OPTION = "weivel.distinct-load";
+    /**
+     * The pointer every access of memory goes through, at the address as its offset.
+     *
+     * @implNote JNA hands the pointer itself to its natives, so it always escapes, and a pointer made per access is a
+     * heap allocation per access; at address zero, the offset is the address.
+     */
+    private static final Pointer ABSOLUTE = new Pointer(0);
 
     private final AtomicLong loads = new AtomicLong();
     private volatile Object reachable;
@@ -61,7 +68,7 @@ final class JnaAccess implements NativeAccess {
         if (address == 0) {
             throw new OutOfMemoryError("no native memory for " + size + " bytes");
         }
-        new Pointer(address).setMemory(0, Math.max(1, size), (byte) 0);
+        ABSOLUTE.setMemory(address, Math.max(1, size), (byte) 0);
         return address;
     }
 
@@ -72,52 +79,52 @@ final class JnaAccess implements NativeAccess {
 
     @Override
     public int getInt(long address, long offset) {
-        return new Pointer(address).getInt(offset);
+        return ABSOLUTE.getInt(address + offset);
     }
 
     @Override
     public void putInt(long address, long offset, int value) {
-        new Pointer(address).setInt(offset, value);
+        ABSOLUTE.setInt(address + offset, value);
     }
 
     @Override
     public long getLong(long address, long offset) {
-        return new Pointer(address).getLong(offset);
+        return ABSOLUTE.getLong(address + offset);
     }
 
     @Override
     public void putLong(long address, long offset, long value) {
-        new Pointer(address).setLong(offset, value);
+        ABSOLUTE.setLong(address + offset, value);
     }
 
     @Override
     public double getDouble(long address, long offset) {
-        return new Pointer(address).getDouble(offset);
+        return ABSOLUTE.getDouble(address + offset);
     }
 
     @Override
     public void putDouble(long address, long offset, double value) {
-        new Pointer(address).setDouble(offset, value);
+        ABSOLUTE.setDouble(address + offset, value);
     }
 
     @Override
     public byte[] readBytes(long address, long offset, int length) {
-        return new Pointer(address).getByteArray(offset, length);
+        return ABSOLUTE.getByteArray(address + offset, length);
     }
 
     @Override
     public void writeBytes(long address, long offset, byte[] bytes) {
-        new Pointer(address).write(offset, bytes, 0, bytes.length);
+        ABSOLUTE.write(address + offset, bytes, 0, bytes.length);
     }
 
     @Override
     public void clear(long address, long offset, long length) {
-        new Pointer(address).setMemory(offset, length, (byte) 0);
+        ABSOLUTE.setMemory(address + offset, length, (byte) 0);
     }
 
     @Override
     public String readText(long address) {
-        return new Pointer(address).getString(0, StandardCharsets.UTF_8.name());
+        return ABSOLUTE.getString(address, StandardCharsets.UTF_8.name());
     }
 
     @Override
@@ -130,7 +137,7 @@ final class JnaAccess implements NativeAccess {
 
     @Override
     public void writeBytes(long address, long offset, byte[] bytes, int from, int length) {
-        new Pointer(address).write(offset, bytes, from, length);
+        ABSOLUTE.write(address + offset, bytes, from, length);
     }
 
     /**
