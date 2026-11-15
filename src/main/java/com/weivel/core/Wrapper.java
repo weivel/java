@@ -908,6 +908,7 @@ final class Wrapper {
                 throw new IllegalStateException("a dispatch or the arming of the timer is still running");
             }
             closed = true;
+            own.clear();
             arena.close();
             scratch.close();
         } finally {

@@ -3,7 +3,9 @@ package com.weivel.core;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,23 @@ class ReusableArenaTest {
             arena.reset();
         }
         arena.close();
+    }
+
+    @Test
+    void holdsNoTextItEncodedOnceClosed() throws InterruptedException {
+        NativeArena arena = NativeArena.reusable(access);
+        WeakReference<String> text = encodedOnce(arena);
+
+        arena.close();
+
+        assertTrue(TestCores.collected(text), "the closed arena still held the last text it encoded");
+    }
+
+    private static WeakReference<String> encodedOnce(NativeArena arena) {
+        String text = new String("forgotten".toCharArray());
+        arena.text(text);
+        arena.reset();
+        return new WeakReference<>(text);
     }
 
     @Test
