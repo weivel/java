@@ -145,6 +145,9 @@ final class FfmAccess implements NativeAccess {
 
     @Override
     public void clear(long address, long offset, long length) {
+        if (length < 0) {
+            throw new IndexOutOfBoundsException("a clear of " + length + " bytes");
+        }
         long start = address + offset;
         if (length > LONGEST_STORED_CLEAR) {
             EVERYTHING.asSlice(start, length).fill((byte) 0);

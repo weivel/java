@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -282,6 +283,52 @@ class WrapperCallTest {
 
         assertEquals(new Answer.Absent<Long>(), core.call(CoreCalls.getService(HOST, "nothing")));
         core.destroy();
+    }
+
+    @Test
+    void whatACallThatThrewNotedIsDroppedAndNotToldWithTheNextCall() {
+        Core core = TestCores.core(TestCores.functions(), new EventCopyTest.FailingCopy(sequence -> true,
+                sequence -> false), listener, sink);
+        CallSteps<Long> throwing = new CallSteps<>(() -> Optional.empty(), value -> {
+            throw new InternalError("an answered step failing on purpose");
+        });
+
+        assertThrows(InternalError.class, () -> CoreInternals.call(core,
+                CoreCalls.wantService(HOST, "awaited", WantOptions.timed(0, 10)), throwing));
+        ok(core.call(CoreCalls.ledger()));
+
+        assertEquals(Collections.emptyList(), sink.failures());
+        core.destroy();
+    }
+
+    @Test
+    void noAnswerStaysReachableFromTheWrapperOnceItsCallReturns() throws InterruptedException {
+        Core core = TestCores.core(listener, sink);
+        openedPlugin(core, "remembered");
+
+        WeakReference<List<LedgerRow>> ledger = ledgerAnswered(core);
+
+        assertTrue(TestCores.collected(ledger), "the ledger a call answered stayed reachable after it returned");
+        core.destroy();
+    }
+
+    @Test
+    void aClosedCoreHoldsNoRefusalItsLastCallMet() throws InterruptedException {
+        Core core = TestCores.core(event -> { }, sink);
+
+        WeakReference<Refusal> refusal = refusalMet(core);
+        core.destroy();
+        core.close();
+
+        assertTrue(TestCores.collected(refusal), "the closed core still held the refusal its last call met");
+    }
+
+    private static WeakReference<List<LedgerRow>> ledgerAnswered(Core core) {
+        return new WeakReference<>(ok(core.call(CoreCalls.ledger())));
+    }
+
+    private static WeakReference<Refusal> refusalMet(Core core) {
+        return new WeakReference<>(TestCores.refusalOf(core.call(CoreCalls.unregister(424242L))));
     }
 
     static long openedPlugin(Core core, String importName) {

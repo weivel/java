@@ -33,6 +33,17 @@ class NativeAccessTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("backends")
+    void refusesToClearANegativeLength(NativeAccess access) {
+        long memory = access.allocate(8);
+        try {
+            assertThrows(IndexOutOfBoundsException.class, () -> access.clear(memory, 0, -1));
+        } finally {
+            access.free(memory);
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("backends")
     void aFunctionIsCalledWithAddressesAndLengthsAndAnswersItsStatus(NativeAccess access) {
         byte[] input = "echo me".getBytes(StandardCharsets.UTF_8);
         try (OpenLibrary echo = access.open(NativeFiles.echoBinary())) {

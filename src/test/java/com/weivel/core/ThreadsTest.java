@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -319,6 +320,79 @@ class ThreadsTest {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(interrupted);
+        }
+    }
+
+    /**
+     * A refused call answers its own refusal, never another's: four threads make first-time refusals of distinct ids
+     * while a listener makes nested refused calls from inside the dispatch.
+     *
+     * @implNote The wrapper keeps one record of the refusal a drain held, so a record not emptied by each drain would
+     * hand a call the refusal an earlier call met.
+     */
+    @Test
+    @Timeout(180)
+    void eachRefusedCallAnswersItsOwnRefusalAcrossThreadsAndNestedCalls() throws Exception {
+        List<String> wrong = Collections.synchronizedList(new ArrayList<String>());
+        AtomicInteger inner = new AtomicInteger();
+        Core[] core = new Core[1];
+        long[] plugin = new long[1];
+        CoreListener calling = event -> {
+            if (event instanceof CoreEvent.ReachRefusedEvent && inner.get() < 2000) {
+                String id = "inner-" + inner.incrementAndGet();
+                refusedAsItsOwn(core[0].call(CoreCalls.getService(plugin[0], id)), id, wrong);
+                refusedWithoutARefusal(core[0].call(CoreCalls.getService(plugin[0], id)), "inner " + id, wrong);
+            }
+        };
+        core[0] = TestCores.core(calling, sink);
+        plugin[0] = WrapperCallTest.openedPlugin(core[0], "reacher");
+        CountDownLatch start = new CountDownLatch(1);
+        List<Thread> running = new ArrayList<>();
+        for (int thread = 0; thread < 4; thread++) {
+            String prefix = "t" + thread + "-";
+            Thread worker = new Thread(() -> {
+                try {
+                    start.await();
+                } catch (InterruptedException interrupted) {
+                    return;
+                }
+                for (int index = 0; index < 3000; index++) {
+                    String id = prefix + index;
+                    refusedAsItsOwn(core[0].call(CoreCalls.getService(plugin[0], id)), id, wrong);
+                    refusedWithoutARefusal(core[0].call(CoreCalls.getService(plugin[0], id)), id, wrong);
+                }
+            });
+            worker.start();
+            running.add(worker);
+        }
+        start.countDown();
+        for (Thread worker : running) {
+            worker.join();
+        }
+        core[0].destroy();
+
+        assertTrue(inner.get() > 0, "no nested call was made");
+        assertEquals(Collections.emptyList(), wrong.subList(0, Math.min(10, wrong.size())));
+        assertEquals(Collections.emptyList(), sink.failures());
+    }
+
+    private static void refusedAsItsOwn(Answer<Long> answer, String id, List<String> wrong) {
+        if (!(answer instanceof Answer.Refused)) {
+            wrong.add(id + " answered " + answer);
+            return;
+        }
+        Optional<Refusal> refusal = ((Answer.Refused<Long>) answer).refusal();
+        if (!refusal.isPresent() || !refusal.get().subject().equals(Optional.of(id))) {
+            wrong.add(id + " carried " + refusal);
+        }
+    }
+
+    /** A repeated reach the core refused already is refused again without a refusal of its own. */
+    private static void refusedWithoutARefusal(Answer<Long> answer, String what, List<String> wrong) {
+        if (!(answer instanceof Answer.Refused)) {
+            wrong.add("repeated " + what + " answered " + answer);
+        } else if (((Answer.Refused<Long>) answer).refusal().isPresent()) {
+            wrong.add("repeated " + what + " carried " + ((Answer.Refused<Long>) answer).refusal());
         }
     }
 }

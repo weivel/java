@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,6 +51,18 @@ final class TestCores {
 
     static <T> T last(List<T> list) {
         return list.get(list.size() - 1);
+    }
+
+    /**
+     * Whether what {@code reference} refers to is collected once nothing else holds it, asking for a collection a
+     * bounded number of times.
+     */
+    static boolean collected(WeakReference<?> reference) throws InterruptedException {
+        for (int attempt = 0; attempt < 20 && reference.get() != null; attempt++) {
+            System.gc();
+            Thread.sleep(50);
+        }
+        return reference.get() == null;
     }
 
     static Refusal refusalOf(Answer<?> answer) {

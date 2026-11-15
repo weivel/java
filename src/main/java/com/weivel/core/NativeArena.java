@@ -164,6 +164,8 @@ final class NativeArena implements AutoCloseable {
     public void close() {
         checkAlive();
         alive = false;
+        lastText = null;
+        lastEncoding = null;
         freeAllocations();
         if (reusable) {
             access.free(block);
