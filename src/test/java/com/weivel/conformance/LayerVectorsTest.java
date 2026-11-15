@@ -168,6 +168,24 @@ class LayerVectorsTest {
         assertWitnessedQuietly("library/a-holding-ended-with-its-holder-closes-the-binary");
     }
 
+    @Test
+    @DisplayName("library/an-owner-hears-the-release-its-own-release-queued")
+    void anOwnerHearsTheReleaseItsOwnReleaseQueued() {
+        assertWitnessedQuietly("library/an-owner-hears-the-release-its-own-release-queued");
+    }
+
+    @Test
+    @DisplayName("library/a-release-event-after-its-owner-was-quarantined-reaches-no-one")
+    void aReleaseEventAfterItsOwnerWasQuarantinedReachesNoOne() {
+        assertWitnessedQuietly("library/a-release-event-after-its-owner-was-quarantined-reaches-no-one");
+    }
+
+    @Test
+    @DisplayName("library/a-forgotten-holder-ends-its-late-holding")
+    void aForgottenHolderEndsItsLateHolding() {
+        assertWitnessedQuietly("library/a-forgotten-holder-ends-its-late-holding");
+    }
+
     /**
      * The held-bytes vector as this layer witnesses it: every bytes answer is copied once into a Java array and released
      * before the call answers, as a collected language's must be, so no bytes are held after the call, and the binary

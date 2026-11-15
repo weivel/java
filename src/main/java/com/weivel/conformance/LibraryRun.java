@@ -4,6 +4,7 @@ import com.weivel.context.PluginContext;
 import com.weivel.context.PluginEvent;
 import com.weivel.core.Answer;
 import com.weivel.core.EdgeSource;
+import com.weivel.core.Manifest;
 import com.weivel.core.ForeignFunction;
 import com.weivel.core.ForeignLibrary;
 import com.weivel.core.ForeignMemory;
@@ -19,10 +20,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -33,9 +36,14 @@ import java.util.concurrent.TimeoutException;
  * its activate left in flight, and every step run on the suite's thread through the host's and the contexts' public
  * surface, so once a step returns the layer has nothing left to run from it.
  *
+ * <p>The host forgets a plugin as the last part of its release, so the only time a released plugin is not yet
+ * forgotten is while the events its release queued are dispatched. A {@code get} a vector makes between a holder's
+ * {@code releaseHolder} and its {@code forgetHolder} is made then, as a late call, from the holder's listener as it
+ * hears the first revocation its release queued, and the {@code forgetHolder} finds the holder forgotten.
+ *
  * @implNote An {@code echo_definition} is read as the echo library's header lays it out: its {@code uint32_t size},
- * then four pointers each at its own alignment, the context and the {@code echo}, {@code release} and
- * {@code count_unloads} operations, so on a 64-bit platform they sit at 8, 16, 24 and 32.
+ * then four pointers each at the platform's pointer alignment, the context and the {@code echo}, {@code release}
+ * and {@code count_unloads} operations, so on a 64-bit platform they sit at 8, 16, 24 and 32.
  */
 final class LibraryRun {
     private static final long WAIT_SECONDS = 10;
@@ -46,7 +54,7 @@ final class LibraryRun {
 
     private final DriverWorld world;
     private final Path echoBinary;
-    private final LibraryDeclaration declaration;
+    private final Optional<LibraryDeclaration> declaration;
     private final ForeignMemory memory;
     private final long counter;
     private final Map<String, CompletableFuture<Void>> activates = new HashMap<>();
@@ -55,12 +63,17 @@ final class LibraryRun {
     private final List<Object> got = new ArrayList<>();
     private final List<Object> echoed = new ArrayList<>();
     private final List<List<String>> revoked = new ArrayList<>();
+    private final Map<String, List<PluginEvent.Revoked>> revocations = new HashMap<>();
+    private final List<Object> holdingsReleased = new ArrayList<>();
+    private final Map<String, List<String>> lateGets = new HashMap<>();
+    private final Set<Integer> consumed = new HashSet<>();
     private final List<Object> unloads = new ArrayList<>();
     private Answer<LoadedLibrary> load;
     private int failuresBeforeTheSteps;
     private int logsBeforeTheSteps;
 
-    private LibraryRun(DriverWorld world, Path echoBinary, LibraryDeclaration declaration, ForeignMemory memory) {
+    private LibraryRun(DriverWorld world, Path echoBinary, Optional<LibraryDeclaration> declaration,
+                       ForeignMemory memory) {
         this.world = world;
         this.echoBinary = echoBinary;
         this.declaration = declaration;
@@ -73,13 +86,20 @@ final class LibraryRun {
                                                     ForeignMemory memory) {
         String where = "the vector " + vector.id() + "'s given";
         Map<String, Object> given = vector.given();
-        Shapes.refuseUnknownKeys(where, given, "declaration", "holders", "steps");
-        LibraryRun run = new LibraryRun(world, echoBinary, declarationOf(where, Shapes.object(where, given,
-                "declaration")), memory);
-        run.open(Shapes.texts(where, given, "holders"));
+        Shapes.refuseUnknownKeys(where, given, "declaration", "owners", "holders", "steps");
+        Optional<LibraryDeclaration> declaration = given.containsKey("declaration")
+                ? Optional.of(declarationOf(where, Shapes.object(where, given, "declaration")))
+                : Optional.<LibraryDeclaration>empty();
+        LibraryRun run = new LibraryRun(world, echoBinary, declaration, memory);
+        List<Map<String, Object>> owners = given.containsKey("owners")
+                ? Shapes.objects(where, given, "owners")
+                : Collections.<Map<String, Object>>emptyList();
+        run.open(where, owners, Shapes.texts(where, given, "holders"));
         List<Map<String, Object>> steps = Shapes.objects(where, given, "steps");
         for (int index = 0; index < steps.size(); index++) {
-            run.step(where + "'s step " + index, steps.get(index));
+            if (!run.consumed.contains(index)) {
+                run.step(where + "'s step " + index, steps, index);
+            }
         }
         return run.observers();
     }
@@ -121,9 +141,9 @@ final class LibraryRun {
      * The address each definition's symbol answers, read through a load of the binary the suite closes again before
      * the first step, so that only the layer holds the binary across the steps.
      */
-    private static Map<String, Long> answeredAddresses(Path echoBinary, LibraryDeclaration declaration) {
+    private static Map<String, Long> answeredAddresses(Path echoBinary, Optional<LibraryDeclaration> declaration) {
         Map<String, String> symbols = new LinkedHashMap<>();
-        for (LibraryDeclaration.Service service : declaration.services()) {
+        for (LibraryDeclaration.Service service : servicesOf(declaration)) {
             LibraryDeclaration.Function first = service.functions().get(0);
             if (first.kind() == LibraryDeclaration.DEFINITION) {
                 symbols.put(service.id(), first.symbol());
@@ -145,44 +165,91 @@ final class LibraryRun {
         return addresses;
     }
 
-    private void open(List<String> holders) {
+    private static List<LibraryDeclaration.Service> servicesOf(Optional<LibraryDeclaration> declaration) {
+        return declaration.isPresent() ? declaration.get().services()
+                : Collections.<LibraryDeclaration.Service>emptyList();
+    }
+
+    /** Opens the owners, then the holders, each consuming every id the declaration lists and every id an owner offers. */
+    private void open(String where, List<Map<String, Object>> owners, List<String> holders) {
         List<String> ids = new ArrayList<>();
-        for (LibraryDeclaration.Service service : declaration.services()) {
+        for (LibraryDeclaration.Service service : servicesOf(declaration)) {
             ids.add(service.id());
         }
-        for (String holder : holders) {
-            CompletableFuture<Void> activate = new CompletableFuture<>();
-            activates.put(holder, activate);
-            Entry entry = context -> activate;
-            world.register(Manifests.services(holder, Collections.<String>emptyList(), ids), entry);
+        List<String> opened = new ArrayList<>();
+        for (Map<String, Object> owner : owners) {
+            String ownerWhere = where + "'s owner";
+            Shapes.refuseUnknownKeys(ownerWhere, owner, "id", "provides");
+            String name = Shapes.text(ownerWhere, owner, "id");
+            List<String> provides = Shapes.texts(ownerWhere, owner, "provides");
+            ids.addAll(provides);
+            registerInFlight(Manifests.services(name, provides, Collections.<String>emptyList()));
+            opened.add(name);
         }
-        world.openInFlight(holders, EdgeSource.CAPABILITIES);
         for (String holder : holders) {
-            world.context(holder).listen(event -> heard(holder, event));
+            registerInFlight(Manifests.services(holder, Collections.<String>emptyList(), ids));
+            opened.add(holder);
+        }
+        world.openInFlight(opened, EdgeSource.CAPABILITIES);
+        for (String plugin : opened) {
+            world.context(plugin).listen(event -> heard(plugin, event));
         }
         failuresBeforeTheSteps = world.failures().size();
         logsBeforeTheSteps = world.logs().size();
     }
 
-    private void heard(String holder, PluginEvent event) {
+    private void registerInFlight(Manifest manifest) {
+        CompletableFuture<Void> activate = new CompletableFuture<>();
+        activates.put(manifest.importName(), activate);
+        Entry entry = context -> activate;
+        world.register(manifest, entry);
+    }
+
+    private void heard(String plugin, PluginEvent event) {
+        if (event instanceof PluginEvent.HoldingsReleased) {
+            PluginEvent.HoldingsReleased released = (PluginEvent.HoldingsReleased) event;
+            holdingsReleased.add(Arrays.asList(plugin, released.id()));
+            return;
+        }
         if (!(event instanceof PluginEvent.Revoked)) {
             return;
         }
-        Object object = ((PluginEvent.Revoked) event).object();
-        for (Map.Entry<String, Object> held : resolvedBy(holder).entrySet()) {
-            if (held.getValue() == object) {
-                revoked.add(Arrays.asList(holder, held.getKey()));
+        PluginEvent.Revoked revocation = (PluginEvent.Revoked) event;
+        revocationsOf(plugin).add(revocation);
+        for (Map.Entry<String, Object> held : resolvedBy(plugin).entrySet()) {
+            if (held.getValue() == revocation.object()) {
+                revoked.add(Arrays.asList(plugin, held.getKey()));
+            }
+        }
+        List<String> late = lateGets.remove(plugin);
+        if (late != null) {
+            for (String id : late) {
+                get(plugin, id);
             }
         }
     }
 
-    private void step(String where, Map<String, Object> step) {
+    private List<PluginEvent.Revoked> revocationsOf(String plugin) {
+        List<PluginEvent.Revoked> heard = revocations.get(plugin);
+        if (heard == null) {
+            heard = new ArrayList<>();
+            revocations.put(plugin, heard);
+        }
+        return heard;
+    }
+
+    private void step(String where, List<Map<String, Object>> steps, int index) {
+        Map<String, Object> step = steps.get(index);
         String named = Shapes.theOneNamed(where, step, "load", "get", "echo", "call", "drop", "countUnloads",
-                "unload", "releaseHolding", "releaseHolder", "quarantine", "readUnloads");
+                "unload", "releaseHolding", "releaseHolder", "quarantine", "readUnloads", "registerAwaitingReleases",
+                "forgetHolder");
         if (named.equals("load")) {
             Shapes.refuseUnknownKeys(where, step, "load");
             Shapes.requireTrue(where, step, "load");
-            load = world.host.loadLibrary(echoBinary, declaration);
+            if (!declaration.isPresent()) {
+                throw new IllegalArgumentException(where + " loads a library the vector declares none of");
+            }
+            load = world.host.loadLibrary(echoBinary, declaration.get());
         } else if (named.equals("unload")) {
             Shapes.refuseUnknownKeys(where, step, "unload");
             Shapes.requireTrue(where, step, "unload");
@@ -193,7 +260,23 @@ final class LibraryRun {
             unloads.add(memory.getLong(counter, 0));
         } else if (named.equals("releaseHolder")) {
             Shapes.refuseUnknownKeys(where, step, "releaseHolder");
-            releaseHolder(Shapes.text(where, step, "releaseHolder"));
+            String holder = Shapes.text(where, step, "releaseHolder");
+            lateGetsBeforeTheForget(where, steps, index, holder);
+            releaseHolder(holder);
+            if (lateGets.containsKey(holder)) {
+                throw new IllegalStateException(holder + " heard no revocation its release queued, so its late gets "
+                        + "were never made");
+            }
+        } else if (named.equals("forgetHolder")) {
+            Shapes.refuseUnknownKeys(where, step, "forgetHolder");
+            String holder = Shapes.text(where, step, "forgetHolder");
+            if (world.host.context(world.plugin(holder)).isPresent()) {
+                throw new IllegalStateException("the host still holds " + holder + " after its release");
+            }
+        } else if (named.equals("registerAwaitingReleases")) {
+            Shapes.refuseUnknownKeys(where, step, "owner", "registerAwaitingReleases");
+            registerAwaitingReleases(Shapes.text(where, step, "owner"),
+                    Shapes.text(where, step, "registerAwaitingReleases"));
         } else if (named.equals("quarantine")) {
             Shapes.refuseUnknownKeys(where, step, "quarantine");
             quarantine(Shapes.text(where, step, "quarantine"));
@@ -227,6 +310,41 @@ final class LibraryRun {
         }
     }
 
+    /**
+     * Takes the {@code get} steps of {@code holder} that follow its release and come before its forget, to be made as
+     * late calls while its release's events are dispatched.
+     */
+    private void lateGetsBeforeTheForget(String where, List<Map<String, Object>> steps, int release, String holder) {
+        List<Integer> late = new ArrayList<>();
+        for (int index = release + 1; index < steps.size(); index++) {
+            Map<String, Object> step = steps.get(index);
+            if (holder.equals(step.get("forgetHolder"))) {
+                List<String> ids = new ArrayList<>();
+                for (int taken : late) {
+                    Shapes.refuseUnknownKeys(where, steps.get(taken), "holder", "get");
+                    ids.add(Shapes.text(where, steps.get(taken), "get"));
+                }
+                consumed.addAll(late);
+                if (!ids.isEmpty()) {
+                    lateGets.put(holder, ids);
+                }
+                return;
+            }
+            if (!holder.equals(step.get("holder")) || !step.containsKey("get")) {
+                return;
+            }
+            late.add(index);
+        }
+    }
+
+    private void registerAwaitingReleases(String owner, String id) {
+        Object service = new Object();
+        Answer<?> registered = world.context(owner).registerAwaitingReleases(id, service);
+        if (!(registered instanceof Answer.Ok)) {
+            throw new IllegalStateException(owner + "'s registration of " + id + " answered " + registered);
+        }
+    }
+
     private void get(String holder, String id) {
         Answer<Object> answer = world.context(holder).get(id);
         got.add(answer instanceof Answer.Ok);
@@ -254,7 +372,7 @@ final class LibraryRun {
     }
 
     private long operation(long definition, int index) {
-        return memory.getLong(definition, index * (long) Long.BYTES);
+        return memory.getLong(definition, index * ForeignMemory.addressSize());
     }
 
     private String echo(Object definition, String text) {
@@ -309,7 +427,16 @@ final class LibraryRun {
         if (object == null) {
             throw new IllegalStateException(holder + " resolved no " + id + " to let go of");
         }
-        Answer<Boolean> released = world.context(holder).releaseHolding(object);
+        PluginEvent.Revoked revocation = null;
+        for (PluginEvent.Revoked heard : revocationsOf(holder)) {
+            if (heard.object() == object && heard.awaitsRelease()) {
+                revocation = heard;
+            }
+        }
+        if (revocation == null) {
+            throw new IllegalStateException(holder + " heard no revocation of " + id + " awaiting its release");
+        }
+        Answer<Boolean> released = world.context(holder).releaseHolding(revocation);
         if (!(released instanceof Answer.Ok) || !((Answer.Ok<Boolean>) released).value()) {
             throw new IllegalStateException(holder + "'s release of its holding of " + id + " answered " + released);
         }
@@ -373,6 +500,7 @@ final class LibraryRun {
         observers.put("echoed", expectation -> new ArrayList<>(echoed));
         observers.put("revoked", expectation -> sortedRevocations());
         observers.put("unloads", expectation -> new ArrayList<>(unloads));
+        observers.put("holdingsReleased", expectation -> new ArrayList<>(holdingsReleased));
         observers.put("reported", expectation -> reported());
         return observers;
     }

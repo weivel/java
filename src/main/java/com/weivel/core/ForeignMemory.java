@@ -31,6 +31,15 @@ public final class ForeignMemory implements AutoCloseable {
     }
 
     /**
+     * How many bytes an address takes on the layer's one native seam, and so the stride of a struct of pointers.
+     *
+     * @return the address size
+     */
+    public static long addressSize() {
+        return NativeBackends.current().addressSize();
+    }
+
+    /**
      * The native address a definition's object carries, as a host registers a library's definition.
      *
      * @param addressed a {@code MemorySegment} on the foreign function API, a JNA {@code Pointer} on JNA
