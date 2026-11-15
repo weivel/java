@@ -119,6 +119,9 @@ final class JnaAccess implements NativeAccess {
 
     @Override
     public void clear(long address, long offset, long length) {
+        if (length < 0) {
+            throw new IndexOutOfBoundsException("a clear of " + length + " bytes");
+        }
         ABSOLUTE.setMemory(address + offset, length, (byte) 0);
     }
 
