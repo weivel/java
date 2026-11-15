@@ -977,8 +977,18 @@ public final class Host implements AutoCloseable {
                 && cause.getCause() != null) {
             cause = cause.getCause();
         }
-        return new QuarantineReason(CoreConstants.REFUSAL_NONE, "its activate failed: " + cause,
+        return new QuarantineReason(CoreConstants.REFUSAL_NONE, "its activate failed: " + withTheNulEscaped(cause),
                 "make the plugin's activate complete normally");
+    }
+
+    /**
+     * The failure's text, every NUL character written as {@code \0}.
+     *
+     * @implNote The reason is the host's own text, never a caller's, so a NUL a plugin put in its message is escaped
+     * rather than refused as a mistake, which would leave the plugin open with its registrations live.
+     */
+    private static String withTheNulEscaped(Throwable cause) {
+        return String.valueOf(cause).replace("\u0000", "\\0");
     }
 
     /**

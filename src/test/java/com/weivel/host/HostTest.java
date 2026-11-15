@@ -281,6 +281,25 @@ class HostTest {
     }
 
     @Test
+    void anActivateThrowingWithANulInItsMessageIsQuarantinedWithTheNulEscapedInItsReason() {
+        TestEntry nul = fixture.entry("nul");
+        nul.onActivate = context -> {
+            value(context.register("nul:feed", new Object()));
+            throw new RuntimeException("bad\u0000reason");
+        };
+        long plugin = fixture.register(services("nul", Collections.singletonList("nul:feed"),
+                Collections.<String>emptyList()), nul);
+
+        Outcome outcome = done(fixture.activate(plugin).outcomes().get(0));
+
+        assertEquals(ActivationState.QUARANTINED, outcome.state());
+        LedgerRow row = value(host.ledger()).get(0);
+        assertEquals(LedgerRow.Status.QUARANTINED, row.status());
+        assertTrue(row.reason().get().detail().contains("bad\\0reason"), row.reason().toString());
+        assertTrue(fixture.failures.isEmpty(), fixture.failures.toString());
+    }
+
+    @Test
     void aVerifyTheCallerAsksForIsCarriedOutAsASettledActivatesIs() {
         TestEntry growing = fixture.entry("growing");
         long plugin = fixture.register(named("growing"), growing);
