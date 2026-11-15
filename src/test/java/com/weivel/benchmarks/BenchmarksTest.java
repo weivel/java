@@ -63,8 +63,11 @@ class BenchmarksTest {
                     SameLanguageBenchmark.DEFAULT_SAMPLING);
             double noise = Gates.deviation(Summary.of(measured.noiseRatios()).median());
             double deviation = Gates.deviation(Summary.of(measured.sameLanguageRatios()).median());
-            report("same-language", repetition, String.format(Locale.ROOT, "noise=%.6f deviation=%.6f", noise,
-                    deviation));
+            report("same-language", repetition, String.format(Locale.ROOT,
+                    "noise=%.6f deviation=%.6f direct_ns=%.4f direct_again_ns=%.4f through_weivel_ns=%.4f "
+                            + "noise_rounds_over_5pct=%d", noise, deviation, measured.direct().median(),
+                    measured.directAgain().median(), measured.throughWeivel().median(),
+                    roundsOver(measured.noiseRatios(), 0.05)));
             if (isGating()) {
                 assertPassed(Gates.sameLanguage(budget(), KitPlatform.current(), measured.noiseRatios(),
                         measured.sameLanguageRatios()));
@@ -88,6 +91,16 @@ class BenchmarksTest {
                     LibraryCallBenchmark.DEFAULT_SAMPLING);
             judged(RatioGate.LIBRARY_CALL, repetition, measured);
         }
+    }
+
+    private static long roundsOver(double[] ratios, double deviation) {
+        long over = 0;
+        for (double ratio : ratios) {
+            if (Gates.deviation(ratio) > deviation) {
+                over++;
+            }
+        }
+        return over;
     }
 
     private static void judged(RatioGate gate, int repetition, PairMeasurement measured) {

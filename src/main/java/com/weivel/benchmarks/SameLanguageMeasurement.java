@@ -11,10 +11,16 @@ public final class SameLanguageMeasurement {
     static final String DIRECT_AGAIN = "directAgain";
     static final String THROUGH_WEIVEL = "throughWeivel";
 
+    private final double[] direct;
+    private final double[] directAgain;
+    private final double[] throughWeivel;
     private final double[] noiseRatios;
     private final double[] sameLanguageRatios;
 
     private SameLanguageMeasurement(double[] direct, double[] directAgain, double[] throughWeivel) {
+        this.direct = direct;
+        this.directAgain = directAgain;
+        this.throughWeivel = throughWeivel;
         this.noiseRatios = Interleaved.roundRatios(directAgain, direct);
         this.sameLanguageRatios = Interleaved.roundRatios(throughWeivel, direct);
     }
@@ -22,6 +28,33 @@ public final class SameLanguageMeasurement {
     static SameLanguageMeasurement of(Map<String, double[]> samples) {
         return new SameLanguageMeasurement(samples.get(DIRECT), samples.get(DIRECT_AGAIN),
                 samples.get(THROUGH_WEIVEL));
+    }
+
+    /**
+     * Answers {@code direct}.
+     *
+     * @return the direct call's nanoseconds per call, by its rounds
+     */
+    public Summary direct() {
+        return Summary.of(direct);
+    }
+
+    /**
+     * Answers {@code directAgain}.
+     *
+     * @return the second direct call's nanoseconds per call, by its rounds
+     */
+    public Summary directAgain() {
+        return Summary.of(directAgain);
+    }
+
+    /**
+     * Answers {@code throughWeivel}.
+     *
+     * @return the call through the resolved service's nanoseconds per call, by its rounds
+     */
+    public Summary throughWeivel() {
+        return Summary.of(throughWeivel);
     }
 
     /**
