@@ -1,5 +1,6 @@
 package com.weivel.core;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +25,8 @@ final class NativeArena implements AutoCloseable {
     private long blockSize;
     private long used;
     private long asked;
-    private byte[] encoding = new byte[0];
+    private String lastText;
+    private byte[] lastEncoding;
 
     NativeArena(NativeAccess access) {
         this(access, false);
@@ -116,8 +118,8 @@ final class NativeArena implements AutoCloseable {
 
     /** {@code text} encoded as UTF-8 and terminated by a zero byte. */
     NativeRegion text(String text) {
-        int length = Utf8.encodedLength(text);
-        return new NativeRegion(access, textAddress(text, length), length + 1L, this);
+        byte[] encoded = encoded(text);
+        return new NativeRegion(access, placed(encoded), encoded.length + 1L, this);
     }
 
     /**
@@ -125,20 +127,27 @@ final class NativeArena implements AutoCloseable {
      * on, so no region is made.
      */
     long textAddress(String text) {
-        return textAddress(text, Utf8.encodedLength(text));
+        return placed(encoded(text));
     }
 
     /**
-     * @implNote The text is encoded through an array this arena keeps and grows, so a reusable arena's texts allocate
-     * nothing on the Java heap once the array holds the longest.
+     * {@code text} encoded as UTF-8.
+     *
+     * @implNote The last text encoded is kept with its encoding and known again by identity, so a caller passing the
+     * same text again, as a plugin passes its ids, costs one comparison and allocates nothing; any other text is
+     * encoded as it always was.
      */
-    private long textAddress(String text, int length) {
-        if (encoding.length < length) {
-            encoding = new byte[Math.max(length, encoding.length * 2)];
+    private byte[] encoded(String text) {
+        if (text != lastText) {
+            lastEncoding = text.getBytes(StandardCharsets.UTF_8);
+            lastText = text;
         }
-        Utf8.encode(text, encoding);
-        long address = allocateAddress(length + 1L);
-        access.writeBytes(address, 0, encoding, 0, length);
+        return lastEncoding;
+    }
+
+    private long placed(byte[] encoded) {
+        long address = allocateAddress(encoded.length + 1L);
+        access.writeBytes(address, 0, encoded);
         return address;
     }
 
