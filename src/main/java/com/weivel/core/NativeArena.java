@@ -25,6 +25,8 @@ final class NativeArena implements AutoCloseable {
     private long blockSize;
     private long used;
     private long asked;
+    private String lastText;
+    private byte[] lastEncoding;
 
     NativeArena(NativeAccess access) {
         this(access, false);
@@ -50,6 +52,14 @@ final class NativeArena implements AutoCloseable {
 
     /** Zeroed memory of {@code size} bytes, freed when this arena closes, or for a reusable one at its reset. */
     NativeRegion allocate(long size) {
+        return new NativeRegion(access, allocateAddress(size), size, this);
+    }
+
+    /**
+     * The address of zeroed memory of {@code size} bytes, as {@link #allocate(long)} holds it: for a crossing that
+     * only hands the address on, so no region is made.
+     */
+    long allocateAddress(long size) {
         checkAlive();
         if (reusable) {
             long aligned = (size + ALIGNMENT - 1) & -ALIGNMENT;
@@ -58,12 +68,12 @@ final class NativeArena implements AutoCloseable {
                 long address = block + used;
                 used += aligned;
                 access.clear(address, 0, size);
-                return new NativeRegion(access, address, size, this);
+                return address;
             }
         }
         long address = access.allocate(size);
         allocations.add(address);
-        return new NativeRegion(access, address, size, this);
+        return address;
     }
 
     /**
@@ -108,10 +118,37 @@ final class NativeArena implements AutoCloseable {
 
     /** {@code text} encoded as UTF-8 and terminated by a zero byte. */
     NativeRegion text(String text) {
-        byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
-        NativeRegion region = allocate(encoded.length + 1L);
-        access.writeBytes(region.address(), 0, encoded);
-        return region;
+        byte[] encoded = encoded(text);
+        return new NativeRegion(access, placed(encoded), encoded.length + 1L, this);
+    }
+
+    /**
+     * The address of {@code text} laid out as {@link #text} lays it out: for a crossing that only hands the address
+     * on, so no region is made.
+     */
+    long textAddress(String text) {
+        return placed(encoded(text));
+    }
+
+    /**
+     * {@code text} encoded as UTF-8.
+     *
+     * @implNote The last text encoded is kept with its encoding and known again by identity, so a caller passing the
+     * same text again, as a plugin passes its ids, costs one comparison and allocates nothing; any other text is
+     * encoded as it always was.
+     */
+    private byte[] encoded(String text) {
+        if (text != lastText) {
+            lastEncoding = text.getBytes(StandardCharsets.UTF_8);
+            lastText = text;
+        }
+        return lastEncoding;
+    }
+
+    private long placed(byte[] encoded) {
+        long address = allocateAddress(encoded.length + 1L);
+        access.writeBytes(address, 0, encoded);
+        return address;
     }
 
     boolean isAlive() {
@@ -133,9 +170,10 @@ final class NativeArena implements AutoCloseable {
         }
     }
 
+    /** @implNote Indexed, so a reset with nothing to free makes no iterator. */
     private void freeAllocations() {
-        for (long address : allocations) {
-            access.free(address);
+        for (int index = 0; index < allocations.size(); index++) {
+            access.free(allocations.get(index));
         }
         allocations.clear();
     }

@@ -1,8 +1,11 @@
 package com.weivel.core;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 /** The wrapper's scratch memory: reused after each reset, grown to what one use asked, zeroed as it is handed out. */
@@ -35,6 +38,23 @@ class ReusableArenaTest {
         arena.reset();
 
         assertEquals(0, arena.allocate(Layout.LONG).getLong(0));
+        arena.close();
+    }
+
+    @Test
+    void writesEachTextAsStringEncodesItInUtf8() {
+        NativeArena arena = NativeArena.reusable(access);
+        String[] texts = {"provider:arithmetic", "", "café", "€中", "😀 pair",
+                "lone \ud83d high", "lone \ude00 low", "high at the end \ud83d", "\ude00\ud83d", "a"};
+        for (String text : texts) {
+            byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
+            byte[] terminated = Arrays.copyOf(encoded, encoded.length + 1);
+
+            NativeRegion region = arena.text(text);
+
+            assertArrayEquals(terminated, access.readBytes(region.address(), 0, terminated.length), text);
+            arena.reset();
+        }
         arena.close();
     }
 

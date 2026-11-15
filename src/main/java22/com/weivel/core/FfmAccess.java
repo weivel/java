@@ -35,6 +35,13 @@ final class FfmAccess implements NativeAccess {
 
     private static final Linker LINKER = Linker.nativeLinker();
     private static final MemorySegment EVERYTHING = MemorySegment.NULL.reinterpret(Long.MAX_VALUE);
+    /**
+     * The longest clear made with plain stores; a longer one fills a slice.
+     *
+     * @implNote Filling a slice makes a segment per clear, which escape analysis does not always remove, and a call's
+     * arguments are cleared on every crossing; a copy from an array of zeros made none but cost about 30 ns a call.
+     */
+    private static final long LONGEST_STORED_CLEAR = 64;
     private static final MemoryLayout SIZE_T = LINKER.canonicalLayouts().get("size_t");
     private static final MethodHandle CALLOC = standardFunction("calloc", FunctionDescriptor.of(JAVA_LONG, SIZE_T,
             SIZE_T));
@@ -138,7 +145,18 @@ final class FfmAccess implements NativeAccess {
 
     @Override
     public void clear(long address, long offset, long length) {
-        EVERYTHING.asSlice(address + offset, length).fill((byte) 0);
+        long start = address + offset;
+        if (length > LONGEST_STORED_CLEAR) {
+            EVERYTHING.asSlice(start, length).fill((byte) 0);
+            return;
+        }
+        long cleared = 0;
+        for (; cleared + Long.BYTES <= length; cleared += Long.BYTES) {
+            EVERYTHING.set(JAVA_LONG_UNALIGNED, start + cleared, 0L);
+        }
+        for (; cleared < length; cleared++) {
+            EVERYTHING.set(JAVA_BYTE, start + cleared, (byte) 0);
+        }
     }
 
     @Override

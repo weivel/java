@@ -47,6 +47,9 @@ final class Wrapper {
 
     private long core;
     private final ArrayDeque<QueueEntry> queue = new ArrayDeque<>();
+    private final OwnRefusal own = new OwnRefusal();
+    private final CallNotes notes = new CallNotes();
+    private final CoreCalls.Crossed<Object> crossingAnswer = new CoreCalls.Crossed<>();
     private boolean dispatching;
     private boolean closed;
     private long sequence;
@@ -88,12 +91,11 @@ final class Wrapper {
 
     private Answer<Wrapper> create(CoreOptions options) {
         hold();
-        CallNotes notes = new CallNotes();
         int status;
         try {
             status = createCore(options);
             if (status == STATUS_OK) {
-                drain(waiting(), notes, new OwnRefusal());
+                drain(waiting());
             }
         } catch (Throwable thrown) {
             abandonCreation();
@@ -103,7 +105,7 @@ final class Wrapper {
             discardUncreated();
             return creationRefused(status);
         }
-        leave(notes, null);
+        leave(null);
         return new Answer.Ok<>(this);
     }
 
@@ -132,7 +134,7 @@ final class Wrapper {
     private void discardUncreated() {
         destroyed = true;
         closed = true;
-        lock.unlock();
+        abandonHold();
         arena.close();
         scratch.close();
     }
@@ -166,23 +168,30 @@ final class Wrapper {
         if (!call.handsTheTime() && !handOverADueDeadline()) {
             return new Answer.Destroyed<>();
         }
-        CallNotes notes = new CallNotes();
         Answer<T> answer;
         try {
-            Optional<Answer<T>> cancelled = guarded(steps.guard(), notes);
-            answer = cancelled.isPresent() ? cancelled.get() : callHeld(call, steps, notes);
-            if (answer instanceof Answer.Ok) {
-                after.ifPresent(step -> queue.addLast(new QueueEntry.StepEntry(step)));
+            Optional<Answer<T>> cancelled = guarded(steps.guard());
+            answer = cancelled.isPresent() ? cancelled.get() : callHeld(call, steps);
+            if (answer instanceof Answer.Ok && after.isPresent()) {
+                queue.addLast(new QueueEntry.StepEntry(after.get()));
             }
         } catch (Throwable thrown) {
-            lock.unlock();
+            abandonHold();
             throw rethrown(thrown);
         }
-        leave(notes, null);
+        leave(null);
         return answer;
     }
 
-    private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps, CallNotes notes) throws Throwable {
+    private <T> Answer<T> callHeld(CoreCall<T> call, CallSteps<T> steps) throws Throwable {
+        try {
+            return answered(call, steps);
+        } finally {
+            crossingAnswer.clear();
+        }
+    }
+
+    private <T> Answer<T> answered(CoreCall<T> call, CallSteps<T> steps) throws Throwable {
         CoreCalls.Crossed<T> crossed;
         Optional<Throwable> unread = Optional.empty();
         try {
@@ -191,17 +200,17 @@ final class Wrapper {
             crossed = null;
             unread = Optional.of(notCopied);
         }
-        OwnRefusal own = new OwnRefusal();
-        drain(waiting(), notes, own);
+        drain(waiting());
         if (unread.isPresent()) {
-            return defect(notes, "the layer could not copy what the core answered a call", unread);
+            return defect("the layer could not copy what the core answered a call", unread);
         }
-        crossed.refusedRelease().ifPresent(release -> notes.noteDefect("the core refused " + release.symbol()
-                + ", the release of an answer the layer copied", Optional.<Throwable>empty()));
-        Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
-        return answer instanceof Answer.Ok
-                ? recorded(steps.answered(), ((Answer.Ok<T>) answer).value(), notes)
-                : answer;
+        if (crossed.refusedRelease().isPresent()) {
+            notes.noteDefect("the core refused " + crossed.refusedRelease().get().symbol()
+                    + ", the release of an answer the layer copied", Optional.<Throwable>empty());
+        }
+        return crossed.status() == STATUS_OK
+                ? recorded(steps.answered(), crossed.valueGiven(own.refusal()))
+                : answerOf(crossed, call.carriesCallersParts());
     }
 
     /**
@@ -209,43 +218,43 @@ final class Wrapper {
      * free again once the crossing returns: the one place a call's crossing is made, so nothing else in the package
      * needs the table of the core's functions.
      */
+    @SuppressWarnings("unchecked")
     <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
         pending.putInt(0, 0);
         try {
-            return crossing.cross(functions, scratch, core, pending.address());
+            return crossing.cross(functions, scratch, core, pending.address(),
+                    (CoreCalls.Crossed<T>) (CoreCalls.Crossed<?>) crossingAnswer);
         } finally {
             scratch.reset();
         }
     }
 
-    private <T> Optional<Answer<T>> guarded(CallSteps.CallGuard<T> guard, CallNotes notes) {
+    private <T> Optional<Answer<T>> guarded(CallSteps.CallGuard<T> guard) {
         try {
             Optional<Answer<T>> checked = guard.check();
             return checked != null ? checked
-                    : Optional.of(defect(notes, "a call's guard answered nothing", Optional.empty()));
+                    : Optional.of(defect("a call's guard answered nothing", Optional.empty()));
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable failure) {
-            return Optional.of(defect(notes, "a call's guard failed in the layer's own code", Optional.of(failure)));
+            return Optional.of(defect("a call's guard failed in the layer's own code", Optional.of(failure)));
         }
     }
 
-    private <T> Answer<T> recorded(CallSteps.AnsweredStep<T> step, T value, CallNotes notes) {
+    private <T> Answer<T> recorded(CallSteps.AnsweredStep<T> step, T value) {
         try {
             Answer<T> answer = step.record(value);
-            return answer != null ? answer : defect(notes, "a call's answered step answered nothing", Optional.empty());
+            return answer != null ? answer : defect("a call's answered step answered nothing", Optional.empty());
         } catch (VirtualMachineError error) {
             throw error;
         } catch (Throwable failure) {
-            return defect(notes, "a call's answered step failed in the layer's own code", Optional.of(failure));
+            return defect("a call's answered step failed in the layer's own code", Optional.of(failure));
         }
     }
 
-    private <T> Answer<T> answerOf(CoreCalls.Crossed<T> crossed, boolean carriesCallersParts, OwnRefusal own,
-                                   CallNotes notes) {
+    /** The answer to a call the core answered anything but OK. */
+    private <T> Answer<T> answerOf(CoreCalls.Crossed<T> crossed, boolean carriesCallersParts) {
         switch (crossed.status()) {
-            case STATUS_OK:
-                return new Answer.Ok<>(crossed.valueGiven(own.refusal()));
             case STATUS_NONE:
                 return new Answer.Absent<>();
             case STATUS_REFUSED:
@@ -255,16 +264,16 @@ final class Wrapper {
             case STATUS_MALFORMED:
                 return carriesCallersParts
                         ? new Answer.Refused<T>(RefusalStatus.MALFORMED, own.refusal())
-                        : Wrapper.<T>defect(notes, "the core called a call the layer built malformed: "
+                        : this.<T>defect("the core called a call the layer built malformed: "
                                 + own.refusal().map(Refusal::detail).orElse("the core queued no refusal saying why"),
                                 Optional.<Throwable>empty());
             default:
-                return defect(notes, "the core answered a status the layer does not know: " + crossed.status(),
+                return defect("the core answered a status the layer does not know: " + crossed.status(),
                         Optional.<Throwable>empty());
         }
     }
 
-    private static <T> Answer<T> defect(CallNotes notes, String text, Optional<Throwable> cause) {
+    private <T> Answer<T> defect(String text, Optional<Throwable> cause) {
         notes.noteDefect(text, cause);
         return new Answer.Defect<>(text);
     }
@@ -273,14 +282,21 @@ final class Wrapper {
         return pending.getInt(0);
     }
 
-    /** Drains a call's events onto the queue, fencing them all when one of them is an announcement. */
-    private void drain(int waiting, CallNotes notes, OwnRefusal own) {
+    /**
+     * Drains a call's events onto the queue, fencing them all when one of them is an announcement, and leaves in
+     * {@code own} the first refusal they carry.
+     */
+    private void drain(int waiting) {
+        own.clear();
+        if (waiting == 0) {
+            return;
+        }
         long serialBefore = deadlineSerial;
         List<QueueEntry.EventEntry> drained = new ArrayList<>();
         try {
             int left = waiting;
             while (left > 0) {
-                left = drainOne(notes, own, drained);
+                left = drainOne(drained);
             }
         } finally {
             if (deadlineSerial != serialBefore) {
@@ -291,7 +307,7 @@ final class Wrapper {
     }
 
     /** Drains one event: copied, recorded when it is an announcement, and released whatever the copy did. */
-    private int drainOne(CallNotes notes, OwnRefusal own, List<QueueEntry.EventEntry> drained) {
+    private int drainOne(List<QueueEntry.EventEntry> drained) {
         buffer.clear();
         buffer.putInt(0, (int) CoreLayouts.EVENT.byteSize());
         pending.putInt(0, 0);
@@ -310,13 +326,13 @@ final class Wrapper {
         try {
             recordDeadline(kind);
             if (EventCopy.isKnownKind(kind)) {
-                copied(kind, number, notes).ifPresent(event -> {
+                copied(kind, number).ifPresent(event -> {
                     drained.add(new QueueEntry.EventEntry(event));
                     own.offer(event);
                 });
             }
         } finally {
-            releaseEvent(notes);
+            releaseEvent();
         }
         return left;
     }
@@ -325,7 +341,7 @@ final class Wrapper {
         return functions.status(CoreFunction.NEXT_EVENT, core, buffer.address(), pending.address());
     }
 
-    private void releaseEvent(CallNotes notes) {
+    private void releaseEvent() {
         int status = functions.status(CoreFunction.EVENT_RELEASE, buffer.address());
         if (status != STATUS_OK) {
             notes.noteDefect("the core refused to release an event the layer drained", Optional.empty());
@@ -340,15 +356,15 @@ final class Wrapper {
         }
     }
 
-    private Optional<CoreEvent> copied(int kind, long number, CallNotes notes) {
+    private Optional<CoreEvent> copied(int kind, long number) {
         try {
             return Optional.of(copying.whole(buffer, number));
         } catch (RuntimeException | OutOfMemoryError notWhole) {
-            return copiedFixedPart(kind, number, notes, notWhole);
+            return copiedFixedPart(kind, number, notWhole);
         }
     }
 
-    private Optional<CoreEvent> copiedFixedPart(int kind, long number, CallNotes notes, Throwable notWhole) {
+    private Optional<CoreEvent> copiedFixedPart(int kind, long number, Throwable notWhole) {
         try {
             CoreEvent fixed = copying.fixedPart(buffer, number);
             notes.note(FailureKind.EVENT_INCOMPLETE,
@@ -383,14 +399,13 @@ final class Wrapper {
         if (now.unread() || !deadlineSet || now.time() < deadlineAt) {
             return true;
         }
-        CallNotes notes = new CallNotes();
         try {
-            advanceHeld(now.time(), notes);
+            advanceHeld(now.time());
         } catch (Throwable thrown) {
-            lock.unlock();
+            abandonHold();
             throw rethrown(thrown);
         }
-        leave(notes, null);
+        leave(null);
         return enter();
     }
 
@@ -451,16 +466,17 @@ final class Wrapper {
         }
     }
 
-    private void advanceHeld(long now, CallNotes notes) throws Throwable {
-        CoreCalls.Crossed<Void> crossed = cross(CoreCalls.advanceCrossing(now));
-        if (crossed.status() == STATUS_MALFORMED) {
+    private void advanceHeld(long now) throws Throwable {
+        int status = cross(CoreCalls.advanceCrossing(now)).status();
+        crossingAnswer.clear();
+        if (status == STATUS_MALFORMED) {
             notes.noteDefect("the core called the advance made for a due deadline malformed", Optional.empty());
-        } else if (crossed.status() != STATUS_OK) {
+        } else if (status != STATUS_OK) {
             notes.note(FailureKind.DUE_ADVANCE,
                     "the core did not take the time of a deadline that fell due, which stays due", 0, 0,
                     Optional.empty());
         }
-        drain(waiting(), notes, new OwnRefusal());
+        drain(waiting());
     }
 
     /**
@@ -468,7 +484,8 @@ final class Wrapper {
      * lets the lock go, tells the sink what the call met, and dispatches unless a dispatch is already running.
      * Answers whether this thread dispatched {@code watched}, which may be null.
      */
-    private boolean leave(CallNotes notes, QueueEntry watched) {
+    private boolean leave(QueueEntry watched) {
+        List<Failure> failures = notes.taken();
         boolean claimed;
         try {
             followTheDeadline();
@@ -477,7 +494,7 @@ final class Wrapper {
             lock.unlock();
         }
         try {
-            tell(notes);
+            tell(failures);
         } catch (VirtualMachineError error) {
             if (claimed) {
                 endDispatch();
@@ -726,8 +743,10 @@ final class Wrapper {
         }
     }
 
-    private void tell(CallNotes notes) {
-        notes.failures().forEach(this::report);
+    private void tell(List<Failure> failures) {
+        for (Failure failure : failures) {
+            report(failure);
+        }
     }
 
     void report(Failure failure) {
@@ -753,7 +772,7 @@ final class Wrapper {
         }
         QueueEntry.StepEntry entry = new QueueEntry.StepEntry(step);
         queue.addLast(entry);
-        return leave(new CallNotes(), entry)
+        return leave(entry)
                 ? DeferredStep.Deferral.RAN_HERE
                 : DeferredStep.Deferral.LEFT_TO_THE_DISPATCH;
     }
@@ -806,7 +825,7 @@ final class Wrapper {
         if (deadlineSerial != 0) {
             deadlineSerial++;
         }
-        leave(new CallNotes(), null);
+        leave(null);
         return new Answer.Ok<>(null);
     }
 
@@ -819,7 +838,7 @@ final class Wrapper {
         if (installed) {
             hooks = null;
         }
-        leave(new CallNotes(), null);
+        leave(null);
         return installed;
     }
 
@@ -923,6 +942,12 @@ final class Wrapper {
         return false;
     }
 
+    /** Lets the lock go from a hold that ends by throwing, whose notes are dropped untold. */
+    private void abandonHold() {
+        notes.taken();
+        lock.unlock();
+    }
+
     private void hold() {
         if (lock.isHeldByCurrentThread()) {
             throw new IllegalStateException(
@@ -941,9 +966,17 @@ final class Wrapper {
         return new IllegalStateException(thrown);
     }
 
-    /** The first refusal-kind event a call's drain held: the call's own, since a refused call queues nothing else. */
+    /**
+     * The first refusal-kind event a call's drain held: the call's own, since a refused call queues nothing else.
+     *
+     * @implNote One per wrapper, guarded by the layer lock and cleared by each drain, so a call allocates none.
+     */
     private static final class OwnRefusal {
         private Optional<Refusal> refusal = Optional.empty();
+
+        void clear() {
+            refusal = Optional.empty();
+        }
 
         void offer(CoreEvent event) {
             if (refusal.isPresent()) {
