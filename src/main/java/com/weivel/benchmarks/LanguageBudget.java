@@ -27,12 +27,10 @@ public final class LanguageBudget {
 
     private final Map<String, Double> perPlatform;
     private final double ratioMargin;
-    private final double noiseMargin;
 
-    private LanguageBudget(Map<String, Double> perPlatform, double ratioMargin, double noiseMargin) {
+    private LanguageBudget(Map<String, Double> perPlatform, double ratioMargin) {
         this.perPlatform = perPlatform;
         this.ratioMargin = ratioMargin;
-        this.noiseMargin = noiseMargin;
     }
 
     /**
@@ -57,7 +55,7 @@ public final class LanguageBudget {
      * @param text the file's text
      * @return the budget
      * @throws IllegalArgumentException for a line the format does not define, a number that is not positive, a line
-     *     given twice, or a missing margin
+     *     given twice, or no ratio margin
      */
     public static LanguageBudget parse(String text) {
         Map<String, Double> perPlatform = new HashMap<>();
@@ -68,14 +66,14 @@ public final class LanguageBudget {
                 readLine(line, perPlatform, margins);
             }
         }
-        return new LanguageBudget(perPlatform, margin(margins, RATIO_MARGIN), margin(margins, NOISE_MARGIN));
+        return new LanguageBudget(perPlatform, margin(margins, RATIO_MARGIN));
     }
 
     private static void readLine(String line, Map<String, Double> perPlatform, Map<String, Double> margins) {
         String[] fields = line.split(" ");
         if (fields.length == 3 && isPerPlatformName(fields[0]) && PLATFORMS.contains(fields[1])) {
             putOnce(perPlatform, fields[0] + " " + fields[1], positiveNumber(fields[2], line), line);
-        } else if (fields.length == 2 && (fields[0].equals(RATIO_MARGIN) || fields[0].equals(NOISE_MARGIN))) {
+        } else if (fields.length == 2 && fields[0].equals(RATIO_MARGIN)) {
             putOnce(margins, fields[0], positiveNumber(fields[1], line), line);
         } else {
             throw new IllegalArgumentException("the budget line \"" + line + "\" is neither a gate of a backend or a "
@@ -84,7 +82,7 @@ public final class LanguageBudget {
     }
 
     private static boolean isPerPlatformName(String name) {
-        if (name.equals(QUIET_NOISE) || name.equals(WORST_NOISE)) {
+        if (name.equals(QUIET_NOISE) || name.equals(WORST_NOISE) || name.equals(NOISE_MARGIN)) {
             return true;
         }
         for (RatioGate gate : RatioGate.values()) {
@@ -148,8 +146,9 @@ public final class LanguageBudget {
     public Optional<NoiseBounds> noiseBounds(String platform) {
         Double quiet = perPlatform.get(QUIET_NOISE + " " + platform);
         Double worst = perPlatform.get(WORST_NOISE + " " + platform);
-        return quiet == null || worst == null ? Optional.<NoiseBounds>empty()
-                : Optional.of(new NoiseBounds(quiet, worst));
+        Double margin = perPlatform.get(NOISE_MARGIN + " " + platform);
+        return quiet == null || worst == null || margin == null ? Optional.<NoiseBounds>empty()
+                : Optional.of(new NoiseBounds(quiet, worst, margin));
     }
 
     /**
@@ -159,14 +158,5 @@ public final class LanguageBudget {
      */
     public double ratioMargin() {
         return ratioMargin;
-    }
-
-    /**
-     * Answers {@code noiseMargin}.
-     *
-     * @return how many times its noise a same-language pair may differ by
-     */
-    public double noiseMargin() {
-        return noiseMargin;
     }
 }
