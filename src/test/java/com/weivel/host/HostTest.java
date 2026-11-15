@@ -252,6 +252,30 @@ class HostTest {
         assertTrue(fixture.failures.isEmpty());
     }
 
+    @Test
+    void aSettledActivateIsVerifiedAndARefusedOneQuarantinedBeforeTheNextPluginIsStarted() {
+        AtomicReference<List<LedgerRow>> seenBySecond = new AtomicReference<>();
+        long lacking = fixture.register(providingCapability("lacking", "screens"), fixture.entry("lacking"));
+        long whole = fixture.register(named("whole"), fixture.entry("whole"));
+        TestEntry second = fixture.entry("second");
+        second.onActivate = context -> {
+            seenBySecond.set(value(host.ledger()));
+            return CompletableFuture.completedFuture(null);
+        };
+        long secondPlugin = fixture.register(named("second"), second);
+
+        Activation activation = value(host.activate(Arrays.asList(lacking, whole, secondPlugin),
+                EdgeSource.SERVICES));
+
+        assertEquals(Arrays.asList(lacking, whole, secondPlugin), activation.plan().order());
+        assertEquals(LedgerRow.Status.QUARANTINED, statusOf(seenBySecond.get(), lacking));
+        assertEquals(LedgerRow.Status.ACTIVE, statusOf(seenBySecond.get(), whole));
+    }
+
+    private static LedgerRow.Status statusOf(List<LedgerRow> rows, long plugin) {
+        return rows.stream().filter(row -> row.plugin() == plugin).findFirst().get().status();
+    }
+
     private static Outcome outcomeOf(Activation activation, long plugin) {
         return done(activation.outcomes().get(activation.plan().order().indexOf(plugin)));
     }
