@@ -209,19 +209,19 @@ class WantTest {
     }
 
     @Test
-    void aWithdrawnWantSettlesOnceAsAnAbsenceAndNeverAgain() {
+    void aWithdrawnWantIsNeverSettledSinceTheCoreNeverSettlesIt() {
         try (ContextFixture fixture = new ContextFixture()) {
             PluginContext provider = fixture.opened(providing("provider", GREETER));
             PluginContext consumer = fixture.opened(consuming("consumer", GREETER));
             PendingWant want = consumer.want(GREETER, WantLimits.unbounded());
             AtomicInteger completions = new AtomicInteger();
-            want.settlement().thenRun(completions::incrementAndGet);
+            want.settlement().whenComplete((answer, failure) -> completions.incrementAndGet());
 
             assertInstanceOf(Answer.Ok.class, want.withdraw());
             value(provider.register(GREETER, new Object()));
+            fixture.release(consumer);
 
-            assertEquals(new Answer.Absent<Object>(), want.settlement().join());
-            assertEquals(1, completions.get());
+            assertEquals(0, completions.get());
             assertInstanceOf(Answer.Refused.class, want.withdraw());
         }
     }

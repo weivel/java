@@ -67,8 +67,8 @@ public final class PluginContext {
      *
      * @param id the service id
      * @param limits how long it may wait, each limit handed to the core unchanged
-     * @return the want, whose settlement is {@link Answer.Absent} once the plugin withdrew it before it settled, and
-     *     whatever this call answered in place of a want when the core made none
+     * @return the want, whose settlement is whatever this call answered in place of a want when the core made none,
+     *     and is never completed once the plugin withdrew it before it settled
      */
     public PendingWant want(String id, WantLimits limits) {
         return ServiceCalls.want(state, this, Objects.requireNonNull(id, "id"),

@@ -21,8 +21,8 @@ public final class PendingWant {
 
     /**
      * The want's settlement, completed once, from a dispatch step and outside every lock, always normally: with the
-     * provider's own object, with the core's refusal, with {@link Answer.Absent} once withdrawn, or with what the
-     * call answered in place of a want when the core made none.
+     * provider's own object, with the core's refusal, or with what the call answered in place of a want when the core
+     * made none. A want withdrawn while it waits is never settled by the core, so its settlement is never completed.
      *
      * @return the settlement
      */
@@ -31,7 +31,9 @@ public final class PendingWant {
     }
 
     /**
-     * Withdraws the want while it still waits, so it settles as an absence.
+     * Withdraws the want while it still waits, so the core never settles it and {@link #settlement()} is never
+     * completed. A want the core settled already, its settlement not yet dispatched, is not withdrawn: the core refuses
+     * the withdrawal, and the settlement still completes.
      *
      * @return nothing beyond its success; the core's refusal for a want that has settled already; an absence for one
      *     the core never made; {@link Answer.Detached} once the plugin is forgotten
@@ -49,9 +51,7 @@ public final class PendingWant {
             return new Answer.Ok<>(withdrawn);
         });
         if (ended[0] != null && ended[0].object() instanceof Records.Want) {
-            Records.Want record = (Records.Want) ended[0].object();
-            record.holdingRoom().cancel();
-            state.settleLater(record.settlement(), new Answer.Absent<>());
+            ((Records.Want) ended[0].object()).holdingRoom().cancel();
         }
         return answer;
     }
