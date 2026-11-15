@@ -951,10 +951,7 @@ public final class Host implements AutoCloseable {
                     "its activation could not be verified: " + verification,
                     "release it and activate it again")), Optional.<Refusal>empty());
         }
-        Verification answered = ((Answer.Ok<Verification>) verification).value();
-        return answered.verified()
-                ? new Outcome(plugin, ActivationState.ACTIVE, Optional.<Refusal>empty())
-                : new Outcome(plugin, ActivationState.QUARANTINED, answered.refusal());
+        return outcomeOf(plugin, ((Answer.Ok<Verification>) verification).value());
     }
 
     /**
@@ -997,11 +994,11 @@ public final class Host implements AutoCloseable {
      * registered, is answered as the core answers it, quarantining nothing.
      *
      * @param plugin the plugin's handle
-     * @return {@link ActivationState#ACTIVE} or {@link ActivationState#QUARANTINED}; the core's refusal for a plugin
-     *     the host holds nothing of open, or one released meanwhile, whose quarantine the core refuses too;
-     *     {@link Answer.Destroyed} once the destroy has been called
+     * @return the outcome, {@link ActivationState#ACTIVE}, or {@link ActivationState#QUARANTINED} carrying the core's
+     *     refusal of the verification; the core's refusal for a plugin the host holds nothing of open, or one released
+     *     meanwhile, whose quarantine the core refuses too; {@link Answer.Destroyed} once the destroy has been called
      */
-    public Answer<ActivationState> verify(long plugin) {
+    public Answer<Outcome> verify(long plugin) {
         PluginRecord record;
         boolean heldOpen;
         lock.lock();
@@ -1017,17 +1014,21 @@ public final class Host implements AutoCloseable {
         if (!heldOpen) {
             Answer<Void> verified = core.call(CoreCalls.verifyActivation(plugin));
             return verified instanceof Answer.Ok
-                    ? new Answer.Ok<>(ActivationState.ACTIVE)
-                    : Answer.<ActivationState>retyped(verified);
+                    ? new Answer.Ok<>(new Outcome(plugin, ActivationState.ACTIVE, Optional.<Refusal>empty()))
+                    : Answer.<Outcome>retyped(verified);
         }
         pauses.beforeTheVerification(plugin);
         Answer<Verification> verification = contexts.verify(record.context());
         if (!(verification instanceof Answer.Ok)) {
             return Answer.retyped(verification);
         }
-        return new Answer.Ok<>(((Answer.Ok<Verification>) verification).value().verified()
-                ? ActivationState.ACTIVE
-                : ActivationState.QUARANTINED);
+        return new Answer.Ok<>(outcomeOf(plugin, ((Answer.Ok<Verification>) verification).value()));
+    }
+
+    private static Outcome outcomeOf(long plugin, Verification verification) {
+        return verification.verified()
+                ? new Outcome(plugin, ActivationState.ACTIVE, Optional.<Refusal>empty())
+                : new Outcome(plugin, ActivationState.QUARANTINED, verification.refusal());
     }
 
     /**

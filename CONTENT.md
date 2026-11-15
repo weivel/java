@@ -108,7 +108,9 @@ them as one step of a dispatch, so what an activate's own calls queue is dispatc
 has been called; where another thread is dispatching, it starts them as calls made while that dispatch runs, and
 their events join the end of that thread's queue. Either way an activate that settles before it returns is verified,
 and quarantined if the core refuses, in the same hold of the layer lock, before the next plugin is started; a failed
-one is quarantined with a reason saying so. An activate runs as the dispatcher, so one that blocks on an event another
+one is quarantined with a reason saying so, any NUL character in the failure's text written as `\0`, since the
+reason is the host's own text and not a caller's mistake. `verify` verifies a plugin as a settled activate is verified
+and answers its outcome by the same rule, a quarantine the core's refusal caused carrying that refusal. An activate runs as the dispatcher, so one that blocks on an event another
 thread causes deadlocks: an activate that must wait answers a stage and completes it later. `release` calls
 the deactivate while the plugin is whole, releases it in the core, and ends its entries and forgets it only once that
 release's events are dispatched, as a step behind them inside a dispatch. `registerHostService` offers a service of
