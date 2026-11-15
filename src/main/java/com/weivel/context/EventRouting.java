@@ -135,12 +135,13 @@ final class EventRouting implements CoreListener {
             state.releases.keepRevoked(event.plugin(), event.implementation(), object);
         }
         contextOf(event.plugin(), event).ifPresent(context -> context.tell(new PluginEvent.Revoked(object,
-                awaitsRelease)));
+                awaitsRelease, event.implementation())));
     }
 
     /**
      * Hands the end of a registration's last holding to its owner: the host's own record runs, and a plugin hears it
-     * unless it was released or forgotten since.
+     * as it hears any event about it, so one its own release or quarantine call queued still reaches it, and one
+     * queued after those events, or after its forget, reaches no one.
      */
     private void holdingsReleased(CoreEvent.HoldingsReleasedEvent event) {
         state.releases.released(event.registration()).ifPresent(awaiting -> {
@@ -151,7 +152,7 @@ final class EventRouting implements CoreListener {
             }
             awaiting.released().run();
             contextOf(event.owner(), event).ifPresent(context -> context.tell(
-                    new PluginEvent.HoldingsReleased(awaiting.service())));
+                    new PluginEvent.HoldingsReleased(awaiting.id(), awaiting.service())));
         });
     }
 

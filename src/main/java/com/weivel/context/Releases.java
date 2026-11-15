@@ -4,7 +4,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,8 +19,8 @@ final class Releases {
     private final Map<Holding, Object> revoked = new ConcurrentHashMap<>();
 
     /** Records a registration the core just answered, from the call's answered step, before any event is dispatched. */
-    void await(long registration, long owner, Object service, Runnable released) {
-        awaiting.put(registration, new Awaiting(owner, service, released));
+    void await(long registration, long owner, String id, Object service, Runnable released) {
+        awaiting.put(registration, new Awaiting(owner, id, service, released));
     }
 
     boolean awaits(long registration) {
@@ -38,18 +37,18 @@ final class Releases {
     }
 
     /**
-     * Takes the revoked holding {@code holder} keeps of {@code object}, matched by reference, so it is taken once.
+     * Takes the revoked holding {@code holder} keeps of {@code registration}, so it is taken once: the registration
+     * names it, since one object may be registered under several registrations awaiting releases.
      *
-     * @return the registration it was of; empty when the holder keeps no revoked holding of that object
+     * @return whether the holder kept such a holding, of that very object
      */
-    OptionalLong takeRevoked(long holder, Object object) {
-        for (Map.Entry<Holding, Object> held : revoked.entrySet()) {
-            Holding holding = held.getKey();
-            if (holding.holder == holder && held.getValue() == object && revoked.remove(holding, object)) {
-                return OptionalLong.of(holding.registration);
-            }
-        }
-        return OptionalLong.empty();
+    boolean takeRevoked(long holder, long registration, Object object) {
+        return revoked.remove(new Holding(holder, registration), object);
+    }
+
+    /** How many revoked holdings are kept: what a test of this package reads. */
+    int revokedCount() {
+        return revoked.size();
     }
 
     /** Drops every revoked holding of {@code holder}, which the core ended with the holder's release or forget. */
@@ -62,20 +61,29 @@ final class Releases {
         }
     }
 
-    /** A registration awaiting releases: its owner, the object it registered, and what runs once nothing holds it. */
+    /**
+     * A registration awaiting releases: its owner, its id, the object it registered, and what runs once nothing holds
+     * it.
+     */
     static final class Awaiting {
         private final long owner;
+        private final String id;
         private final Object service;
         private final Runnable released;
 
-        Awaiting(long owner, Object service, Runnable released) {
+        Awaiting(long owner, String id, Object service, Runnable released) {
             this.owner = owner;
+            this.id = id;
             this.service = service;
             this.released = released;
         }
 
         long owner() {
             return owner;
+        }
+
+        String id() {
+            return id;
         }
 
         Object service() {
