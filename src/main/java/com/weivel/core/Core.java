@@ -153,6 +153,10 @@ public final class Core implements AutoCloseable {
         wrapper.report(Objects.requireNonNull(failure, "failure"));
     }
 
+    Optional<BareServiceGet> bareServiceGet(long plugin, String id) {
+        return wrapper.bareServiceGet(plugin, id);
+    }
+
     boolean isLockHeld() {
         return wrapper.isLockHeld();
     }

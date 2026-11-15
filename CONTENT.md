@@ -136,7 +136,18 @@ clock and scheduler of the suite's own, and answers a `LayerWitness` in the shap
 has one test per vector, its display name the vector's id, and a coverage test that discovers those names through
 the JUnit Platform Launcher and fails on a vector none names.
 
-`com.weivel.benchmarks` holds only its purpose so far.
+`com.weivel.benchmarks` holds the benchmark gates, judged as the kit's `RUNNER.md` defines them and bounded by the
+pinned kit's `benchmarks/java.txt`, a ratio gate per backend. The same-language gate is the identity check: a consumer's
+get answers the provider's own object, and the timing beside it, three paths running the very same compiled call, is
+judged only against the platform's noise. `control-call` is `weivel_get_service` through the wrapper, with the core's
+timer armed as a host arms it, over the same function of the core's table on the same core, plugin and id called bare
+through `CoreInternals.bareServiceGet`, the one route past the wrapper, which reaches that function alone.
+`library-call` is the echo library's `echo_echo` through the host's `LibraryService` with a `byte[]`, over the same
+function called bare with the same bytes copied in and its answer copied out and released as the host does. Paths are
+sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,
+and judged on the median of the per-round ratios. A run with nothing measured fails, and so does a backend or platform
+the budget gives no line: no bound is never a pass. "Next to no overhead" is judged on the foreign function backend;
+JNA is the compatibility path and is bounded at what it measures.
 
 ## Using it
 
@@ -163,6 +174,12 @@ Java 8 compiles every source but the foreign function backend, which Java 25 com
 so the multi-release choice is the one a caller gets: `test` on Java 25 through the foreign function API, and
 `testJava8` on Java 8 through JNA, each asserting which backend it ran on. Javadoc runs on Java 25, at release 8 for the
 jar's base and at release 22 for the Java 22 sources.
+
+`./gradlew benchmark` runs the benchmark gates on both backends, `benchmarkFfm` on Java 25 and `benchmarkJna` on
+Java 8, and is never part of `check`: CI runs it as a job of its own on every runner. By default it judges one run of
+each gate against `java.txt` of the pinned kit; `-Pweivel.benchmark.mode=measure` judges no timing and prints one
+`weivel-benchmark` line per gate for each of `-Pweivel.benchmark.repetitions` runs (10 by default), the samples a
+bound is set from, and `-Pweivel.benchmark.budget=<path>` judges against another budget file.
 
 Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
 symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run

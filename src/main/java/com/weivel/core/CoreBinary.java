@@ -42,6 +42,15 @@ public final class CoreBinary implements AutoCloseable {
     }
 
     /**
+     * The native backend the binary was opened through, which the Java it runs on selects.
+     *
+     * @return {@code ffm} on Java 22 and later, {@code jna} below
+     */
+    public String backend() {
+        return functions.access().name();
+    }
+
+    /**
      * Closes the binary, after which no call through its functions may be made.
      *
      * @throws IllegalStateException when it was closed already, or a call into it is under way
