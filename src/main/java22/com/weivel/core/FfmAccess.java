@@ -35,6 +35,13 @@ final class FfmAccess implements NativeAccess {
 
     private static final Linker LINKER = Linker.nativeLinker();
     private static final MemorySegment EVERYTHING = MemorySegment.NULL.reinterpret(Long.MAX_VALUE);
+    /**
+     * What memory is cleared from, a chunk at a time.
+     *
+     * @implNote Filling a slice of {@code EVERYTHING} makes a segment per clear, which escape analysis does not
+     * always remove; a copy from an array makes none.
+     */
+    private static final byte[] ZEROS = new byte[512];
     private static final MemoryLayout SIZE_T = LINKER.canonicalLayouts().get("size_t");
     private static final MethodHandle CALLOC = standardFunction("calloc", FunctionDescriptor.of(JAVA_LONG, SIZE_T,
             SIZE_T));
@@ -138,7 +145,10 @@ final class FfmAccess implements NativeAccess {
 
     @Override
     public void clear(long address, long offset, long length) {
-        EVERYTHING.asSlice(address + offset, length).fill((byte) 0);
+        for (long cleared = 0; cleared < length; cleared += ZEROS.length) {
+            int chunk = (int) Math.min(ZEROS.length, length - cleared);
+            MemorySegment.copy(ZEROS, 0, EVERYTHING, JAVA_BYTE, address + offset + cleared, chunk);
+        }
     }
 
     @Override
