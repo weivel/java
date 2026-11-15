@@ -59,7 +59,7 @@ final class LibraryRun {
     private final long counter;
     private final Map<String, CompletableFuture<Void>> activates = new HashMap<>();
     private final Map<String, Map<String, Object>> resolved = new HashMap<>();
-    private final Map<String, Long> answeredAddresses;
+    private final Map<String, Long> answeredAddresses = new HashMap<>();
     private final List<Object> got = new ArrayList<>();
     private final List<Object> echoed = new ArrayList<>();
     private final List<List<String>> revoked = new ArrayList<>();
@@ -79,7 +79,6 @@ final class LibraryRun {
         this.declaration = declaration;
         this.memory = memory;
         this.counter = memory.allocate(Long.BYTES);
-        this.answeredAddresses = answeredAddresses(echoBinary, declaration);
     }
 
     static Map<String, Observations.Observer> drive(LayerVector vector, DriverWorld world, Path echoBinary,
@@ -138,8 +137,12 @@ final class LibraryRun {
     }
 
     /**
-     * The address each definition's symbol answers, read through a load of the binary the suite closes again before
-     * the first step, so that only the layer holds the binary across the steps.
+     * The address each definition's symbol answers, read through a load of the binary the suite makes and closes again
+     * while the layer's load holds it, so the suite reads the very mapping the layer loaded and holds nothing of its
+     * own across a step.
+     *
+     * @implNote Read before the first step, while nothing held the binary, a closed suite load let the platform map
+     * the layer's load at another address, and {@code sameObject} read false on a layer registering the right one.
      */
     private static Map<String, Long> answeredAddresses(Path echoBinary, Optional<LibraryDeclaration> declaration) {
         Map<String, String> symbols = new LinkedHashMap<>();
@@ -250,6 +253,9 @@ final class LibraryRun {
                 throw new IllegalArgumentException(where + " loads a library the vector declares none of");
             }
             load = world.host.loadLibrary(echoBinary, declaration.get());
+            if (load instanceof Answer.Ok) {
+                answeredAddresses.putAll(answeredAddresses(echoBinary, declaration));
+            }
         } else if (named.equals("unload")) {
             Shapes.refuseUnknownKeys(where, step, "unload");
             Shapes.requireTrue(where, step, "unload");
