@@ -152,11 +152,12 @@ public final class DefinitionCallBenchmark {
 
         DefinitionEcho(ForeignMemory memory, Map<Long, ForeignFunction> bound, long definition) {
             this.memory = memory;
-            this.context = memory.getLong(definition, CONTEXT * (long) Long.BYTES);
-            this.echo = bound.computeIfAbsent(memory.getLong(definition, OPERATION * (long) Long.BYTES),
+            long stride = ForeignMemory.addressSize();
+            this.context = memory.getLong(definition, CONTEXT * stride);
+            this.echo = bound.computeIfAbsent(memory.getLong(definition, OPERATION * stride),
                     pointer -> ForeignFunction.at(pointer, NativeType.INT, NativeType.ADDRESS, NativeType.ADDRESS,
                             NativeType.LONG, NativeType.ADDRESS, NativeType.ADDRESS));
-            this.release = bound.computeIfAbsent(memory.getLong(definition, RELEASE * (long) Long.BYTES),
+            this.release = bound.computeIfAbsent(memory.getLong(definition, RELEASE * stride),
                     pointer -> ForeignFunction.at(pointer, NativeType.VOID, NativeType.ADDRESS, NativeType.ADDRESS));
             byte[] bytes = new byte[INPUT_LENGTH];
             Arrays.fill(bytes, (byte) 7);
