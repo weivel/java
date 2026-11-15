@@ -1,10 +1,12 @@
 package com.weivel.conformance;
 
 import com.weivel.context.PluginContext;
+import com.weivel.context.ServiceWatcher;
 import com.weivel.context.WantLimits;
 import com.weivel.core.Answer;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.LedgerRow;
+import com.weivel.core.Manifest;
 import com.weivel.core.Refusal;
 import com.weivel.host.Activation;
 import com.weivel.host.Deactivating;
@@ -28,6 +30,10 @@ final class LifecycleRun {
     private static final String REGISTER = "register";
     private static final String WANT = "want";
     private static final String GET = "get";
+    private static final String WATCH = "watch";
+    private static final String PROVIDE = "provide";
+    private static final String ALL = "all";
+    private static final String CAPABILITIES = "capabilities";
 
     private final DriverWorld world;
     private final List<String> trace = Collections.synchronizedList(new ArrayList<String>());
@@ -72,13 +78,27 @@ final class LifecycleRun {
     private void build(String where, Map<String, Object> plugin) {
         String id = Shapes.text(where, plugin, "id");
         String pluginWhere = where + "'s plugin " + id;
-        Shapes.refuseUnknownKeys(pluginWhere, plugin, "id", "provides", "consumes", "activate", "deactivate");
+        Shapes.refuseUnknownKeys(pluginWhere, plugin, "id", "provides", "consumes", CAPABILITIES, "activate",
+                "deactivate");
         List<Map<String, Object>> activate = actions(pluginWhere + "'s activate", plugin, "activate");
         Optional<List<Map<String, Object>>> deactivate = plugin.containsKey("deactivate")
                 ? Optional.of(actions(pluginWhere + "'s deactivate", plugin, "deactivate"))
                 : Optional.<List<Map<String, Object>>>empty();
-        world.register(Manifests.services(id, Shapes.texts(pluginWhere, plugin, "provides"),
-                Shapes.texts(pluginWhere, plugin, "consumes")), entryOf(id, activate, deactivate));
+        world.register(manifestOf(pluginWhere, id, plugin), entryOf(id, activate, deactivate));
+    }
+
+    private static Manifest manifestOf(String where, String id, Map<String, Object> plugin) {
+        List<String> providesCapabilities = Collections.emptyList();
+        List<String> consumesCapabilities = Collections.emptyList();
+        if (plugin.containsKey(CAPABILITIES)) {
+            String capabilitiesWhere = where + "'s capabilities";
+            Map<String, Object> capabilities = Shapes.object(capabilitiesWhere, plugin, CAPABILITIES);
+            Shapes.refuseUnknownKeys(capabilitiesWhere, capabilities, "provides", "consumes");
+            providesCapabilities = Shapes.texts(capabilitiesWhere, capabilities, "provides");
+            consumesCapabilities = Shapes.texts(capabilitiesWhere, capabilities, "consumes");
+        }
+        return Manifests.declaring(id, Shapes.texts(where, plugin, "provides"), Shapes.texts(where, plugin,
+                "consumes"), providesCapabilities, consumesCapabilities);
     }
 
     private static List<Map<String, Object>> actions(String where, Map<String, Object> plugin, String key) {
@@ -86,7 +106,7 @@ final class LifecycleRun {
         for (int index = 0; index < actions.size(); index++) {
             String actionWhere = where + " action " + index;
             Map<String, Object> action = actions.get(index);
-            String named = Shapes.theOneNamed(actionWhere, action, REGISTER, WANT, GET);
+            String named = Shapes.theOneNamed(actionWhere, action, REGISTER, WANT, GET, WATCH, PROVIDE, ALL);
             if (named.equals(WANT)) {
                 Shapes.refuseUnknownKeys(actionWhere, action, WANT, "await");
             } else {
@@ -127,10 +147,58 @@ final class LifecycleRun {
                     return ended.thenCompose(nothing -> runActions(name, context, actions, after));
                 }
             } else {
-                get(name, context, (String) action.get(GET));
+                runAtOnce(name, context, action);
             }
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    private void runAtOnce(String name, PluginContext context, Map<String, Object> action) {
+        if (action.containsKey(GET)) {
+            get(name, context, (String) action.get(GET));
+        } else if (action.containsKey(WATCH)) {
+            watch(name, context, (String) action.get(WATCH));
+        } else if (action.containsKey(PROVIDE)) {
+            provide(name, context, (String) action.get(PROVIDE));
+        } else {
+            listAll(name, context, (String) action.get(ALL));
+        }
+    }
+
+    private void watch(String name, PluginContext context, String id) {
+        Answer<?> watching = context.watch(id, new ServiceWatcher() {
+            @Override
+            public void registered(Object service) {
+                trace.add("heard " + name + " " + id);
+            }
+
+            @Override
+            public void unregistered() {
+            }
+        });
+        if (!(watching instanceof Answer.Ok)) {
+            throw new IllegalStateException(name + "'s watch of " + id + " answered " + watching);
+        }
+    }
+
+    private void provide(String name, PluginContext context, String id) {
+        Answer<?> provided = context.provide(id, new Implementation(name));
+        if (!(provided instanceof Answer.Ok)) {
+            throw new IllegalStateException(name + "'s provision of " + id + " answered " + provided);
+        }
+        trace.add("provided " + name + " " + id);
+    }
+
+    private void listAll(String name, PluginContext context, String id) {
+        Answer<List<Object>> listed = context.implementations(id);
+        if (!(listed instanceof Answer.Ok)) {
+            throw new IllegalStateException(name + "'s listing of " + id + " answered " + listed);
+        }
+        StringBuilder line = new StringBuilder("listed " + name + " " + id);
+        for (Object implementation : ((Answer.Ok<List<Object>>) listed).value()) {
+            line.append(' ').append(((Implementation) implementation).provider);
+        }
+        trace.add(line.toString());
     }
 
     private void register(String name, PluginContext context, String id) {
@@ -278,6 +346,15 @@ final class LifecycleRun {
                 ? Long.valueOf(world.written(true) - loudBeforeTheDestroy + thrownSinceTheDestroy)
                 : Long.valueOf(thrownSinceTheDestroy));
         return observers;
+    }
+
+    /** A capability's implementation, naming the plugin that provided it. */
+    private static final class Implementation {
+        private final String provider;
+
+        private Implementation(String provider) {
+            this.provider = provider;
+        }
     }
 
     /** An entry that offers a deactivate. */

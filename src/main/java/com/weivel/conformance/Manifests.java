@@ -20,6 +20,12 @@ final class Manifests {
     }
 
     static Manifest services(String importName, List<String> provides, List<String> consumes) {
+        return declaring(importName, provides, consumes, Collections.<String>emptyList(),
+                Collections.<String>emptyList());
+    }
+
+    static Manifest declaring(String importName, List<String> provides, List<String> consumes,
+                              List<String> providesCapabilities, List<String> consumesCapabilities) {
         List<Manifest.ServiceOffer> offers = new ArrayList<>();
         for (String id : provides) {
             offers.add(new Manifest.ServiceOffer(id, Collections.<NamedNumber>emptyList()));
@@ -30,7 +36,7 @@ final class Manifests {
                     Collections.<NamedNumber>emptyList()));
         }
         return new Manifest(importName, 0, Optional.<String>empty(), Collections.<String>emptyList(),
-                Collections.<String>emptyList(), Collections.<String>emptyList(), offers, wants,
-                Collections.<String>emptyList(), Optional.<String>empty());
+                providesCapabilities, consumesCapabilities, offers, wants, Collections.<String>emptyList(),
+                Optional.<String>empty());
     }
 }
