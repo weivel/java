@@ -14,6 +14,9 @@ import java.util.Optional;
  * @param <T> the result of the call
  */
 public final class CallSteps<T> {
+    private static final CallSteps<Object> NONE = new CallSteps<>(() -> Optional.<Answer<Object>>empty(),
+            Answer.Ok::new);
+
     private final CallGuard<T> guard;
     private final AnsweredStep<T> answered;
 
@@ -57,8 +60,9 @@ public final class CallSteps<T> {
      * @param <T> the result of the call
      * @return the steps
      */
+    @SuppressWarnings("unchecked")
     public static <T> CallSteps<T> none() {
-        return new CallSteps<T>(() -> Optional.<Answer<T>>empty(), Answer.Ok::new);
+        return (CallSteps<T>) (CallSteps<?>) NONE;
     }
 
     /**
