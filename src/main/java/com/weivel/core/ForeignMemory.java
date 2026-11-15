@@ -50,6 +50,17 @@ public final class ForeignMemory implements AutoCloseable {
     }
 
     /**
+     * Writes {@code bytes} at an address, into memory of this or of the library's.
+     *
+     * @param address where the memory starts
+     * @param offset where in it the bytes go
+     * @param bytes the bytes
+     */
+    public void write(long address, long offset, byte[] bytes) {
+        access.writeBytes(address, offset, bytes);
+    }
+
+    /**
      * Reads a 32-bit integer.
      *
      * @param address where the struct or value starts

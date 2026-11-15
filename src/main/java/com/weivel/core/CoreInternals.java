@@ -1,10 +1,14 @@
 package com.weivel.core;
 
+import java.util.Objects;
+import java.util.Optional;
+
 /**
  * The wrapper's operations the layer's own packages use and its callers do not: a call with steps run under the layer
  * lock, a deferred step, the deadline hooks, and the error sink.
  *
- * <p>It is for the layer's own packages alone, {@code handles}, {@code timer}, {@code context} and {@code host},
+ * <p>It is for the layer's own packages alone, {@code handles}, {@code timer}, {@code context}, {@code host} and
+ * {@code benchmarks},
  * until the layer has a module descriptor that can keep it from everyone else. A caller outside them that uses it can
  * run its own code under the layer lock, through a guard or an answered step, which the layer forbids: nothing of a
  * caller's may run there.
@@ -105,6 +109,25 @@ public final class CoreInternals {
      */
     public static boolean removeDeadlineHooks(Core core, DeadlineHooks hooks) {
         return core.removeDeadlineHooks(hooks);
+    }
+
+    /**
+     * The bare {@code weivel_get_service} the benchmarks weigh the wrapper's call against: the same function of the
+     * core's table, on the core's own pointer, past the wrapper.
+     *
+     * @param core the core
+     * @param plugin the plugin asking
+     * @param id the service id
+     * @return the call, which its caller closes before the core is destroyed; {@link Answer.Destroyed} for a destroyed
+     *     core; {@link Answer.Mistake} for an id C cannot read
+     */
+    public static Answer<BareServiceGet> bareServiceGet(Core core, long plugin, String id) {
+        Optional<String> mistake = CallerTexts.inText("the id", Objects.requireNonNull(id, "id"));
+        if (mistake.isPresent()) {
+            return new Answer.Mistake<>(mistake.get());
+        }
+        Optional<BareServiceGet> bare = core.bareServiceGet(plugin, id);
+        return bare.isPresent() ? new Answer.Ok<>(bare.get()) : new Answer.Destroyed<>();
     }
 
     /**

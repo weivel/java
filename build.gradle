@@ -258,18 +258,63 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
     task.systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
 }
 
+def runsOnFfm = { Test task ->
+    task.javaLauncher = javaToolchains.launcherFor(jdk25)
+    task.jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+def runsOnJna = { Test task ->
+    task.javaLauncher = javaToolchains.launcherFor(jdk8)
+}
+
 tasks.named('test', Test) {
     description = 'Runs the suite on Java 25, where the jar reaches the core through the foreign function API.'
     runsTheSuiteAgainstTheJar(it, 'ffm')
-    javaLauncher = javaToolchains.launcherFor(jdk25)
-    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    useJUnitPlatform { excludeTags 'benchmark' }
+    runsOnFfm(it)
 }
 
 def testJava8 = tasks.register('testJava8', Test) {
     group = 'verification'
     description = 'Runs the suite on Java 8, where the jar reaches the core through JNA.'
     runsTheSuiteAgainstTheJar(it, 'jna')
-    javaLauncher = javaToolchains.launcherFor(jdk8)
+    useJUnitPlatform { excludeTags 'benchmark' }
+    runsOnJna(it)
+}
+
+def benchmarkMode = providers.gradleProperty('weivel.benchmark.mode').getOrElse('gate')
+def benchmarkRepetitions = providers.gradleProperty('weivel.benchmark.repetitions').getOrElse('10')
+def benchmarkBudget = providers.gradleProperty('weivel.benchmark.budget').map { file(it) }
+        .getOrElse(new File(siblingsDirectory, 'conformance/benchmarks/java.txt'))
+
+def runsTheBenchmarks = { Test task, String backend ->
+    task.group = 'verification'
+    runsTheSuiteAgainstTheJar(task, backend)
+    task.useJUnitPlatform { includeTags 'benchmark' }
+    task.systemProperty 'weivel.benchmark.mode', benchmarkMode
+    task.systemProperty 'weivel.benchmark.repetitions', benchmarkRepetitions
+    task.inputs.files(benchmarkBudget).withPropertyName('weivel.benchmark.budget')
+    task.systemProperty 'weivel.benchmark.budget', benchmarkBudget.absolutePath
+    task.outputs.upToDateWhen { false }
+    task.testLogging { showStandardStreams = true }
+}
+
+def benchmarkFfm = tasks.register('benchmarkFfm', Test) {
+    description = 'Runs the benchmark gates on Java 25, through the foreign function API.'
+    runsTheBenchmarks(it, 'ffm')
+    runsOnFfm(it)
+}
+
+def benchmarkJna = tasks.register('benchmarkJna', Test) {
+    description = 'Runs the benchmark gates on Java 8, through JNA.'
+    runsTheBenchmarks(it, 'jna')
+    runsOnJna(it)
+}
+
+tasks.register('benchmark') {
+    group = 'verification'
+    description = 'Runs the benchmark gates on both backends: -Pweivel.benchmark.mode=measure prints every sample ' +
+            'and judges no timing, the default gate mode judges one run against java.txt of the pinned kit.'
+    dependsOn benchmarkFfm, benchmarkJna
 }
 
 tasks.named('check') {

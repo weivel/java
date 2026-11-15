@@ -17,3 +17,16 @@ jobs:
       cmake_test: ''
       java_version: '25'
       gradle_test: check
+
+  benchmarks:
+    uses: intisy/workflows/.github/workflows/test.yml@main
+    with:
+      toolchains: gradle cmake
+      runners: '["ubuntu-latest","windows-latest","macos-latest"]'
+      cmake_version: '4.4.4'
+      cmake_configure: ''
+      cmake_build: ''
+      cmake_test: ''
+      java_version: '25'
+      gradle_test: benchmark
+      gradle_args: --continue -Pweivel.benchmark.mode=measure

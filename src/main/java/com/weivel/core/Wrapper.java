@@ -831,6 +831,18 @@ final class Wrapper {
         return destroyed;
     }
 
+    /** The bare call on this wrapper's core, or empty once it is destroyed; read under the lock. */
+    Optional<BareServiceGet> bareServiceGet(long plugin, String id) {
+        hold();
+        try {
+            return core == 0 ? Optional.<BareServiceGet>empty()
+                    : Optional.of(new BareServiceGet(new ForeignFunction(functions.function(CoreFunction.GET_SERVICE)),
+                            new ForeignMemory(new NativeArena(functions.access())), core, plugin, id));
+        } finally {
+            lock.unlock();
+        }
+    }
+
     void destroy() {
         hold();
         try {
