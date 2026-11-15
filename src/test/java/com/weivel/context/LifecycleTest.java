@@ -268,6 +268,29 @@ class LifecycleTest {
     }
 
     @Test
+    void aQuarantinedPluginOpenedAgainInsideADispatchHearsWhatItsCallsQueueRightAfterTheOpen() {
+        try (ContextFixture fixture = new ContextFixture()) {
+            PluginContext consumer = fixture.opened(consuming("consumer", GREETER));
+            fixture.quarantine(consumer);
+            List<PluginEvent> heard = new ArrayList<>();
+            consumer.listen(heard::add);
+            AtomicBoolean first = new AtomicBoolean(true);
+            fixture.core.addListener(event -> {
+                if (first.getAndSet(false)) {
+                    fixture.open(consumer);
+                    consumer.get("undeclared-once-open");
+                }
+            });
+
+            fixture.core.call(CoreCalls.unregister(424242L));
+
+            assertEquals(1, heard.size());
+            assertEquals("undeclared-once-open",
+                    assertInstanceOf(PluginEvent.ReachRefused.class, heard.get(0)).id());
+        }
+    }
+
+    @Test
     void aRefusedVerifyEndsThePluginsEntriesSoAListenerFromBeforeHearsNothingAfterIt() {
         try (ContextFixture fixture = new ContextFixture()) {
             PluginContext lacking = fixture.opened(ContextFixture.capabilities("lacking",
