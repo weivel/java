@@ -82,6 +82,24 @@ class LayerVectorsTest {
     }
 
     @Test
+    @DisplayName("lifecycle/events-of-an-activate-wait-for-every-activate-of-the-plan")
+    void eventsOfAnActivateWaitForEveryActivateOfThePlan() {
+        assertWitnessedQuietly("lifecycle/events-of-an-activate-wait-for-every-activate-of-the-plan");
+    }
+
+    @Test
+    @DisplayName("lifecycle/an-activate-that-settles-at-once-is-verified-before-the-next-starts")
+    void anActivateThatSettlesAtOnceIsVerifiedBeforeTheNextStarts() {
+        assertWitnessedQuietly("lifecycle/an-activate-that-settles-at-once-is-verified-before-the-next-starts");
+    }
+
+    @Test
+    @DisplayName("lifecycle/an-activate-refused-at-once-is-quarantined-before-the-next-starts")
+    void anActivateRefusedAtOnceIsQuarantinedBeforeTheNextStarts() {
+        assertWitnessedQuietly("lifecycle/an-activate-refused-at-once-is-quarantined-before-the-next-starts");
+    }
+
+    @Test
     @DisplayName("lifecycle/a-release-deactivates-then-releases-then-forgets")
     void aReleaseDeactivatesThenReleasesThenForgets() {
         assertWitnessedQuietly("lifecycle/a-release-deactivates-then-releases-then-forgets");
