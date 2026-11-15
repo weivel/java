@@ -211,6 +211,22 @@ class HostTest {
     }
 
     @Test
+    void aVirtualMachineErrorFromAnActivatePropagatesOnceTheHostCanStillReleaseThePlugin() throws Exception {
+        TestEntry overflowing = fixture.entry("overflowing");
+        overflowing.onActivate = context -> {
+            throw new StackOverflowError("an overflow on purpose");
+        };
+        long plugin = fixture.register(named("overflowing"), overflowing);
+
+        assertThrows(StackOverflowError.class, () -> fixture.activate(plugin));
+        Answer<Boolean> released = host.release(plugin).toCompletableFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals(new Answer.Ok<>(true), released);
+        assertEquals(Arrays.asList("activate overflowing", "deactivate overflowing"), fixture.trace());
+        assertTrue(fixture.failures.isEmpty());
+    }
+
+    @Test
     void aVerifyTheCallerAsksForIsCarriedOutAsASettledActivatesIs() {
         TestEntry growing = fixture.entry("growing");
         long plugin = fixture.register(named("growing"), growing);

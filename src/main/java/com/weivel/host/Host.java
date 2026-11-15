@@ -869,12 +869,19 @@ public final class Host implements AutoCloseable {
         }
     }
 
+    /**
+     * Calls the plugin's activate and settles it once its stage completes.
+     *
+     * @implNote A {@link VirtualMachineError} is let through only once the call is marked returned, since a release
+     * waits for that mark before it calls the deactivate; its activate then never settles and a release answers it.
+     */
     private void callActivate(PluginRecord record, PluginContext context, CompletableFuture<Outcome> outcome,
                               CompletableFuture<Void> call) {
         CompletionStage<?> activating;
         try {
             activating = record.entry.activate(context);
         } catch (VirtualMachineError error) {
+            call.complete(null);
             throw error;
         } catch (Throwable thrown) {
             call.complete(null);
