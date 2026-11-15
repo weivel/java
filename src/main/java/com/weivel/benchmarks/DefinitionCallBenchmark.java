@@ -38,12 +38,16 @@ import java.util.function.Supplier;
  */
 public final class DefinitionCallBenchmark {
     /**
-     * Batches long enough that a batch's noise settles below the platform's worst, the call being a native one.
+     * Batches of some milliseconds on each backend, long enough that two identical direct paths settle below the
+     * platform's worst noise.
      *
-     * @implNote The library call's sampling, a thousand calls a batch, left two identical direct paths of this row
-     * 0.0093 apart on Windows, past its worst noise of 0.0092.
+     * @implNote A batch of 20 000 calls lasts about 0.6 ms on the foreign function API on Linux, where the call takes
+     * 29 ns, and left the two direct paths 0.0072 apart, twice Linux's worst noise; on JNA, where it takes about
+     * 1.6 us, the same batch left them 0.00004 apart, and a foreign function batch as long would make JNA's run
+     * last minutes.
      */
-    public static final Sampling DEFAULT_SAMPLING = new Sampling(200_000, 20_000, 101);
+    private static final Sampling FFM_SAMPLING = new Sampling(1_000_000, 500_000, 101);
+    private static final Sampling JNA_SAMPLING = new Sampling(200_000, 20_000, 101);
 
     private static final String ECHO = "echo";
     private static final String SYMBOL = "echo_service_definition";
@@ -54,6 +58,16 @@ public final class DefinitionCallBenchmark {
     private static final int RELEASE = 3;
 
     private DefinitionCallBenchmark() {
+    }
+
+    /**
+     * The sampling this row is timed with on a backend.
+     *
+     * @param backend the backend the core was loaded on, {@code ffm} or {@code jna}
+     * @return its sampling
+     */
+    public static Sampling samplingFor(String backend) {
+        return backend.equals("ffm") ? FFM_SAMPLING : JNA_SAMPLING;
     }
 
     /**
