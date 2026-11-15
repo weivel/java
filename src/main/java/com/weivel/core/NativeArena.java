@@ -1,6 +1,5 @@
 package com.weivel.core;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +24,7 @@ final class NativeArena implements AutoCloseable {
     private long blockSize;
     private long used;
     private long asked;
+    private byte[] encoding = new byte[0];
 
     NativeArena(NativeAccess access) {
         this(access, false);
@@ -106,11 +106,20 @@ final class NativeArena implements AutoCloseable {
         return allocate(element.byteSize() * Math.max(1, count));
     }
 
-    /** {@code text} encoded as UTF-8 and terminated by a zero byte. */
+    /**
+     * {@code text} encoded as UTF-8 and terminated by a zero byte.
+     *
+     * @implNote It is encoded through an array this arena keeps and grows, so a reusable arena's texts allocate
+     * nothing on the Java heap once the array holds the longest.
+     */
     NativeRegion text(String text) {
-        byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
-        NativeRegion region = allocate(encoded.length + 1L);
-        access.writeBytes(region.address(), 0, encoded);
+        int length = Utf8.encodedLength(text);
+        if (encoding.length < length) {
+            encoding = new byte[Math.max(length, encoding.length * 2)];
+        }
+        Utf8.encode(text, encoding);
+        NativeRegion region = allocate(length + 1L);
+        access.writeBytes(region.address(), 0, encoding, 0, length);
         return region;
     }
 
