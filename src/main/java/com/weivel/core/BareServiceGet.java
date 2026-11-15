@@ -6,8 +6,8 @@ package com.weivel.core;
  * arguments laid out once. It exists for the benchmarks' control ratio, the wrapper's call over this one, and for
  * nothing else.
  *
- * <p>Only one thread at a time may call it, while no other thread calls the core. Once the core is destroyed every
- * call is refused before it reaches the core's pointer.
+ * <p>Only one thread at a time may call it, while no other thread calls the core. Under that precondition, a call
+ * made once the core is destroyed is refused before it reaches the core's pointer.
  *
  * @implNote The wrapper hands it the one function, so the table stays the wrapper's alone. It reaches only
  * {@code weivel_get_service}, which changes nothing in the core; a call that leaves an event waiting is answered as a
