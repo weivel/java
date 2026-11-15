@@ -19,6 +19,7 @@ import com.weivel.core.LibraryBinary;
 import com.weivel.core.LibraryFunction;
 import com.weivel.core.Manifest;
 import com.weivel.core.QuarantineReason;
+import com.weivel.core.Refusal;
 import com.weivel.core.RefusalStatus;
 import com.weivel.core.Verification;
 import com.weivel.handles.Handles;
@@ -912,16 +913,18 @@ public final class Host implements AutoCloseable {
         } finally {
             lock.unlock();
         }
-        ActivationState state = ActivationState.QUARANTINED;
+        Outcome settled = new Outcome(record.plugin, ActivationState.QUARANTINED, Optional.<Refusal>empty());
         try {
-            state = failure == null ? verified(context) : quarantined(context, reasonFor(failure));
+            settled = failure == null
+                    ? verified(record.plugin, context)
+                    : new Outcome(record.plugin, quarantined(context, reasonFor(failure)), Optional.<Refusal>empty());
         } finally {
-            endSettling(record, outcome, settling, state);
+            endSettling(record, outcome, settling, settled);
         }
     }
 
     private void endSettling(PluginRecord record, CompletableFuture<Outcome> outcome,
-                             CompletableFuture<Void> settling, ActivationState state) {
+                             CompletableFuture<Void> settling, Outcome settled) {
         boolean ending;
         lock.lock();
         try {
@@ -934,22 +937,24 @@ public final class Host implements AutoCloseable {
             lock.unlock();
         }
         settling.complete(null);
-        outcome.complete(new Outcome(record.plugin, state, Optional.empty()));
+        outcome.complete(settled);
         if (ending) {
             endTheDestroy();
         }
     }
 
-    private ActivationState verified(PluginContext context) {
+    /** Verifies a settled activate, the outcome of a refused verification carrying the core's refusal of it. */
+    private Outcome verified(long plugin, PluginContext context) {
         Answer<Verification> verification = contexts.verify(context);
         if (!(verification instanceof Answer.Ok)) {
-            return quarantined(context, new QuarantineReason(CoreConstants.REFUSAL_NONE,
+            return new Outcome(plugin, quarantined(context, new QuarantineReason(CoreConstants.REFUSAL_NONE,
                     "its activation could not be verified: " + verification,
-                    "release it and activate it again"));
+                    "release it and activate it again")), Optional.<Refusal>empty());
         }
-        return ((Answer.Ok<Verification>) verification).value().verified()
-                ? ActivationState.ACTIVE
-                : ActivationState.QUARANTINED;
+        Verification answered = ((Answer.Ok<Verification>) verification).value();
+        return answered.verified()
+                ? new Outcome(plugin, ActivationState.ACTIVE, Optional.<Refusal>empty())
+                : new Outcome(plugin, ActivationState.QUARANTINED, answered.refusal());
     }
 
     /**

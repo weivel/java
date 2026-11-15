@@ -211,6 +211,32 @@ class HostTest {
     }
 
     @Test
+    void anOutcomeCarriesTheRefusalThatDecidedItAndAQuarantineForAHostReasonCarriesNone() {
+        TestEntry failing = fixture.entry("failing");
+        CompletableFuture<Void> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new IllegalStateException("failed on purpose"));
+        failing.onActivate = context -> failed;
+        long lacking = fixture.register(providingCapability("lacking", "screens"), fixture.entry("lacking"));
+        long failingPlugin = fixture.register(named("failing"), failing);
+        long whole = fixture.register(named("whole"), fixture.entry("whole"));
+
+        Activation activation = value(host.activate(Arrays.asList(lacking, failingPlugin, whole),
+                EdgeSource.SERVICES));
+
+        Outcome refusedVerification = outcomeOf(activation, lacking);
+        assertEquals(ActivationState.QUARANTINED, refusedVerification.state());
+        assertEquals(CoreConstants.REFUSAL_ACTIVATION_MISMATCH, refusedVerification.refusal().get().code());
+        assertEquals(Optional.of("lacking"), refusedVerification.refusal().get().subject());
+        Outcome hostReason = outcomeOf(activation, failingPlugin);
+        assertEquals(ActivationState.QUARANTINED, hostReason.state());
+        assertEquals(Optional.<Refusal>empty(), hostReason.refusal());
+        assertEquals(Optional.<Refusal>empty(), outcomeOf(activation, whole).refusal());
+        Outcome refusedOpen = done(fixture.activate(whole).outcomes().get(0));
+        assertEquals(ActivationState.REFUSED, refusedOpen.state());
+        assertEquals(CoreConstants.REFUSAL_PLUGIN_STATE, refusedOpen.refusal().get().code());
+    }
+
+    @Test
     void aVirtualMachineErrorFromAnActivatePropagatesOnceTheHostCanStillReleaseThePlugin() throws Exception {
         TestEntry overflowing = fixture.entry("overflowing");
         overflowing.onActivate = context -> {
@@ -224,6 +250,10 @@ class HostTest {
         assertEquals(new Answer.Ok<>(true), released);
         assertEquals(Arrays.asList("activate overflowing", "deactivate overflowing"), fixture.trace());
         assertTrue(fixture.failures.isEmpty());
+    }
+
+    private static Outcome outcomeOf(Activation activation, long plugin) {
+        return done(activation.outcomes().get(activation.plan().order().indexOf(plugin)));
     }
 
     @Test

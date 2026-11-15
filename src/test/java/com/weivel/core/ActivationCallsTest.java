@@ -101,6 +101,7 @@ class ActivationCallsTest {
         Verification verified = ok(core.call(CoreCalls.verifyOrQuarantine(plugin)));
 
         assertTrue(verified.verified());
+        assertEquals(Optional.empty(), verified.refusal());
         assertTrue(listener.of(CoreEvent.LogEvent.class).isEmpty());
     }
 
@@ -118,6 +119,8 @@ class ActivationCallsTest {
         Verification verification = ok(core.call(CoreCalls.verifyOrQuarantine(plugin)));
 
         assertTrue(!verification.verified());
+        assertEquals(CoreConstants.REFUSAL_ACTIVATION_MISMATCH, verification.refusal().get().code());
+        assertEquals(Optional.of("lacking"), verification.refusal().get().subject());
         assertEquals(Arrays.asList(CoreFunction.VERIFY_ACTIVATION, CoreFunction.QUARANTINE_PLUGIN),
                 log.calls().subList(0, 2));
         List<CoreEvent> heard = listener.events();

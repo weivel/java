@@ -4,7 +4,11 @@ import com.weivel.core.Refusal;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Where one plugin's activation ended, and the core's refusal when the core refused to open it. */
+/**
+ * Where one plugin's activation ended, and the core's refusal that decided it: the refusal of its open for
+ * {@link ActivationState#REFUSED}, and the refusal of its verification for a {@link ActivationState#QUARANTINED} the
+ * core's refusal caused. A quarantine for a reason of the host's carries none.
+ */
 public final class Outcome {
     private final long plugin;
     private final ActivationState state;
@@ -15,7 +19,7 @@ public final class Outcome {
      *
      * @param plugin the plugin's handle
      * @param state where its activation ended
-     * @param refusal the core's refusal of its open; empty for every other state
+     * @param refusal the core's refusal that decided it; empty when none did
      */
     public Outcome(long plugin, ActivationState state, Optional<Refusal> refusal) {
         this.plugin = plugin;
@@ -44,7 +48,8 @@ public final class Outcome {
     /**
      * Answers {@code refusal}.
      *
-     * @return the core's refusal of its open, as the core queued it; empty unless {@link ActivationState#REFUSED}
+     * @return the core's refusal of its open or of its verification, as the core queued it; empty when no refusal
+     *     of the core's decided the outcome
      */
     public Optional<Refusal> refusal() {
         return refusal;

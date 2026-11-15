@@ -44,15 +44,30 @@ public final class CoreCalls {
         private final int status;
         private final T value;
         private final Optional<CoreFunction> refusedRelease;
+        private final Optional<Function<Optional<Refusal>, T>> completedByTheRefusal;
 
         Crossed(int status, T value) {
             this(status, value, Optional.<CoreFunction>empty());
         }
 
         Crossed(int status, T value, Optional<CoreFunction> refusedRelease) {
+            this(status, value, refusedRelease, Optional.<Function<Optional<Refusal>, T>>empty());
+        }
+
+        private Crossed(int status, T value, Optional<CoreFunction> refusedRelease,
+                        Optional<Function<Optional<Refusal>, T>> completedByTheRefusal) {
             this.status = status;
             this.value = value;
             this.refusedRelease = refusedRelease;
+            this.completedByTheRefusal = completedByTheRefusal;
+        }
+
+        /**
+         * A crossing answered OK whose result carries the refusal the core queued during it, which is known only once
+         * the call's events are drained.
+         */
+        static <T> Crossed<T> completedByTheRefusal(Function<Optional<Refusal>, T> value) {
+            return new Crossed<>(STATUS_OK, null, Optional.<CoreFunction>empty(), Optional.of(value));
         }
 
         public int status() {
@@ -61,6 +76,11 @@ public final class CoreCalls {
 
         public T value() {
             return value;
+        }
+
+        /** The result, given the first refusal the call's drained events carry. */
+        T valueGiven(Optional<Refusal> drainedRefusal) {
+            return completedByTheRefusal.isPresent() ? completedByTheRefusal.get().apply(drainedRefusal) : value;
         }
 
         /** The release function the core refused once the answer was copied: the copy still answers the call. */
@@ -306,7 +326,8 @@ public final class CoreCalls {
      * before any event of the verification is dispatched, and its ledger row shows the core's refusal.
      *
      * @param plugin the plugin's handle
-     * @return the call, answering whether it was verified or quarantined; a refused verification whose quarantine
+     * @return the call, answering whether it was verified or quarantined, a quarantine carrying the verification's
+     *     refusal, the first its events carry; a refused verification whose quarantine
      *     the core refuses too, as for a plugin released meanwhile, is answered as the core answered the verification,
      *     with its refusal
      * @implNote The core's {@code pending_events} counts every event waiting, so the quarantine's answer covers the
@@ -320,7 +341,7 @@ public final class CoreCalls {
             }
             int quarantined = functions.status(CoreFunction.QUARANTINE_PLUGIN, core, plugin, 0L, pending);
             return quarantined == STATUS_OK
-                    ? new Crossed<>(STATUS_OK, Verification.quarantined())
+                    ? Crossed.completedByTheRefusal(Verification::quarantined)
                     : new Crossed<>(verified, Verification.passed());
         });
     }
