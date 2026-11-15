@@ -13,17 +13,13 @@ public interface PluginEvent {
     final class Revoked implements PluginEvent {
         private final Object object;
         private final boolean awaitsRelease;
+        private final long registration;
 
-        /**
-         * Checks that the object is present.
-         *
-         * @param object the object
-         * @param awaitsRelease whether its provider awaits the plugin's release of it
-         */
-        public Revoked(Object object, boolean awaitsRelease) {
+        Revoked(Object object, boolean awaitsRelease, long registration) {
             Objects.requireNonNull(object, "object");
             this.object = object;
             this.awaitsRelease = awaitsRelease;
+            this.registration = registration;
         }
 
         /**
@@ -45,6 +41,11 @@ public interface PluginEvent {
             return awaitsRelease;
         }
 
+        /** The registration or capability implementation revoked, stale as a handle to call with. */
+        long registration() {
+            return registration;
+        }
+
         @Override
         public boolean equals(Object other) {
             if (this == other) {
@@ -54,7 +55,8 @@ public interface PluginEvent {
                 return false;
             }
             Revoked that = (Revoked) other;
-            return Objects.equals(object, that.object) && awaitsRelease == that.awaitsRelease;
+            return Objects.equals(object, that.object) && awaitsRelease == that.awaitsRelease
+                    && registration == that.registration;
         }
 
         @Override
@@ -62,6 +64,7 @@ public interface PluginEvent {
             int hash = 0;
             hash = 31 * hash + Objects.hashCode(object);
             hash = 31 * hash + Boolean.hashCode(awaitsRelease);
+            hash = 31 * hash + Long.hashCode(registration);
             return hash;
         }
 
@@ -76,15 +79,27 @@ public interface PluginEvent {
      * freed.
      */
     final class HoldingsReleased implements PluginEvent {
+        private final String id;
         private final Object service;
 
         /**
-         * Checks that the object is present.
+         * Checks that the parts are present.
          *
+         * @param id the id the plugin registered it under
          * @param service the object the plugin registered
          */
-        public HoldingsReleased(Object service) {
+        public HoldingsReleased(String id, Object service) {
+            this.id = Objects.requireNonNull(id, "id");
             this.service = Objects.requireNonNull(service, "service");
+        }
+
+        /**
+         * Answers {@code id}.
+         *
+         * @return the id the plugin registered it under
+         */
+        public String id() {
+            return id;
         }
 
         /**
@@ -98,17 +113,18 @@ public interface PluginEvent {
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof HoldingsReleased && service == ((HoldingsReleased) other).service;
+            return other instanceof HoldingsReleased && id.equals(((HoldingsReleased) other).id)
+                    && service == ((HoldingsReleased) other).service;
         }
 
         @Override
         public int hashCode() {
-            return System.identityHashCode(service);
+            return 31 * id.hashCode() + System.identityHashCode(service);
         }
 
         @Override
         public String toString() {
-            return "HoldingsReleased[service=" + service + "]";
+            return "HoldingsReleased[id=" + id + ", service=" + service + "]";
         }
     }
 

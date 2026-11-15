@@ -118,7 +118,7 @@ final class ServiceCalls {
                 : CoreCalls.registerService(context.plugin(), id), guard,
                 registration -> {
                     room.add(HandleKind.SERVICE_REGISTRATION, registration, context.plugin(), record);
-                    released.ifPresent(then -> state.releases.await(registration, context.plugin(), service, then));
+                    released.ifPresent(then -> state.releases.await(registration, context.plugin(), id, service, then));
                     registered.run();
                     return new Answer.Ok<>(registration);
                 });
@@ -129,17 +129,17 @@ final class ServiceCalls {
     }
 
     /**
-     * Ends the plugin's revoked holding of {@code service} in the core, for a registration made awaiting releases.
+     * Ends the plugin's revoked holding a revocation named in the core, for a registration made awaiting releases.
      *
-     * @return true; false, calling nothing, when the plugin keeps no revoked holding of that very object
+     * @return true; false, calling nothing, when the plugin keeps no such revoked holding
      */
-    static Answer<Boolean> releaseHolding(ContextState state, PluginContext context, Object service) {
-        OptionalLong registration = state.releases.takeRevoked(context.plugin(), service);
-        if (!registration.isPresent()) {
+    static Answer<Boolean> releaseHolding(ContextState state, PluginContext context, PluginEvent.Revoked revoked) {
+        if (!revoked.awaitsRelease()
+                || !state.releases.takeRevoked(context.plugin(), revoked.registration(), revoked.object())) {
             return new Answer.Ok<>(false);
         }
         Answer<Void> released = state.call(context, CoreCalls.releaseHolding(context.plugin(),
-                registration.getAsLong()), Answer.Ok::new);
+                revoked.registration()), Answer.Ok::new);
         return released instanceof Answer.Ok ? new Answer.Ok<>(true) : Answer.retyped(released);
     }
 

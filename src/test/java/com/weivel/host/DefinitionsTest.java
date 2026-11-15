@@ -60,14 +60,15 @@ class DefinitionsTest {
         try (HostFixture fixture = new HostFixture(pauses)) {
             LoadedLibrary library = value(fixture.host.loadLibrary(echoBinary(), bytesAndDefinition()));
             TestEntry consumer = activated(fixture, "consumer", "echo-bytes", "echo");
+            List<PluginEvent.Revoked> revoked = revocationsHeardBy(consumer);
             LibraryService bytes = (LibraryService) value(consumer.context.get("echo-bytes"));
-            Object definition = value(consumer.context.get("echo"));
+            value(consumer.context.get("echo"));
             CompletableFuture<LibraryAnswer> running = CompletableFuture.supplyAsync(
                     () -> bytes.call("echo", "still running".getBytes(StandardCharsets.UTF_8)));
             pauses.holdCalls.awaitReached();
 
             value(fixture.host.unloadLibrary(library));
-            assertEquals(true, value(consumer.context.releaseHolding(definition)));
+            assertEquals(true, value(consumer.context.releaseHolding(awaiting(revoked))));
             List<String> closedWhileTheCallRan = pauses.closed();
             pauses.holdCalls.open();
             LibraryAnswer answer = running.get(10, TimeUnit.SECONDS);
@@ -94,36 +95,23 @@ class DefinitionsTest {
                 public void unregistered() {
                 }
             }));
-            List<PluginEvent> events = Collections.synchronizedList(new ArrayList<>());
-            consumer.context.listen(events::add);
+            List<PluginEvent.Revoked> revoked = revocationsHeardBy(consumer);
             LoadedLibrary library = value(fixture.host.loadLibrary(echoBinary(), definitions("echo")));
             Object definition = library.definitions().get("echo");
             assertSame(definition, value(consumer.context.get("echo")));
 
             value(fixture.host.unloadLibrary(library));
             List<String> closedAtTheUnload = pauses.closed();
-            boolean released = value(consumer.context.releaseHolding(definition));
-            boolean releasedAgain = value(consumer.context.releaseHolding(definition));
+            boolean released = value(consumer.context.releaseHolding(awaiting(revoked)));
+            boolean releasedAgain = value(consumer.context.releaseHolding(awaiting(revoked)));
 
             assertEquals(Collections.singletonList(definition), heard);
-            assertEquals(Collections.<PluginEvent>singletonList(new PluginEvent.Revoked(definition, true)), events);
+            assertEquals(1, revoked.size());
+            assertSame(definition, revoked.get(0).object());
             assertEquals(Collections.emptyList(), closedAtTheUnload);
             assertTrue(released);
             assertFalse(releasedAgain);
             assertEquals(Collections.singletonList(LIBRARY), pauses.closed());
-        }
-    }
-
-    @Test
-    void aHolderLetsGoOfNothingBeforeItsRevocation() throws Exception {
-        try (HostFixture fixture = new HostFixture()) {
-            LoadedLibrary library = value(fixture.host.loadLibrary(echoBinary(), definitions("echo")));
-            TestEntry consumer = activated(fixture, "consumer", "echo");
-            Object definition = value(consumer.context.get("echo"));
-
-            assertEquals(false, value(consumer.context.releaseHolding(definition)));
-            assertEquals(false, value(consumer.context.releaseHolding(new Object())));
-            assertSame(definition, library.definitions().get("echo"));
         }
     }
 
@@ -133,14 +121,15 @@ class DefinitionsTest {
             Object own = new Object();
             HostService service = value(fixture.host.registerHostService("plain", own));
             TestEntry consumer = activated(fixture, "consumer", "plain");
-            List<PluginEvent> events = Collections.synchronizedList(new ArrayList<>());
-            consumer.context.listen(events::add);
+            List<PluginEvent.Revoked> revoked = revocationsHeardBy(consumer);
             assertSame(own, value(consumer.context.get("plain")));
 
             value(service.unregister());
 
-            assertEquals(Collections.<PluginEvent>singletonList(new PluginEvent.Revoked(own, false)), events);
-            assertEquals(false, value(consumer.context.releaseHolding(own)));
+            assertEquals(1, revoked.size());
+            assertSame(own, revoked.get(0).object());
+            assertFalse(revoked.get(0).awaitsRelease());
+            assertEquals(false, value(consumer.context.releaseHolding(revoked.get(0))));
         }
     }
 
@@ -155,6 +144,7 @@ class DefinitionsTest {
             fixture.activate(providerPlugin, consumerPlugin);
             List<PluginEvent> heard = Collections.synchronizedList(new ArrayList<>());
             provider.context.listen(heard::add);
+            List<PluginEvent.Revoked> revoked = revocationsHeardBy(consumer);
             Object held = new Object();
             ServiceRegistration registration = value(provider.context.registerAwaitingReleases("provider:held",
                     held));
@@ -162,10 +152,11 @@ class DefinitionsTest {
 
             value(registration.unregister());
             List<PluginEvent> heardAtTheUnregistration = new ArrayList<>(heard);
-            value(consumer.context.releaseHolding(held));
+            value(consumer.context.releaseHolding(awaiting(revoked)));
 
             assertEquals(Collections.emptyList(), heardAtTheUnregistration);
-            assertEquals(Collections.<PluginEvent>singletonList(new PluginEvent.HoldingsReleased(held)), heard);
+            assertEquals(Collections.<PluginEvent>singletonList(new PluginEvent.HoldingsReleased("provider:held", held)),
+                    heard);
         }
     }
 
@@ -187,18 +178,17 @@ class DefinitionsTest {
     }
 
     @Test
-    void aDefinitionTheDestroyFindsRegisteredKeepsItsBinaryOpenUntilTheHostIsFreed() throws Exception {
+    void aDefinitionTheDestroyFindsRegisteredClosesItsBinaryOnceTheCoreIsDestroyed() throws Exception {
         LibraryPauses pauses = new LibraryPauses();
         try (HostFixture fixture = new HostFixture(pauses)) {
             value(fixture.host.loadLibrary(echoBinary(), definitions("echo")));
             TestEntry consumer = activated(fixture, "consumer", "echo");
             value(consumer.context.get("echo"));
+            List<String> closedBeforeTheDestroy = pauses.closed();
 
             fixture.host.destroy().toCompletableFuture().get(10, TimeUnit.SECONDS);
-            List<String> closedAtTheDestroy = pauses.closed();
-            fixture.host.close();
 
-            assertEquals(Collections.emptyList(), closedAtTheDestroy);
+            assertEquals(Collections.emptyList(), closedBeforeTheDestroy);
             assertEquals(Collections.singletonList(LIBRARY), pauses.closed());
         }
     }
@@ -235,6 +225,31 @@ class DefinitionsTest {
             assertEquals(Collections.emptyList(), fixture.failures);
             assertInstanceOf(Answer.Ok.class, fixture.host.registerHostService("echo", new Object()));
         }
+    }
+
+    /** Every revocation the plugin hears from now on, in order. */
+    private static List<PluginEvent.Revoked> revocationsHeardBy(TestEntry plugin) {
+        List<PluginEvent.Revoked> revoked = Collections.synchronizedList(new ArrayList<>());
+        plugin.context.listen(event -> {
+            if (event instanceof PluginEvent.Revoked) {
+                revoked.add((PluginEvent.Revoked) event);
+            }
+        });
+        return revoked;
+    }
+
+    /** The one revocation heard that awaits the plugin's release. */
+    private static PluginEvent.Revoked awaiting(List<PluginEvent.Revoked> revoked) {
+        List<PluginEvent.Revoked> awaiting = new ArrayList<>();
+        synchronized (revoked) {
+            for (PluginEvent.Revoked heard : revoked) {
+                if (heard.awaitsRelease()) {
+                    awaiting.add(heard);
+                }
+            }
+        }
+        assertEquals(1, awaiting.size(), String.valueOf(revoked));
+        return awaiting.get(0);
     }
 
     private static TestEntry activated(HostFixture fixture, String name, String... consumes) {

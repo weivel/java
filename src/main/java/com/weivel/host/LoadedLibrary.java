@@ -62,6 +62,11 @@ public final class LoadedLibrary {
     /**
      * Answers {@code definitions}.
      *
+     * <p>The caller of this method holds no registration of any of them, so its use keeps nothing open: each address
+     * dies with the library's binary, which closes once every holder has let go after the unload, or once the
+     * destroy has destroyed the core, and a call through one afterwards is undefined. A consumer that must keep
+     * calling resolves the service through its context, and so holds it.
+     *
      * @return the object each declared definition service is registered with, by its id in the declaration's order:
      *     a {@code MemorySegment} on the foreign function API and a JNA {@code Pointer} on JNA, carrying the very
      *     address the definition's symbol answered

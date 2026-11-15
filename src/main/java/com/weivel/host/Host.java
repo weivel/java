@@ -1328,6 +1328,7 @@ public final class Host implements AutoCloseable {
             timer.destroy();
         } finally {
             core.destroy();
+            endEveryDefinitionHold();
             List<Long> released;
             lock.lock();
             try {
@@ -1373,14 +1374,14 @@ public final class Host implements AutoCloseable {
             lock.unlock();
         }
         contexts.close();
-        endEveryDefinitionHold();
         ownScheduler.ifPresent(SystemScheduler::close);
         closeLoaders(closing);
     }
 
     /**
      * Ends the hold of every definition the core never reported released, as one the destroy found still registered,
-     * now that the host is freed, so each binary they kept open closes once no call runs in it.
+     * once the core is destroyed: a collected language has no free of the host to wait for, so each binary they kept
+     * open closes once no call runs in it, and every address a definition answered is invalid from then on.
      */
     private void endEveryDefinitionHold() {
         for (DefinitionHold hold : new ArrayList<>(definitionHolds)) {

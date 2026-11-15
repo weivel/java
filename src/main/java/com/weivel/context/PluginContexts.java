@@ -191,7 +191,7 @@ public final class PluginContexts implements AutoCloseable {
     /**
      * Registers a service of the host's own under {@code WEIVEL_HOST} as {@link #registerHostService(String, Object,
      * Runnable)} does, awaiting releases: unregistering it revokes it to every holder, and each holding lasts until
-     * its holder lets go of the object, by {@link PluginContext#releaseHolding}, or is released, quarantined or
+     * its holder lets go of it, by {@link PluginContext#releaseHolding}, or is released, quarantined or
      * forgotten. Once the last has ended {@code released} runs, from the dispatch.
      *
      * @param id the service id
@@ -326,6 +326,11 @@ public final class PluginContexts implements AutoCloseable {
         state.releases.dropRevokedOf(context.plugin());
         context.dropListeners();
         state.contexts.remove(context);
+    }
+
+    /** How many revoked holdings the contexts keep for their plugins: what a test of this package reads. */
+    int revokedHoldingsKept() {
+        return state.releases.revokedCount();
     }
 
     /**

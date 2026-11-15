@@ -119,7 +119,9 @@ public final class PluginContext {
      * Registers {@code service} under {@code id} as {@link #register(String, Object)} does, awaiting releases: once it
      * is unregistered, by the plugin or by its stop, each holder keeps its holding until it lets go of the object, and
      * once the last has, this plugin hears {@link PluginEvent.HoldingsReleased}, so whatever stood behind the object
-     * may be freed. A plugin released or forgotten since hears nothing.
+     * may be freed. It hears it as any event about it: one its own release or quarantine call queued, as when
+     * nothing held the registration then, still reaches it, and one queued after those events, or after its forget,
+     * reaches no one.
      *
      * @param id the service id
      * @param service the provider's own object
@@ -132,17 +134,20 @@ public final class PluginContext {
     }
 
     /**
-     * Lets go of a service revoked from this plugin whose provider awaits each holder's release, as a
-     * {@link PluginEvent.Revoked} that {@linkplain PluginEvent.Revoked#awaitsRelease() awaits it} says: the plugin no
-     * longer uses the object nor anything it answered, and the core ends the holding. However the plugin came to hold
-     * it, by a get, a want or a watch, it lets go once.
+     * Lets go of what a revocation that {@linkplain PluginEvent.Revoked#awaitsRelease() awaits its release} withdrew:
+     * the plugin no longer uses the object nor anything it answered, and the core ends the holding. The revocation
+     * names the registration, so an object registered under several is let go of under that one alone. However the
+     * plugin came to hold it, by a get, a want or a watch, it lets go once.
      *
-     * @param service the object it had been handed, matched by reference
-     * @return true; false, calling nothing, when the plugin keeps no revoked holding of that very object, as before
-     *     its revocation or once it let go; the core's refusal
+     * <p>A call through the object made afterwards is the plugin's defect and undefined, as any use of memory after
+     * its free is: for a C library's definition, nothing keeps the library's binary open for it any more.
+     *
+     * @param revoked the revocation this plugin heard
+     * @return true; false, calling nothing, for a revocation that awaits no release, or one this plugin let go of
+     *     already or was released or forgotten since; the core's refusal
      */
-    public Answer<Boolean> releaseHolding(Object service) {
-        return ServiceCalls.releaseHolding(state, this, Objects.requireNonNull(service, "service"));
+    public Answer<Boolean> releaseHolding(PluginEvent.Revoked revoked) {
+        return ServiceCalls.releaseHolding(state, this, Objects.requireNonNull(revoked, "revoked"));
     }
 
     /**

@@ -131,12 +131,18 @@ carrying the very address its definition's symbol answered, called once at the l
 struct's `size` bytes on the foreign function backend, a JNA `Pointer` on JNA. A definition answering NULL, or a
 struct whose `size` is below `2 * sizeof(void *)`, refuses the load as the caller's mistake before anything is
 registered. A definition is registered awaiting releases: `unloadLibrary` unregisters it at once, each holder hears a
-`PluginEvent.Revoked` that `awaitsRelease`, and lets go with `PluginContext.releaseHolding` once it no longer uses the
-object, however it came to hold it, by a get, a want or a watch; a holder released, quarantined or forgotten has let
-go with it. The binary closes once the core's `WEIVEL_EVENT_HOLDINGS_RELEASED` of every definition service has been
-dispatched and no bytes call runs in it, and a definition the destroy finds still registered keeps it open until
-`close`. A plugin registers awaiting releases with `PluginContext.registerAwaitingReleases`, and hears
-`PluginEvent.HoldingsReleased` once nothing holds what it registered. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
+`PluginEvent.Revoked` that `awaitsRelease`, and lets go by handing that revocation to
+`PluginContext.releaseHolding` once it no longer uses the object, however it came to hold it, by a get, a want or a
+watch; the revocation names the registration, so an object registered under several is let go of under that one
+alone. A holder released, quarantined or forgotten has let go with it, and a call through a definition after its
+holder let go is undefined. The binary closes once the core's `WEIVEL_EVENT_HOLDINGS_RELEASED` of every definition
+service has been dispatched and no bytes call runs in it, or, for a definition the destroy finds still registered,
+once the destroy has destroyed the core, since a collected language has no free of the host to wait for; every
+address a definition answered is invalid from then on. `LoadedLibrary.definitions()` hands those addresses to a
+caller that holds no registration of them, so they die with the binary. A plugin registers awaiting releases with
+`PluginContext.registerAwaitingReleases`, and hears `PluginEvent.HoldingsReleased` once nothing holds what it
+registered, as it hears any event about it: one its own release or quarantine queued still reaches it, one queued
+after those reaches no one. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
 once into native memory, because lending the heap would hold off garbage collection for the whole C call. The copy and
 the cells the answer comes back in share one block, and each library keeps one such block of 256 bytes spare for
 whichever call takes it first. A call allocates no native memory when it finds the spare free and needs no more than
@@ -179,8 +185,11 @@ refused once it is closed or the core is destroyed.
 function called bare with the same bytes copied in and its answer copied out and released as the host does. Its
 definition row is the echo definition's `echo` called through the definition a consumer resolved, over the same
 operation called through the pointer `echo_service_definition` answered, each path reading the operation's function
-pointer out of the struct once before its timed loop; it is judged by the platform's noise, as the same-language pair
-is. Paths are
+pointer out of the struct once before its timed loop, from the one address it is handed; it is judged by the
+platform's noise, as the same-language pair is. It is sampled apart from that pair, in 101 rounds after a discarded
+warm-up: on the foreign function backend 1 000 000 warm-up calls and batches of 500 000, on JNA 200 000 warm-up calls
+and batches of 20 000, so a batch lasts some milliseconds on each; a foreign function batch of 20 000 calls left two
+identical direct paths twice Linux's worst noise apart. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,
 and judged on the median of the per-round ratios. A run with nothing measured fails, and so does a backend or platform
 the budget gives no line: no bound is never a pass. "Next to no overhead" is judged on the foreign function backend;
