@@ -39,12 +39,15 @@ grown when a call needs more, so a warm call allocates no native memory. The wra
 core queued for it (never one the layer invents), `Destroyed`, `Defect`, which also goes to the error sink, or
 `Mistake`, the caller's own error found before anything reached the core, such as a text holding a NUL character,
 which C would read cut short; `Detached` is answered only through a context. What a listener or a deferred step
-throws goes to the error sink, never to a caller, and a sink that throws goes to the standard error output. A
-`VirtualMachineError` is rethrown instead, once the dispatcher is free again, and the events and steps still queued
-behind it are delivered by the next call that dispatches.
+throws goes to the error sink, never to a caller, and a sink that throws goes to the standard error output. The one
+exception is a fatal runtime error, one after which the runtime itself cannot be trusted to go on: a
+`VirtualMachineError` propagates, once the layer has restored its own state. The dispatcher is free again, the events
+and steps still queued behind it are delivered by the next call that dispatches, and an activate that threw one is
+marked returned, so a release still deactivates and releases its plugin.
 
 `CoreInternals`, `ForeignLibrary`, `ForeignMemory` and `BareServiceGet` are public only so the layer's own packages
-can reach them, since Java offers no narrower scope without a module descriptor; they are unsafe for a caller, who can
+can reach them: Java 8 has no module system, so it has no way to hide a type its own packages share, and as the
+contract asks of such a language it keeps them public and documents them as unsafe for a caller, who can
 run code under the layer lock through `CoreInternals`, call into native code past the wrapper through
 `BareServiceGet`, and read or write any native address through `ForeignMemory`.
 
@@ -98,11 +101,15 @@ stage completing exceptionally is a failure. `Entries.load` makes an entry by it
 loader, and `Host.loadEntry` from a JAR in a class loader of the host's own, whose parent is the loader of `Entry`;
 the host never assumes a name. `activate` asks the core for the plan and starts each plugin of its order in that order
 on the calling thread, never waiting for an activate, and answers the plan at once with each plugin's outcome as a
-stage: active, quarantined, refused, released or failed. Where no dispatch runs it starts them as one step of a
-dispatch, so what an activate's own calls queue is heard once that activate has returned, as inside any dispatch. An
-activate therefore runs while its thread is the dispatcher: one that blocks on an event another thread causes
-deadlocks, so an activate that must wait answers a stage and completes it later. A settled activate is verified, and a refused verification
-quarantined in the same hold of the layer lock; a failed one is quarantined with a reason saying so. `release` calls
+stage: active, quarantined, refused, released or failed. An outcome carries the core's refusal that decided it: a
+refused one the refusal of its open, and one quarantined because the core refused its verification that refusal; a
+quarantine for a reason of the host's, a failed activate among them, carries none. Where no dispatch runs it starts
+them as one step of a dispatch, so what an activate's own calls queue is dispatched once every activate of the plan
+has been called; where another thread is dispatching, it starts them as calls made while that dispatch runs, and
+their events join the end of that thread's queue. Either way an activate that settles before it returns is verified,
+and quarantined if the core refuses, in the same hold of the layer lock, before the next plugin is started; a failed
+one is quarantined with a reason saying so. An activate runs as the dispatcher, so one that blocks on an event another
+thread causes deadlocks: an activate that must wait answers a stage and completes it later. `release` calls
 the deactivate while the plugin is whole, releases it in the core, and ends its entries and forgets it only once that
 release's events are dispatched, as a step behind them inside a dispatch. `registerHostService` offers a service of
 the host's own under `WEIVEL_HOST`, which an activation plan counts as provided. `destroy` answers one
@@ -111,7 +118,8 @@ settlings under way, then disarms the timer and destroys the core, and every oth
 moment it is called. `ledger` answers the core's ledger, where a plugin quarantined for a refused verification shows
 the core's refusal, and `HostOptions.withTimerObserver` hears each move of the host's timer, armed or disarmed.
 `close` frees what the host holds, the class loaders it opened among them, and is refused until the destroy has
-finished. A host given no scheduler makes one with `Schedulers.system()` and closes it.
+finished. A host its caller gives no scheduler arms the language's own timer rather than none: it makes one with
+`Schedulers.system()` and closes it when it is closed, so a want that needs the time is never the caller's mistake.
 
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
 path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
