@@ -283,8 +283,7 @@ def testJava8 = tasks.register('testJava8', Test) {
 
 def benchmarkMode = providers.gradleProperty('weivel.benchmark.mode').getOrElse('gate')
 def benchmarkRepetitions = providers.gradleProperty('weivel.benchmark.repetitions').getOrElse('10')
-def benchmarkBudget = providers.gradleProperty('weivel.benchmark.budget').map { file(it) }
-        .getOrElse(new File(siblingsDirectory, 'conformance/benchmarks/java.txt'))
+def benchmarkBudget = new File(siblingsDirectory, 'conformance/benchmarks/java.txt')
 
 def runsTheBenchmarks = { Test task, String backend ->
     task.group = 'verification'

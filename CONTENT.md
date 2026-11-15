@@ -191,7 +191,7 @@ jar's base and at release 22 for the Java 22 sources.
 Java 8, and is never part of `check`: CI runs it as a job of its own on every runner. By default it judges one run of
 each gate against `java.txt` of the pinned kit; `-Pweivel.benchmark.mode=measure` judges no timing and prints one
 `weivel-benchmark` line per gate for each of `-Pweivel.benchmark.repetitions` runs (10 by default), the samples a
-bound is set from, and `-Pweivel.benchmark.budget=<path>` judges against another budget file.
+bound is set from. No repository sets its own bound, so the gate reads no budget but the pinned kit's.
 
 Gradle's file system watching may not see a change made behind a link: a sibling linked in as a junction or a
 symbolic link can be edited without the next build noticing, which then reports the native tasks up to date. Run
