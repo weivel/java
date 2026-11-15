@@ -36,14 +36,23 @@ public final class CoreCalls {
         Crossed<T> cross(CoreFunctions functions, NativeArena arena, long core, long pending) throws Throwable;
     }
 
-    /** What a crossing answered: the core's status, and the result it read, meaningful when the status is OK. */
+    /**
+     * What a crossing answered: the core's status, the result it read, meaningful when the status is OK, and the
+     * release of a copied answer the core refused, if any.
+     */
     static final class Crossed<T> {
         private final int status;
         private final T value;
+        private final Optional<CoreFunction> refusedRelease;
 
         Crossed(int status, T value) {
+            this(status, value, Optional.<CoreFunction>empty());
+        }
+
+        Crossed(int status, T value, Optional<CoreFunction> refusedRelease) {
             this.status = status;
             this.value = value;
+            this.refusedRelease = refusedRelease;
         }
 
         public int status() {
@@ -52,6 +61,11 @@ public final class CoreCalls {
 
         public T value() {
             return value;
+        }
+
+        /** The release function the core refused once the answer was copied: the copy still answers the call. */
+        Optional<CoreFunction> refusedRelease() {
+            return refusedRelease;
         }
 
         @Override
@@ -64,7 +78,8 @@ public final class CoreCalls {
             }
             Crossed<?> that = (Crossed<?>) other;
             return status == that.status
-                    && Objects.equals(value, that.value);
+                    && Objects.equals(value, that.value)
+                    && refusedRelease.equals(that.refusedRelease);
         }
 
         @Override
@@ -72,12 +87,13 @@ public final class CoreCalls {
             int hash = 0;
             hash = 31 * hash + Integer.hashCode(status);
             hash = 31 * hash + Objects.hashCode(value);
+            hash = 31 * hash + refusedRelease.hashCode();
             return hash;
         }
 
         @Override
         public String toString() {
-            return "Crossed[status=" + status + ", value=" + value + "]";
+            return "Crossed[status=" + status + ", value=" + value + ", refusedRelease=" + refusedRelease + "]";
         }
     }
 
@@ -347,10 +363,8 @@ public final class CoreCalls {
                             plugins.isEmpty() ? 0L : Marshal.handles(arena, plugins).address(), plugins.size(),
                             source.value(), Marshal.strings(arena, hostProvided.get()).address(), plan.address(),
                             pending);
-                    return new Crossed<>(status, status == STATUS_OK
-                            ? copiedThenReleased(functions, CoreFunction.ACTIVATION_PLAN_RELEASE, plan,
-                                    AnswerCopy::plan)
-                            : null);
+                    return copiedThenReleased(status, functions, CoreFunction.ACTIVATION_PLAN_RELEASE, plan,
+                            AnswerCopy::plan, null);
                 });
     }
 
@@ -364,10 +378,8 @@ public final class CoreCalls {
         return builtByTheLayer((functions, arena, core, pending) -> {
             NativeRegion snapshot = Marshal.emptyAnswer(arena, CoreLayouts.LEDGER_SNAPSHOT);
             int status = functions.status(CoreFunction.LEDGER, core, snapshot.address(), pending);
-            return new Crossed<>(status, status == STATUS_OK
-                    ? copiedThenReleased(functions, CoreFunction.LEDGER_SNAPSHOT_RELEASE, snapshot,
-                            AnswerCopy::ledger)
-                    : Collections.<LedgerRow>emptyList());
+            return copiedThenReleased(status, functions, CoreFunction.LEDGER_SNAPSHOT_RELEASE, snapshot,
+                    AnswerCopy::ledger, Collections.<LedgerRow>emptyList());
         });
     }
 
@@ -381,9 +393,8 @@ public final class CoreCalls {
         return builtByTheLayer((functions, arena, core, pending) -> {
             NativeRegion list = Marshal.emptyAnswer(arena, CoreLayouts.SERVICE_LIST);
             int status = functions.status(CoreFunction.SERVICE_IDS, core, plugin, list.address(), pending);
-            return new Crossed<>(status, status == STATUS_OK
-                    ? copiedThenReleased(functions, CoreFunction.SERVICE_LIST_RELEASE, list, AnswerCopy::serviceIds)
-                    : Collections.<String>emptyList());
+            return copiedThenReleased(status, functions, CoreFunction.SERVICE_LIST_RELEASE, list,
+                    AnswerCopy::serviceIds, Collections.<String>emptyList());
         });
     }
 
@@ -401,10 +412,8 @@ public final class CoreCalls {
             NativeRegion list = Marshal.emptyAnswer(arena, CoreLayouts.CAPABILITY_LIST);
             int status = functions.status(CoreFunction.ALL_CAPABILITIES, core, plugin, arena.text(id).address(),
                     list.address(), pending);
-            return new Crossed<>(status, status == STATUS_OK
-                    ? copiedThenReleased(functions, CoreFunction.CAPABILITY_LIST_RELEASE, list,
-                            AnswerCopy::capabilities)
-                    : Collections.<CapabilityImplementation>emptyList());
+            return copiedThenReleased(status, functions, CoreFunction.CAPABILITY_LIST_RELEASE, list,
+                    AnswerCopy::capabilities, Collections.<CapabilityImplementation>emptyList());
         });
     }
 
@@ -469,14 +478,24 @@ public final class CoreCalls {
                 functions.status(CoreFunction.ADVANCE, core, now, pending), null);
     }
 
-    /** Copies an answer the core filled, then releases it whatever the copy did. */
-    private static <V> V copiedThenReleased(CoreFunctions functions, CoreFunction release, NativeRegion answer,
-                                            Function<NativeRegion, V> copy) {
-        try {
-            return copy.apply(answer);
-        } finally {
-            functions.status(release, answer.address());
+    /**
+     * Copies an answer the core filled when it answered OK, then releases it whatever the copy did, keeping a refused
+     * release for the wrapper to report; any other status answers {@code none} and releases nothing.
+     */
+    private static <V> Crossed<V> copiedThenReleased(int status, CoreFunctions functions, CoreFunction release,
+                                                     NativeRegion answer, Function<NativeRegion, V> copy, V none) {
+        if (status != STATUS_OK) {
+            return new Crossed<>(status, none);
         }
+        V copied;
+        try {
+            copied = copy.apply(answer);
+        } catch (RuntimeException | Error notCopied) {
+            functions.status(release, answer.address());
+            throw notCopied;
+        }
+        boolean released = functions.status(release, answer.address()) == STATUS_OK;
+        return new Crossed<>(status, copied, released ? Optional.<CoreFunction>empty() : Optional.of(release));
     }
 
     private static <T> CoreCall<T> builtByTheLayer(Crossing<T> crossing) {

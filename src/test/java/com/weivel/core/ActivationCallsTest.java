@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 
 /** The calls a host makes to plan an activation and to verify one, each read as the core's header says it answers. */
 class ActivationCallsTest {
+    private static final long STATUS_MALFORMED = 2;
+
     private final TestCores.RecordingSink sink = new TestCores.RecordingSink();
     private final TestCores.RecordingListener listener = new TestCores.RecordingListener();
     private Core core;
@@ -147,6 +149,36 @@ class ActivationCallsTest {
 
         assertEquals(RefusalStatus.REFUSED, assertInstanceOf(Answer.Refused.class, verified).status());
         assertEquals(0, log.count(CoreFunction.QUARANTINE_PLUGIN));
+    }
+
+    @Test
+    void aReleaseOfACopiedAnswerThatTheCoreRefusesIsToldToTheSinkAndTheCopyStillAnswers() {
+        List<CoreFunction> releases = Arrays.asList(CoreFunction.ACTIVATION_PLAN_RELEASE,
+                CoreFunction.LEDGER_SNAPSHOT_RELEASE, CoreFunction.SERVICE_LIST_RELEASE,
+                CoreFunction.CAPABILITY_LIST_RELEASE);
+        core = TestCores.core(TestCores.functions().mapped((function, original) -> releases.contains(function)
+                ? arguments -> {
+                    original.call(arguments);
+                    return STATUS_MALFORMED;
+                }
+                : original), EventCopy.INSTANCE, listener, sink);
+        long plugin = registered(services("lonely", Collections.<String>emptyList(),
+                Collections.<String>emptyList()));
+
+        ActivationPlan plan = ok(core.call(CoreCalls.planActivation(Collections.singletonList(plugin),
+                EdgeSource.SERVICES, Collections.<String>emptyList())));
+        List<LedgerRow> ledger = ok(core.call(CoreCalls.ledger()));
+        ok(core.call(CoreCalls.openPlugin(plugin, 0)));
+        ok(core.call(CoreCalls.serviceIds(plugin)));
+        ok(core.call(CoreCalls.allCapabilities(CoreConstants.HOST, "screens")));
+
+        assertEquals(Collections.singletonList(plugin), plan.order());
+        assertEquals(1, ledger.size());
+        List<Failure> defects = sink.of(FailureKind.LAYER_DEFECT);
+        assertEquals(releases.size(), defects.size(), String.valueOf(defects));
+        for (int index = 0; index < releases.size(); index++) {
+            assertTrue(defects.get(index).text().contains(releases.get(index).symbol()), defects.get(index).text());
+        }
     }
 
     private long registered(Manifest manifest) {

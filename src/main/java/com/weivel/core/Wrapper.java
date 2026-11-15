@@ -196,6 +196,8 @@ final class Wrapper {
         if (unread.isPresent()) {
             return defect(notes, "the layer could not copy what the core answered a call", unread);
         }
+        crossed.refusedRelease().ifPresent(release -> notes.noteDefect("the core refused " + release.symbol()
+                + ", the release of an answer the layer copied", Optional.<Throwable>empty()));
         Answer<T> answer = answerOf(crossed, call.carriesCallersParts(), own, notes);
         return answer instanceof Answer.Ok
                 ? recorded(steps.answered(), ((Answer.Ok<T>) answer).value(), notes)
