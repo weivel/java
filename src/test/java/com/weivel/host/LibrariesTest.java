@@ -261,6 +261,29 @@ class LibrariesTest {
     }
 
     @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void aCloseRefusedOnceTheDestroyHasFinishedIsReportedNowhere() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        pauses.holdCalls = new Gates.Gate();
+        pauses.refuseToClose = "echo-test";
+        HostFixture fixture = new HostFixture(pauses);
+        LibraryService echo = loadedEcho(fixture);
+        CompletableFuture<LibraryAnswer> running = CompletableFuture.supplyAsync(
+                () -> echo.call("echo", bytes("outlives the destroy")));
+        pauses.holdCalls.awaitReached();
+
+        fixture.host.destroy().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        List<String> askedWhileTheCallRan = pauses.closingAsked();
+        pauses.holdCalls.open();
+        running.get(10, TimeUnit.SECONDS);
+        fixture.host.close();
+
+        assertEquals(Collections.emptyList(), askedWhileTheCallRan);
+        assertEquals(Collections.singletonList("echo-test"), pauses.closingAsked());
+        assertEquals(Collections.emptyList(), fixture.failures);
+    }
+
+    @Test
     void theHostServiceCountsALibrarysServicesForThePlan() throws Exception {
         try (HostFixture fixture = new HostFixture()) {
             value(fixture.host.loadLibrary(echoBinary(), declaring("echo")));
