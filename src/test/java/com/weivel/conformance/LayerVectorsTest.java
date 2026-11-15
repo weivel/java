@@ -7,8 +7,11 @@ import com.weivel.core.CoreConstants;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -109,6 +112,82 @@ class LayerVectorsTest {
     @DisplayName("lifecycle/destroy-releases-a-plugin-whose-activate-is-in-flight")
     void destroyReleasesAPluginWhoseActivateIsInFlight() {
         assertWitnessedQuietly("lifecycle/destroy-releases-a-plugin-whose-activate-is-in-flight");
+    }
+
+    @Test
+    @DisplayName("library/a-definition-is-the-providers-own-pointer")
+    void aDefinitionIsTheProvidersOwnPointer() {
+        assertWitnessedQuietly("library/a-definition-is-the-providers-own-pointer");
+    }
+
+    @Test
+    @DisplayName("library/a-null-definition-fails-the-load")
+    void aNullDefinitionFailsTheLoad() {
+        assertWitnessedQuietly("library/a-null-definition-fails-the-load");
+    }
+
+    @Test
+    @DisplayName("library/a-definition-below-its-size-fails-the-load")
+    void aDefinitionBelowItsSizeFailsTheLoad() {
+        assertWitnessedQuietly("library/a-definition-below-its-size-fails-the-load");
+    }
+
+    @Test
+    @DisplayName("library/a-definition-at-its-size-loads")
+    void aDefinitionAtItsSizeLoads() {
+        assertWitnessedQuietly("library/a-definition-at-its-size-loads");
+    }
+
+    @Test
+    @DisplayName("library/an-unload-revokes-every-holding-of-a-definition")
+    void anUnloadRevokesEveryHoldingOfADefinition() {
+        assertWitnessedQuietly("library/an-unload-revokes-every-holding-of-a-definition");
+    }
+
+    @Test
+    @DisplayName("library/a-binary-stays-open-while-a-holding-lives")
+    void aBinaryStaysOpenWhileAHoldingLives() {
+        assertWitnessedQuietly("library/a-binary-stays-open-while-a-holding-lives");
+    }
+
+    @Test
+    @DisplayName("library/a-binary-closes-once-every-definition-service-is-released")
+    void aBinaryClosesOnceEveryDefinitionServiceIsReleased() {
+        assertWitnessedQuietly("library/a-binary-closes-once-every-definition-service-is-released");
+    }
+
+    @Test
+    @DisplayName("library/a-binary-with-no-holding-closes-at-the-unload")
+    void aBinaryWithNoHoldingClosesAtTheUnload() {
+        assertWitnessedQuietly("library/a-binary-with-no-holding-closes-at-the-unload");
+    }
+
+    @Test
+    @DisplayName("library/a-holding-ended-with-its-holder-closes-the-binary")
+    void aHoldingEndedWithItsHolderClosesTheBinary() {
+        assertWitnessedQuietly("library/a-holding-ended-with-its-holder-closes-the-binary");
+    }
+
+    /**
+     * The held-bytes vector as this layer witnesses it: every bytes answer is copied once into a Java array and released
+     * before the call answers, as a collected language's must be, so no bytes are held after the call, and the binary
+     * closes at the last definition release instead of at the drop, which lets go of nothing. Holding the binary open
+     * while a bytes call still runs in it is {@code LibrariesTest}'s to show.
+     */
+    @Test
+    @DisplayName("library/a-held-bytes-answer-keeps-the-binary-open-past-the-last-holding")
+    void aHeldBytesAnswerKeepsTheBinaryOpenPastTheLastHolding() {
+        String id = "library/a-held-bytes-answer-keeps-the-binary-open-past-the-last-holding";
+        LayerVector vector = KitFixture.vector(id);
+        Map<String, Object> copyingThen = new LinkedHashMap<>(vector.then());
+        copyingThen.put("unloads", Collections.singletonMap("equals", Arrays.asList(0L, 1L, 1L)));
+
+        LayerWitness witness = KitFixture.witness(vector);
+
+        assertEquals(Collections.singletonMap("equals", Arrays.asList(0L, 0L, 1L)), vector.then().get("unloads"));
+        assertEquals(copyingThen, witness.observed());
+        assertEquals(Collections.<Failure>emptyList(), witness.failures());
+        assertEquals(Collections.emptyList(), errorLogs(witness));
     }
 
     private static void assertWitnessedQuietly(String id) {
