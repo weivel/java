@@ -134,9 +134,9 @@ manifest validated and read into a `Manifest`, plugins discovered on disk as `Di
 standard's functions. Every struct the standard fills is copied into Java values and released through the standard's
 own release before the call answers, every release of a call running even when another fails. `readManifest`
 reads a manifest without validating it, and `validate` validates one without reading it.
-`DiscoveredPlugin.register` is one default for a Java plugin packed as a JAR: it loads the JAR its manifest's entry
-names by a class name the caller gives. The manifest calls its entry opaque, so it is never the only way: a host that
-lays its plugins out otherwise registers `manifest()` with an entry of its own, from `entryPath()` or anything else.
+A `DiscoveredPlugin` loads no code: the manifest calls its entry opaque and no module convention is a default the
+layer may assume, so its caller registers `manifest()` with an entry it makes itself, from `entryPath()` through
+`Host.loadEntry` with a class name the caller gives, or any other way.
 `ForeignMemory.manifest` reads a manifest another library laid out up to the size it declares, as the core does. `Config`, `Secrets` and `Paths` are the standard's service definitions as Java
 interfaces, a refusal thrown as a `ServiceRefusal`.
 

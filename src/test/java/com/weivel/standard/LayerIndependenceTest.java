@@ -41,8 +41,8 @@ class LayerIndependenceTest {
             }
         }
 
-        assertTrue(edges.stream().anyMatch(edge -> edge[0].equals("com.weivel.standard.DiscoveredPlugin")
-                && edge[1].equals("com.weivel.host.Host")), "jdeps reported none of the edges it should");
+        assertTrue(edges.stream().anyMatch(edge -> edge[0].equals("com.weivel.standard.Standard")
+                && edge[1].equals("com.weivel.host.LibraryDeclaration")), "jdeps reported none of the edges it should");
         assertTrue(edges.stream().anyMatch(edge -> edge[0].equals("com.weivel.core.NativeBackends")
                 && edge[1].equals("com.weivel.core.FfmAccess")), "jdeps read no Java 22 class");
         assertEquals(Collections.<String>emptyList(), offending);
