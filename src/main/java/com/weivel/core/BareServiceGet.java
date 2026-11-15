@@ -3,10 +3,11 @@ package com.weivel.core;
 /**
  * {@code weivel_get_service} on one core, plugin and id, made through the very function of the core's table the
  * wrapper calls and on the core's own pointer, but past the wrapper: no lock, no drain, no deadline check, and its
- * arguments laid out once. It is the bare call the benchmarks weigh the wrapper's call against, and nothing else.
+ * arguments laid out once. It exists for the benchmarks' control ratio, the wrapper's call over this one, and for
+ * nothing else.
  *
- * <p>Only one thread at a time may call it, while no other thread calls the core, and it is closed before the core is
- * destroyed: past the wrapper nothing guards the core's pointer.
+ * <p>Only one thread at a time may call it, while no other thread calls the core. Once the core is destroyed every
+ * call is refused before it reaches the core's pointer.
  *
  * @implNote The wrapper hands it the one function, so the table stays the wrapper's alone. It reaches only
  * {@code weivel_get_service}, which changes nothing in the core; a call that leaves an event waiting is answered as a
@@ -15,6 +16,7 @@ package com.weivel.core;
 public final class BareServiceGet implements AutoCloseable {
     private static final int STATUS_OK = 0;
 
+    private final Wrapper wrapper;
     private final ForeignFunction getService;
     private final ForeignMemory memory;
     private final long core;
@@ -23,7 +25,9 @@ public final class BareServiceGet implements AutoCloseable {
     private final long implementation;
     private final long pending;
 
-    BareServiceGet(ForeignFunction getService, ForeignMemory memory, long core, long plugin, String id) {
+    BareServiceGet(Wrapper wrapper, ForeignFunction getService, ForeignMemory memory, long core, long plugin,
+                   String id) {
+        this.wrapper = wrapper;
         this.getService = getService;
         this.memory = memory;
         this.core = core;
@@ -37,9 +41,13 @@ public final class BareServiceGet implements AutoCloseable {
      * Makes the call.
      *
      * @return the implementation handle the core answered
-     * @throws IllegalStateException when the core answers anything but OK, or leaves an event waiting
+     * @throws IllegalStateException once the core is destroyed, or when it answers anything but OK or leaves an
+     *     event waiting
      */
     public long call() {
+        if (wrapper.isDestroyed()) {
+            throw new IllegalStateException("the core is destroyed, so the bare call reaches it no more");
+        }
         int status = (int) getService.call(core, plugin, id, implementation, pending);
         int waiting = memory.getInt(pending, 0);
         if (status != STATUS_OK || waiting != 0) {
