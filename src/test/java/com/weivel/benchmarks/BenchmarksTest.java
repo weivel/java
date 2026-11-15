@@ -98,7 +98,7 @@ class BenchmarksTest {
         Path echo = existing("weivel.test.echoBinary");
         for (int repetition = 1; repetition <= repetitions(); repetition++) {
             SameLanguageMeasurement measured = DefinitionCallBenchmark.measure(binary, echo,
-                    DefinitionCallBenchmark.DEFAULT_SAMPLING);
+                    DefinitionCallBenchmark.samplingFor(binary.backend()));
             double noise = Gates.deviation(Summary.of(measured.noiseRatios()).median());
             double deviation = Gates.deviation(Summary.of(measured.sameLanguageRatios()).median());
             report(RatioGate.LIBRARY_CALL.kitNameFor(binary.backend()) + "-definition", repetition,
