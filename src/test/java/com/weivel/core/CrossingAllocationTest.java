@@ -32,6 +32,21 @@ class CrossingAllocationTest {
         }
     }
 
+    @Test
+    void theWrapperFreesItsScratchMemoryAtClose() {
+        CountingAccess access = new CountingAccess();
+        try (OpenLibrary library = access.open(NativeFiles.coreBinary())) {
+            Core core = TestCores.ok(Core.wrapped(Wrapper.start(CoreFunctions.link(access, library),
+                    EventCopy.INSTANCE, CoreOptions.defaults(), Optional.<CoreListener>empty(), failure -> { })));
+            getServiceRepeatedly(core, WARM_UP_CALLS);
+
+            core.destroy();
+            core.close();
+
+            assertEquals(access.allocations(), access.frees(), "native allocations left unfreed after close");
+        }
+    }
+
     private static void getServiceRepeatedly(Core core, int calls) {
         for (int call = 0; call < calls; call++) {
             Answer<Long> answer = core.call(CoreCalls.getService(CoreConstants.HOST, ID));

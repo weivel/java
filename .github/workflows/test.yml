@@ -29,4 +29,4 @@ jobs:
       cmake_test: ''
       java_version: '25'
       gradle_test: benchmark
-      gradle_args: --continue -Pweivel.benchmark.mode=measure
+      gradle_args: --continue
