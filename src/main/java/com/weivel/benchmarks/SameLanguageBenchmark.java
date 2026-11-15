@@ -4,6 +4,7 @@ import com.weivel.core.CoreBinary;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
 import java.util.function.LongBinaryOperator;
+import java.util.function.Supplier;
 
 /**
  * The same-language gate: a consumer resolving a provider's service is answered the provider's own object, so a call
@@ -55,11 +56,11 @@ public final class SameLanguageBenchmark {
         }
         LongBinaryOperator direct = resolution.provided();
         LongBinaryOperator resolved = (LongBinaryOperator) resolution.resolved();
-        LinkedHashMap<String, MeasuredPath> paths = new LinkedHashMap<>();
-        paths.put(SameLanguageMeasurement.DIRECT, new Adding(direct));
-        paths.put(SameLanguageMeasurement.DIRECT_AGAIN, new Adding(direct));
-        paths.put(SameLanguageMeasurement.THROUGH_WEIVEL, new Adding(resolved));
-        return SameLanguageMeasurement.of(Interleaved.sample(paths, sampling));
+        LinkedHashMap<String, Supplier<MeasuredPath>> paths = new LinkedHashMap<>();
+        paths.put(SameLanguageMeasurement.DIRECT, () -> new Adding(direct));
+        paths.put(SameLanguageMeasurement.DIRECT_AGAIN, () -> new Adding(direct));
+        paths.put(SameLanguageMeasurement.THROUGH_WEIVEL, () -> new Adding(resolved));
+        return SameLanguageMeasurement.of(Interleaved.sampleFresh(paths, sampling));
     }
 
     /**
