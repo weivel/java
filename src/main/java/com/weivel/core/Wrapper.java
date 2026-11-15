@@ -37,6 +37,7 @@ final class Wrapper {
     private final CoreFunctions functions;
     private final EventCopying copying;
     private final NativeArena arena;
+    private final NativeArena scratch;
     private final NativeRegion buffer;
     private final NativeRegion pending;
     private final CopyOnWriteArrayList<CoreListener> listeners = new CopyOnWriteArrayList<>();
@@ -63,6 +64,7 @@ final class Wrapper {
         this.arena = new NativeArena(functions.access());
         this.buffer = arena.allocate(CoreLayouts.EVENT);
         this.pending = arena.allocate(Layout.INT);
+        this.scratch = NativeArena.reusable(functions.access());
     }
 
     static Answer<Wrapper> start(CoreBinary binary, CoreOptions options, Optional<CoreListener> listener,
@@ -132,6 +134,7 @@ final class Wrapper {
         closed = true;
         lock.unlock();
         arena.close();
+        scratch.close();
     }
 
     private Answer<Wrapper> creationRefused(int status) {
@@ -200,13 +203,16 @@ final class Wrapper {
     }
 
     /**
-     * Makes one crossing into the core, under the lock, in an arena of its own: the one place a call's crossing is
-     * made, so nothing else in the package needs the table of the core's functions.
+     * Makes one crossing into the core, under the lock, its arguments laid out in the wrapper's scratch arena, made
+     * free again once the crossing returns: the one place a call's crossing is made, so nothing else in the package
+     * needs the table of the core's functions.
      */
     <T> CoreCalls.Crossed<T> cross(CoreCalls.Crossing<T> crossing) throws Throwable {
-        try (NativeArena callArena = new NativeArena(functions.access())) {
-            pending.putInt(0, 0);
-            return crossing.cross(functions, callArena, core, pending.address());
+        pending.putInt(0, 0);
+        try {
+            return crossing.cross(functions, scratch, core, pending.address());
+        } finally {
+            scratch.reset();
         }
     }
 
@@ -835,9 +841,12 @@ final class Wrapper {
     Optional<BareServiceGet> bareServiceGet(long plugin, String id) {
         hold();
         try {
-            return core == 0 ? Optional.<BareServiceGet>empty()
-                    : Optional.of(new BareServiceGet(new ForeignFunction(functions.function(CoreFunction.GET_SERVICE)),
-                            new ForeignMemory(new NativeArena(functions.access())), core, plugin, id));
+            if (core == 0) {
+                return Optional.empty();
+            }
+            ForeignFunction getService = new ForeignFunction(functions.function(CoreFunction.GET_SERVICE));
+            return Optional.of(new BareServiceGet(this, getService,
+                    new ForeignMemory(new NativeArena(functions.access())), core, plugin, id));
         } finally {
             lock.unlock();
         }
@@ -879,6 +888,7 @@ final class Wrapper {
             }
             closed = true;
             arena.close();
+            scratch.close();
         } finally {
             lock.unlock();
         }

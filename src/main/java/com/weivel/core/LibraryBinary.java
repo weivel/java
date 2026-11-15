@@ -15,11 +15,13 @@ public final class LibraryBinary implements AutoCloseable {
     private final NativeAccess access;
     private final OpenLibrary library;
     private final NativeFunction release;
+    private final SpareBlock spare;
 
     private LibraryBinary(NativeAccess access, OpenLibrary library, NativeFunction release) {
         this.access = access;
         this.library = library;
         this.release = release;
+        this.spare = new SpareBlock(access);
     }
 
     /**
@@ -63,7 +65,7 @@ public final class LibraryBinary implements AutoCloseable {
         if (!library.has(symbol)) {
             return new Answer.Mistake<>("the library exports no function " + symbol);
         }
-        return new Answer.Ok<>(new LibraryFunction(access, library.function(symbol, BYTES), release, copies));
+        return new Answer.Ok<>(new LibraryFunction(access, library.function(symbol, BYTES), release, spare, copies));
     }
 
     /**
@@ -74,5 +76,6 @@ public final class LibraryBinary implements AutoCloseable {
     @Override
     public void close() {
         library.close();
+        spare.close();
     }
 }

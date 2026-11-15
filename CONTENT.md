@@ -34,7 +34,8 @@ and its events are drained under the same hold, each copied into a `CoreEvent` v
 before the next is drained; an event that cannot be copied whole is still heard, marked incomplete, with fixed
 sentences in place of its texts. The events are dispatched to the listeners first in, first out, outside the lock, by
 one thread at a time: a call made while a dispatch runs, from a listener or another thread, joins the end of the
-queue and returns. The wrapper answers every call with an `Answer`: `Ok`, `Absent`, `Refused` with the refusal the
+queue and returns. A call's arguments are laid out in scratch memory the wrapper keeps and uses only under its lock,
+grown when a call needs more, so a warm call allocates no native memory. The wrapper answers every call with an `Answer`: `Ok`, `Absent`, `Refused` with the refusal the
 core queued for it (never one the layer invents), `Destroyed`, `Defect`, which also goes to the error sink, or
 `Mistake`, the caller's own error found before anything reached the core, such as a text holding a NUL character,
 which C would read cut short; `Detached` is answered only through a context. What a listener or a deferred step
@@ -110,7 +111,9 @@ finished. A host given no scheduler makes one with `Schedulers.system()` and clo
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
 path, and registers each declared service under `WEIVEL_HOST` as a `LibraryService`, whose functions a consumer calls
 by name as plain Java calls. A direct `ByteBuffer` input is lent to the library for the call; a `byte[]` is copied
-once into native memory, because lending the heap would hold off garbage collection for the whole C call. The body
+once into native memory, because lending the heap would hold off garbage collection for the whole C call. The copy and
+the cells the answer comes back in share one block, and each library keeps one such block spare for whichever call
+takes it first, so a call that finds it free allocates nothing and one that finds it taken allocates its own. The body
 the library answers is copied once into a Java array and released before the call answers. `unloadLibrary`, and the
 destroy, close a library to calls at once and close its binary once no call runs in it.
 
@@ -141,7 +144,8 @@ pinned kit's `benchmarks/java.txt`, a ratio gate per backend. The same-language 
 get answers the provider's own object, and the timing beside it, three paths running the very same compiled call, is
 judged only against the platform's noise. `control-call` is `weivel_get_service` through the wrapper, with the core's
 timer armed as a host arms it, over the same function of the core's table on the same core, plugin and id called bare
-through `CoreInternals.bareServiceGet`, the one route past the wrapper, which reaches that function alone.
+through `CoreInternals.bareServiceGet`, the one route past the wrapper, which reaches that function alone and is
+refused once the core is destroyed.
 `library-call` is the echo library's `echo_echo` through the host's `LibraryService` with a `byte[]`, over the same
 function called bare with the same bytes copied in and its answer copied out and released as the host does. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,

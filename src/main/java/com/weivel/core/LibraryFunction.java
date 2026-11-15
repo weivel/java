@@ -14,16 +14,21 @@ import java.util.Objects;
  */
 public final class LibraryFunction {
     private static final int LARGEST_BODY = Integer.MAX_VALUE - 8;
+    /** The body's address and its length, laid out ahead of a copied input in the call's one block. */
+    private static final long ANSWER_CELLS = Layout.ADDRESS.byteSize() + Layout.LONG.byteSize();
 
     private final NativeAccess access;
     private final NativeFunction function;
     private final NativeFunction release;
+    private final SpareBlock spare;
     private final LibraryCopies copies;
 
-    LibraryFunction(NativeAccess access, NativeFunction function, NativeFunction release, LibraryCopies copies) {
+    LibraryFunction(NativeAccess access, NativeFunction function, NativeFunction release, SpareBlock spare,
+                    LibraryCopies copies) {
         this.access = access;
         this.function = function;
         this.release = release;
+        this.spare = spare;
         this.copies = copies;
     }
 
@@ -62,27 +67,32 @@ public final class LibraryFunction {
     }
 
     private LibraryOutput lent(ByteBuffer direct) {
-        try (NativeArena arena = new NativeArena(access)) {
-            return answered(arena, access.addressOf(direct), direct.remaining());
+        long cells = spare.take(ANSWER_CELLS);
+        try {
+            return answered(cells, access.addressOf(direct), direct.remaining());
         } finally {
+            spare.give(cells, ANSWER_CELLS);
             access.keepReachable(direct);
         }
     }
 
     private LibraryOutput copied(byte[] input, int offset, int length) {
-        try (NativeArena arena = new NativeArena(access)) {
-            NativeRegion copy = arena.allocate(length);
-            access.writeBytes(copy.address(), 0, input, offset, length);
-            copies.inputCopied(copy.address(), length);
-            return answered(arena, copy.address(), length);
+        long size = ANSWER_CELLS + length;
+        long cells = spare.take(size);
+        try {
+            long copy = cells + ANSWER_CELLS;
+            access.writeBytes(copy, 0, input, offset, length);
+            copies.inputCopied(copy, length);
+            return answered(cells, copy, length);
+        } finally {
+            spare.give(cells, size);
         }
     }
 
-    private LibraryOutput answered(NativeArena arena, long input, long inputLength) {
-        NativeRegion output = arena.allocate(Layout.LONG);
-        NativeRegion outputLength = arena.allocate(Layout.LONG);
-        int status = (int) function.call(input, inputLength, output.address(), outputLength.address());
-        return new LibraryOutput(status, copiedThenReleased(output.getAddress(0), outputLength.getLong(0)));
+    private LibraryOutput answered(long cells, long input, long inputLength) {
+        long outputLength = cells + Layout.ADDRESS.byteSize();
+        int status = (int) function.call(input, inputLength, cells, outputLength);
+        return new LibraryOutput(status, copiedThenReleased(access.getLong(cells, 0), access.getLong(outputLength, 0)));
     }
 
     private byte[] copiedThenReleased(long body, long length) {
