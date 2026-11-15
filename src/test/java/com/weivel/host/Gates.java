@@ -76,6 +76,10 @@ final class Gates {
             this(fixture, () -> { });
         }
 
+        Thread thread() {
+            return thread;
+        }
+
         boolean isDispatching() {
             return thread.isAlive();
         }

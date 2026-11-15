@@ -245,7 +245,7 @@ final class Wrapper {
                                    CallNotes notes) {
         switch (crossed.status()) {
             case STATUS_OK:
-                return new Answer.Ok<>(crossed.value());
+                return new Answer.Ok<>(crossed.valueGiven(own.refusal()));
             case STATUS_NONE:
                 return new Answer.Absent<>();
             case STATUS_REFUSED:

@@ -1,9 +1,6 @@
 package com.weivel.standard;
 
-import com.weivel.core.Answer;
 import com.weivel.core.Manifest;
-import com.weivel.host.Entry;
-import com.weivel.host.Host;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,6 +9,9 @@ import java.util.Optional;
  * One plugin the standard found laid out on disk, its {@code weivel_standard_discovered_plugin} copied: the manifest
  * value, validated and carrying the identity file's id when there is one, where each file lies, and the entry its
  * manifest names, resolved against the plugin's directory.
+ *
+ * <p>It loads no code: a manifest's entry is opaque, so how it becomes an {@code Entry} is the caller's, by
+ * {@code Host.loadEntry} with a class name the caller gives or any way of its own.
  */
 public final class DiscoveredPlugin {
     private final Manifest manifest;
@@ -43,36 +43,6 @@ public final class DiscoveredPlugin {
         this.identity = Objects.requireNonNull(identity, "identity");
         this.entryPath = Objects.requireNonNull(entryPath, "entryPath");
         this.entryPresent = entryPresent;
-    }
-
-    /**
-     * Registers the plugin with a host: loads its entry, the JAR its manifest names, by the class name the caller
-     * gives, and registers its manifest value with that entry.
-     *
-     * <p>This is one default, for a Java plugin packed as a JAR, never the only way to register what discovery
-     * found: core.h calls a manifest's {@code entry} opaque, so a host that lays its plugins out otherwise reads
-     * {@link #manifest()} and {@link #entryPath()} and hands {@link Host#register} an entry of its own making.
-     *
-     * @param host the host
-     * @param entryClassName the entry's binary class name inside the JAR, the caller's, since nothing names a default
-     * @return the plugin's handle; {@link Answer.Mistake} for a manifest naming no entry or an entry not present, or
-     *     what {@link Host#loadEntry} or {@link Host#register} answered
-     */
-    public Answer<Long> register(Host host, String entryClassName) {
-        Objects.requireNonNull(host, "host");
-        Objects.requireNonNull(entryClassName, "entryClassName");
-        if (!entryPath.isPresent()) {
-            return new Answer.Mistake<>(manifestPath + " names no entry");
-        }
-        if (!entryPresent) {
-            return new Answer.Mistake<>("the entry " + entryPath.get()
-                    + " is not a regular file reached through no link");
-        }
-        Answer<Entry> entry = host.loadEntry(entryPath.get(), entryClassName);
-        if (!(entry instanceof Answer.Ok)) {
-            return Answer.retyped(entry);
-        }
-        return host.register(manifest, ((Answer.Ok<Entry>) entry).value());
     }
 
     /**

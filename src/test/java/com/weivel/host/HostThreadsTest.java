@@ -1,8 +1,10 @@
 package com.weivel.host;
 
+import static com.weivel.host.HostFixture.consuming;
 import static com.weivel.host.HostFixture.done;
 import static com.weivel.host.HostFixture.named;
 import static com.weivel.host.HostFixture.providingCapability;
+import static com.weivel.host.HostFixture.services;
 import static com.weivel.host.HostFixture.value;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,9 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.weivel.context.CapabilityWatcher;
+import com.weivel.context.ServiceWatcher;
 import com.weivel.core.Answer;
+import com.weivel.core.LedgerRow;
 import com.weivel.core.RefusalStatus;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
@@ -43,6 +50,51 @@ class HostThreadsTest {
             assertTrue(dispatcher.isDispatching());
             assertEquals(ActivationState.ACTIVE, done(activation.outcomes().get(0)).state());
             dispatcher.release();
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    void whileAnotherThreadDispatchesAnActivatesEventsJoinItsQueueAndASettledActivateIsVerifiedBeforeTheNext()
+            throws Exception {
+        try (HostFixture fixture = new HostFixture()) {
+            List<Thread> heardOn = Collections.synchronizedList(new ArrayList<Thread>());
+            TestEntry listening = fixture.entry("listening");
+            long listeningPlugin = fixture.register(consuming("listening", "joining:events"), listening);
+            fixture.activate(listeningPlugin);
+            value(listening.context.watch("joining:events", new ServiceWatcher() {
+                @Override
+                public void registered(Object service) {
+                    heardOn.add(Thread.currentThread());
+                }
+
+                @Override
+                public void unregistered() {
+                }
+            }));
+            Gates.BlockedDispatcher dispatcher = new Gates.BlockedDispatcher(fixture);
+            long lacking = fixture.register(providingCapability("lacking", "screens"), fixture.entry("lacking"));
+            TestEntry joining = fixture.entry("joining");
+            AtomicReference<List<LedgerRow>> seenByJoining = new AtomicReference<>();
+            joining.onActivate = context -> {
+                seenByJoining.set(value(fixture.host.ledger()));
+                value(context.register("joining:events", new Object()));
+                return CompletableFuture.completedFuture(null);
+            };
+            long joiningPlugin = fixture.register(services("joining", Collections.singletonList("joining:events"),
+                    Collections.<String>emptyList()), joining);
+
+            Activation activation = fixture.activate(lacking, joiningPlugin);
+
+            assertEquals(Arrays.asList(lacking, joiningPlugin), activation.plan().order());
+            assertEquals(LedgerRow.Status.QUARANTINED, seenByJoining.get().stream()
+                    .filter(row -> row.plugin() == lacking).findFirst().get().status());
+            assertEquals(ActivationState.QUARANTINED, done(activation.outcomes().get(0)).state());
+            assertTrue(heardOn.isEmpty(), heardOn.toString());
+            Thread dispatching = dispatcher.thread();
+            dispatcher.release();
+            assertEquals(Collections.singletonList(dispatching), heardOn);
+            assertTrue(fixture.failures.isEmpty());
         }
     }
 

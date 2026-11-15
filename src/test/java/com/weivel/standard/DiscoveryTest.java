@@ -11,12 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.weivel.core.Answer;
 import com.weivel.core.CoreProbes;
 import com.weivel.core.Manifest;
+import com.weivel.host.Entry;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,13 +49,15 @@ class DiscoveryTest {
     }
 
     @Test
-    void aDiscoveredPluginIsRegisteredWithItsEntryFromDisk(@TempDir Path directory) throws Exception {
+    void aDiscoveredPluginIsRegisteredByItsCallerWithAnEntryLoadedByTheNameTheCallerGives(@TempDir Path directory)
+            throws Exception {
         layOutGreeting(directory);
         DiscoveredPlugin greeting = value(standard().discover(directory, ValidationOptions.defaults()))
                 .plugins().get(0);
 
         try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
-            long plugin = CoreProbes.ok(greeting.register(fixture.host, JAR_ENTRY));
+            Entry entry = CoreProbes.ok(fixture.host.loadEntry(greeting.entryPath().get(), JAR_ENTRY));
+            long plugin = CoreProbes.ok(fixture.host.register(greeting.manifest(), entry));
 
             Manifest registered = fixture.host.manifest(plugin).get();
             assertEquals(greeting.manifest(), registered);
@@ -59,17 +66,27 @@ class DiscoveryTest {
     }
 
     @Test
-    void aPluginWhoseEntryIsAbsentIsNotRegistered(@TempDir Path directory) throws Exception {
+    void aDiscoveredPluginLoadsNoCodeItselfSinceNoModuleConventionIsTheLayersToAssume() {
+        List<String> loading = new ArrayList<>();
+        for (Method method : DiscoveredPlugin.class.getMethods()) {
+            if (Arrays.stream(method.getParameterTypes()).anyMatch(type -> type.getName().startsWith("com.weivel.host"))
+                    || method.getReturnType().getName().startsWith("com.weivel.host")) {
+                loading.add(method.getName());
+            }
+        }
+
+        assertEquals(Collections.<String>emptyList(), loading);
+    }
+
+    @Test
+    void aPluginWhoseEntryIsAbsentIsFoundSayingSoAndLoadsNothing(@TempDir Path directory) throws Exception {
         write(directory, "absent.json", "{\"importName\": \"absent\", \"api\": 1, \"entry\": \"absent.jar\"}");
         DiscoveredPlugin absent = value(standard().discover(directory, ValidationOptions.defaults()))
                 .plugins().get(0);
 
         try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
             assertFalse(absent.entryPresent());
-            Answer<Long> registered = absent.register(fixture.host, JAR_ENTRY);
-            assertInstanceOf(Answer.Mistake.class, registered);
-            assertTrue(((Answer.Mistake<?>) registered).detail().endsWith("is not a regular file reached through no"
-                    + " link"), registered.toString());
+            assertInstanceOf(Answer.Mistake.class, fixture.host.loadEntry(absent.entryPath().get(), JAR_ENTRY));
         }
     }
 
