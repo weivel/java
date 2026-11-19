@@ -207,7 +207,7 @@ which a virtual thread pins its carrier.
 `./gradlew check` builds and tests everything. The wrapper fetches its pinned Gradle, and Gradle fetches the Java 8 and
 Java 25 toolchains when they are not installed; the native build needs CMake 3.15 or later and a C compiler on the
 `PATH`. The build reads the core, the standard and the conformance kit from `siblings/core`, `siblings/standard` and
-`siblings/conformance` at the commits `.weivel/repo.json` pins: CI checks them out there, and locally they are links or
+`siblings/conformance` at the commits `repo.json` pins: CI checks them out there, and locally they are links or
 clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts` program, and
 the standard's shared library and `layouts` program, with CMake in Release, and the tests run against those binaries.
 Each native build declares every sibling's sources it compiles as its inputs, the core's among the standard's, so a

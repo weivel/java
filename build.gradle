@@ -142,8 +142,8 @@ def requireSiblings = tasks.register('requireSiblings') {
     doLast {
         requiredSiblings.each { String sibling ->
             if (!new File(siblingsDirectory, "${sibling}/CMakeLists.txt").isFile()) {
-                throw new GradleException("siblings/${sibling} is missing. CI checks it out from .weivel/repo.json; " +
-                        "locally, link or clone the ${sibling} checkout there at the commit .weivel/repo.json pins.")
+                throw new GradleException("siblings/${sibling} is missing. CI checks it out from repo.json; " +
+                        "locally, link or clone the ${sibling} checkout there at the commit repo.json pins.")
             }
         }
     }
