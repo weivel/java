@@ -11,10 +11,17 @@ import com.weivel.host.LibraryDeclaration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -180,6 +187,116 @@ class DescribedBindingTest {
         }
     }
 
+    @Test
+    void aDescriptionBindsWhateverOrderItListsItsStructsIn() {
+        try (Opened mirror = Opened.service(0)) {
+            BoundDefinition reversed = mirror.bind(DescribedFixture.withTypesReversed(mirror.description));
+            Map<String, Object> origin = new LinkedHashMap<>();
+            origin.put("label", "embedded");
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("origin", origin);
+
+            Map<?, ?> reflection = (Map<?, ?>) answered(reversed.call("reflect",
+                    Collections.<String, Object>singletonMap("sample", sample)));
+
+            assertEquals("embedded", ((Map<?, ?>) ((Map<?, ?>) reflection.get("sample")).get("origin")).get("label"));
+        }
+    }
+
+    /**
+     * A release of a handle while a call that was handed it is still inside that call waits for the call, which then
+     * frees it, so the provider never reads a freed handle.
+     */
+    @Test
+    void aHandleReleasedWhileACallHoldsItIsFreedOnlyOnceThatCallReturns() throws Exception {
+        CountDownLatch parked = new CountDownLatch(1);
+        CountDownLatch resume = new CountDownLatch(1);
+        AtomicBoolean park = new AtomicBoolean();
+        Runnable inside = () -> {
+            if (park.getAndSet(false)) {
+                parked.countDown();
+                awaited(resume);
+            }
+        };
+        DescribedHandles holdings = new DescribedHandles();
+        try (Opened walker = Opened.service(1); Opened mirror = Opened.service(0)) {
+            BoundDefinition bound = walker.bindWith(walker.description, holdings, inside);
+            BoundDefinition counting = mirror.bind(mirror.description);
+            Map<String, Object> open = new LinkedHashMap<>();
+            open.put("label", "parked");
+            open.put("start", 7L);
+            DescribedHandle cursor = (DescribedHandle) answered(bound.call("open", open));
+            long before = cursors(counting);
+            park.set(true);
+            ExecutorService thread = Executors.newSingleThreadExecutor();
+            try {
+                Future<DescribedAnswer> using = thread.submit(() -> bound.call("use",
+                        Collections.<String, Object>singletonMap("cursor", cursor)));
+                awaited(parked);
+
+                holdings.releaseAll();
+                long whileTheCallRuns = cursors(counting);
+                resume.countDown();
+                Object start = answered(using.get(10, TimeUnit.SECONDS));
+
+                assertTrue(cursor.isReleased());
+                assertEquals(before, whileTheCallRuns, "freed under the call that was handed it");
+                assertEquals(7L, start);
+                assertEquals(before + 1, cursors(counting));
+            } finally {
+                resume.countDown();
+                thread.shutdownNow();
+            }
+        }
+    }
+
+    @Test
+    void structsNestedPastTheDepthLimitAreRefusedBothWays() {
+        NativeAccess access = NativeBackends.current();
+        Description.Member next = new Description.Member("next", 0, 8, DescribedKind.POINTER, DescribedKind.STRUCT,
+                Optional.of("link"), Optional.<String>empty(), Optional.<String>empty());
+        Description.Member number = new Description.Member("number", 8, 8, DescribedKind.U64, 0,
+                Optional.<String>empty(), Optional.<String>empty(), Optional.<String>empty());
+        Description chain = new Description("link", Collections.singletonList(new Description.Type("link", 16, 16,
+                Arrays.asList(next, number))), Collections.<Description.Enumeration>emptyList(),
+                Collections.<Description.Operation>emptyList());
+        StructPlan link = new DescribedLayouts(access, chain).plan(Optional.of("link"), "the test");
+        try (NativeArena arena = new NativeArena(access)) {
+            DescribedCall call = new DescribedCall(access, arena, new DescribedHandles());
+            long node = arena.allocateAddress(16);
+            access.putLong(node, 0, node);
+            Map<String, Object> cycle = new HashMap<>();
+            cycle.put("next", cycle);
+
+            IllegalStateException read = assertThrows(IllegalStateException.class, () -> call.readStruct(link, node));
+            IllegalArgumentException written = assertThrows(IllegalArgumentException.class,
+                    () -> call.writeStruct(link, arena.allocateAddress(16), cycle, "the cycle"));
+
+            assertTrue(read.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), read.getMessage());
+            assertTrue(written.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), written.getMessage());
+        }
+    }
+
+    private static long cursors(BoundDefinition mirror) {
+        Map<?, ?> counts = (Map<?, ?>) answered(mirror.call("count_releases", Collections.<String, Object>emptyMap()));
+        Object last = null;
+        for (Object count : counts.values()) {
+            last = count;
+        }
+        return (Long) last;
+    }
+
+    private static void awaited(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("a latch was not counted down in 10 seconds");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(interrupted);
+        }
+    }
+
     private static void assertRefusedWith(Opened opened, Description description, String naming) {
         DescriptionRefused refused = assertThrows(DescriptionRefused.class, () -> opened.bind(description));
         assertTrue(refused.getMessage().contains(naming), refused.getMessage());
@@ -281,6 +398,11 @@ class DescribedBindingTest {
         BoundDefinition bindAt(Description chosen, long at) {
             return DescribedBinder.bind(access, chosen, at, access.addressed(at, 8),
                     new BoundOperation.Bound(access, new SpareArena(access), new DescribedHandles(), CallGate.OPEN));
+        }
+
+        BoundDefinition bindWith(Description chosen, DescribedHandles holdings, Runnable insideTheCall) {
+            return DescribedBinder.bind(access, chosen, definition, access.addressed(definition, 8),
+                    new BoundOperation.Bound(access, new SpareArena(access), holdings, CallGate.OPEN, insideTheCall));
         }
 
         /**

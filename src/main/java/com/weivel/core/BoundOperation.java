@@ -119,10 +119,16 @@ public final class BoundOperation {
 
     private DescribedAnswer called(DescribedCall call, Map<String, ?> given) {
         long[] arguments = new long[steps.length];
-        for (int index = 0; index < steps.length; index++) {
-            steps[index].prepare(call, given, arguments, index);
+        int status;
+        try {
+            for (int index = 0; index < steps.length; index++) {
+                steps[index].prepare(call, given, arguments, index);
+            }
+            bound.insideTheCall.run();
+            status = (int) function.call(arguments);
+        } finally {
+            call.leaveUsedHandles();
         }
-        int status = (int) function.call(arguments);
         try {
             return outcome(call, status, arguments);
         } finally {
@@ -170,12 +176,20 @@ public final class BoundOperation {
         final SpareArena arenas;
         final DescribedHandles holdings;
         final CallGate gate;
+        /** What runs inside every call, its inputs handed and its native call about to be made: a test's seam. */
+        final Runnable insideTheCall;
 
         Bound(NativeAccess access, SpareArena arenas, DescribedHandles holdings, CallGate gate) {
+            this(access, arenas, holdings, gate, () -> { });
+        }
+
+        Bound(NativeAccess access, SpareArena arenas, DescribedHandles holdings, CallGate gate,
+              Runnable insideTheCall) {
             this.access = access;
             this.arenas = arenas;
             this.holdings = holdings;
             this.gate = gate;
+            this.insideTheCall = insideTheCall;
         }
     }
 

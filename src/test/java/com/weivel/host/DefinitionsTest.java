@@ -228,7 +228,7 @@ class DefinitionsTest {
     }
 
     /** Every revocation the plugin hears from now on, in order. */
-    private static List<PluginEvent.Revoked> revocationsHeardBy(TestEntry plugin) {
+    static List<PluginEvent.Revoked> revocationsHeardBy(TestEntry plugin) {
         List<PluginEvent.Revoked> revoked = Collections.synchronizedList(new ArrayList<>());
         plugin.context.listen(event -> {
             if (event instanceof PluginEvent.Revoked) {
@@ -239,7 +239,7 @@ class DefinitionsTest {
     }
 
     /** The one revocation heard that awaits the plugin's release. */
-    private static PluginEvent.Revoked awaiting(List<PluginEvent.Revoked> revoked) {
+    static PluginEvent.Revoked awaiting(List<PluginEvent.Revoked> revoked) {
         List<PluginEvent.Revoked> awaiting = new ArrayList<>();
         synchronized (revoked) {
             for (PluginEvent.Revoked heard : revoked) {
