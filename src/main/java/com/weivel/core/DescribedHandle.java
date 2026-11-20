@@ -5,6 +5,10 @@ package com.weivel.core;
  * holder through {@link #release()}, or by the layer when the library is unloaded, or at the latest when its binary
  * closes, whichever comes first. It is freed exactly once, and never while a call that was handed it is still in its
  * provider: a release then waits for that call to return, and the call frees it. Any thread may release it.
+ *
+ * @implNote {@code released} says no call may hand it on any more, {@code freed} that its native release has run or
+ *     is running inside the binary's gate. A release that finds the gate shut leaves {@code freed} unset, so the
+ *     binary's close, the one caller left, frees it.
  */
 public final class DescribedHandle {
     private final DescribedHandles holdings;
@@ -45,17 +49,16 @@ public final class DescribedHandle {
      * one after the binary closed, does nothing.
      */
     public void release() {
-        boolean freeNow;
+        boolean unused;
         synchronized (this) {
             if (released) {
                 return;
             }
             released = true;
-            freeNow = takeTheFree();
+            unused = users == 0;
         }
-        holdings.forget(this);
-        if (freeNow) {
-            holdings.free(release, pointer);
+        if (unused) {
+            holdings.free(this);
         }
     }
 
@@ -74,38 +77,45 @@ public final class DescribedHandle {
 
     /** Counts a call {@link #use} let in out again, freeing the handle when it was released meanwhile. */
     void leave() {
-        boolean freeNow;
+        boolean last;
         synchronized (this) {
             users--;
-            freeNow = released && takeTheFree();
+            last = released && users == 0;
         }
-        if (freeNow) {
-            holdings.free(release, pointer);
+        if (last) {
+            holdings.free(this);
         }
     }
 
     /**
-     * Releases it as its binary closes, with nothing left to call in it but this release, so no gate is entered.
+     * Takes the one free there is, for a caller about to run the native release.
+     *
+     * @return false when it was freed already, or a call still holds it
      */
-    void releaseAtTheClose() {
-        boolean freeNow;
-        synchronized (this) {
-            released = true;
-            freeNow = takeTheFree();
-        }
-        holdings.forget(this);
-        if (freeNow && release != null) {
-            release.free(pointer);
-        }
-    }
-
-    /** Under the lock: whether this caller frees it now, which only one caller ever does. */
-    private boolean takeTheFree() {
+    synchronized boolean takeTheFree() {
         if (freed || users > 0) {
             return false;
         }
         freed = true;
         return true;
+    }
+
+    /**
+     * Marks it released as its binary closes, with nothing left to call in it.
+     *
+     * @return whether this close frees it, which it does for every handle not freed yet, released or not
+     */
+    synchronized boolean releaseAtTheClose() {
+        released = true;
+        if (freed) {
+            return false;
+        }
+        freed = true;
+        return true;
+    }
+
+    ReleasePlan releasePlan() {
+        return release;
     }
 
     long pointer() {

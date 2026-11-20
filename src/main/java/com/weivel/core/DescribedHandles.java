@@ -6,9 +6,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Every {@link DescribedHandle} one library's described definitions answered and nobody has released yet, so the
- * unload releases each one still held while the binary is open, the binary's close releases any answered after that,
- * and an input handle is known for one of this library.
+ * Every {@link DescribedHandle} one library's described definitions answered that is not freed yet, so the unload
+ * releases each one still held while the binary is open, the binary's close frees every one left, answered after the
+ * unload or released while the gate was shut, and an input handle is known for one of this library.
  */
 final class DescribedHandles {
     private final Set<DescribedHandle> held = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -50,17 +50,19 @@ final class DescribedHandles {
         return handle;
     }
 
-    void forget(DescribedHandle handle) {
-        held.remove(handle);
-    }
-
-    /** Frees a handle's pointer, unless the binary is closed already, after which its close freed it. */
-    void free(ReleasePlan release, long pointer) {
-        if (release == null || !gate.enter()) {
+    /**
+     * Frees a released handle through its release, unless a call still holds it or another caller freed it; when the
+     * gate is shut, the binary is closing, and its close frees the handle instead.
+     */
+    void free(DescribedHandle handle) {
+        if (!gate.enter()) {
             return;
         }
         try {
-            release.free(pointer);
+            if (handle.takeTheFree()) {
+                held.remove(handle);
+                runRelease(handle);
+            }
         } finally {
             gate.leave();
         }
@@ -73,10 +75,19 @@ final class DescribedHandles {
         }
     }
 
-    /** Releases every handle still held as the binary closes, once nothing else can call into it. */
+    /** Frees every handle not freed yet as the binary closes, once nothing else can call into it. */
     void releaseAtTheClose() {
         for (DescribedHandle handle : new ArrayList<>(held)) {
-            handle.releaseAtTheClose();
+            if (handle.releaseAtTheClose()) {
+                held.remove(handle);
+                runRelease(handle);
+            }
+        }
+    }
+
+    private static void runRelease(DescribedHandle handle) {
+        if (handle.releasePlan() != null) {
+            handle.releasePlan().free(handle.pointer());
         }
     }
 }

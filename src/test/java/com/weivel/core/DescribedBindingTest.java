@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -250,8 +251,12 @@ class DescribedBindingTest {
         }
     }
 
+    /**
+     * Run on a thread of 256 KiB of stack, below the 512 KiB a small plugin thread may have and below every CI
+     * runner's default, since a walk that recursed per level overflowed a Linux runner's stack before its limit.
+     */
     @Test
-    void structsNestedPastTheDepthLimitAreRefusedBothWays() {
+    void structsAndValuesNestedPastTheDepthLimitAreRefusedBothWaysOnASmallStack() throws Exception {
         NativeAccess access = NativeBackends.current();
         Description.Member next = new Description.Member("next", 0, 8, DescribedKind.POINTER, DescribedKind.STRUCT,
                 Optional.of("link"), Optional.<String>empty(), Optional.<String>empty());
@@ -261,19 +266,111 @@ class DescribedBindingTest {
                 Arrays.asList(next, number))), Collections.<Description.Enumeration>emptyList(),
                 Collections.<Description.Operation>emptyList());
         StructPlan link = new DescribedLayouts(access, chain).plan(Optional.of("link"), "the test");
+        List<Throwable> refused = new ArrayList<>();
+        Thread small = new Thread(null, () -> {
+            try (NativeArena arena = new NativeArena(access)) {
+                DescribedCall call = new DescribedCall(access, arena, new DescribedHandles());
+                long node = arena.allocateAddress(16);
+                access.putLong(node, 0, node);
+                Map<String, Object> cycle = new HashMap<>();
+                cycle.put("next", cycle);
+                long value = arena.allocateAddress(ValueTrees.NODE_SIZE);
+                access.putInt(value, DescriptionLayouts.VALUE.offsetOf("kind"), ValueTrees.LIST);
+                access.putLong(value, DescriptionLayouts.VALUE.offsetOf("items"), value);
+                access.putLong(value, DescriptionLayouts.VALUE.offsetOf("count"), 1);
+                List<Object> nested = new ArrayList<>();
+                nested.add(nested);
+
+                refused.add(thrown(() -> call.readStruct(link, node)));
+                refused.add(thrown(() -> call.writeStruct(link, arena.allocateAddress(16), cycle, "the cycle")));
+                refused.add(thrown(() -> ValueTrees.read(access, value)));
+                refused.add(thrown(() -> ValueTrees.write(access, arena, arena.allocateAddress(ValueTrees.NODE_SIZE),
+                        nested, "the list")));
+            }
+        }, "small stack", 256 * 1024);
+        small.start();
+        small.join(TimeUnit.SECONDS.toMillis(30));
+
+        assertEquals(4, refused.size(), String.valueOf(refused));
+        assertInstanceOf(IllegalStateException.class, refused.get(0));
+        assertInstanceOf(IllegalArgumentException.class, refused.get(1));
+        assertInstanceOf(IllegalStateException.class, refused.get(2));
+        assertInstanceOf(IllegalArgumentException.class, refused.get(3));
+        for (Throwable each : refused) {
+            assertTrue(each.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), each.toString());
+        }
+    }
+
+    /**
+     * A release made while the binary's gate is shut, as one racing the last holder at the unload is, frees nothing
+     * then; the close frees it, once.
+     */
+    @Test
+    void aHandleReleasedWhileTheGateIsShutIsFreedAtTheClose() {
+        AtomicInteger freed = new AtomicInteger();
+        DescribedHandles holdings = new DescribedHandles();
+        holdings.gate(new CallGate() {
+            @Override
+            public boolean enter() {
+                return false;
+            }
+
+            @Override
+            public void leave() {
+            }
+        });
+        DescribedHandle handle = holdings.hold(1, "opaque", counting(freed, false));
+
+        handle.release();
+        int freedByTheRelease = freed.get();
+        holdings.releaseAtTheClose();
+        holdings.releaseAtTheClose();
+
+        assertEquals(0, freedByTheRelease);
+        assertEquals(1, freed.get());
+    }
+
+    /** A failing release of one handle a call let go of leaves no other handle of that call held for ever. */
+    @Test
+    void aFailingReleaseLeavesEveryOtherHandleOfTheCallFreed() {
+        AtomicInteger freed = new AtomicInteger();
+        DescribedHandles holdings = new DescribedHandles();
+        DescribedHandle failing = holdings.hold(1, "opaque", counting(freed, true));
+        DescribedHandle other = holdings.hold(2, "opaque", counting(freed, false));
+        MemberPlan handlePlan = new MemberPlan("handle", DescribedKind.HANDLE, 0, 0, MemberPlan.NO_COUNT, 0,
+                "opaque", null);
+        NativeAccess access = NativeBackends.current();
         try (NativeArena arena = new NativeArena(access)) {
-            DescribedCall call = new DescribedCall(access, arena, new DescribedHandles());
-            long node = arena.allocateAddress(16);
-            access.putLong(node, 0, node);
-            Map<String, Object> cycle = new HashMap<>();
-            cycle.put("next", cycle);
+            DescribedCall call = new DescribedCall(access, arena, holdings);
+            call.reached(handlePlan, failing, "the first");
+            call.reached(handlePlan, other, "the second");
+            failing.release();
+            other.release();
 
-            IllegalStateException read = assertThrows(IllegalStateException.class, () -> call.readStruct(link, node));
-            IllegalArgumentException written = assertThrows(IllegalArgumentException.class,
-                    () -> call.writeStruct(link, arena.allocateAddress(16), cycle, "the cycle"));
+            IllegalStateException thrown = assertThrows(IllegalStateException.class, call::leaveUsedHandles);
 
-            assertTrue(read.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), read.getMessage());
-            assertTrue(written.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), written.getMessage());
+            assertEquals("the release failed", thrown.getMessage());
+            assertEquals(2, freed.get(), "both releases ran, the failing one first");
+        }
+    }
+
+    /** A release counting every handle it frees, failing when asked to after counting. */
+    private static ReleasePlan counting(AtomicInteger freed, boolean failing) {
+        return new ReleasePlan("counting", arguments -> {
+            freed.incrementAndGet();
+            if (failing) {
+                throw new IllegalStateException("the release failed");
+            }
+            return 0;
+        }, 0, true);
+    }
+
+    private static Throwable thrown(Runnable walk) {
+        try {
+            walk.run();
+            return new AssertionError("the walk finished");
+        } catch (RuntimeException | StackOverflowError refused) {
+            return refused;
         }
     }
 
