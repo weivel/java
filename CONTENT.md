@@ -139,12 +139,14 @@ ships no Java source:
 - **The check is the caller's.** The host never loads the standard, so it runs the check its caller hands it through
   `HostOptions.withDescriptionCheck`, as `Standard.descriptionCheck()` answers it, before it reads anything else of a
   description. A host given none refuses a described library as the caller's mistake, and so does a description the
-  check refuses, a description symbol missing or answering NULL, and a definition ending before its first shape.
+  check refuses, a description symbol missing or answering NULL, and a definition ending before its first shape. A
+  check that runs out of memory fails the load as `Answer.Refused` of `OUT_OF_MEMORY`, never as the caller's mistake.
+  The kinds each role takes, the shape of a refusal and a release, and where the context lies are the check's rules,
+  which this binding does not repeat.
 - **The layout is the platform's.** Every described struct, embedded structs and value nodes included, is laid out by
   the native backend's own rules, and every member's offset and size and every struct's size must be what the
   description states, or the load is refused naming the member. So is a kind above the last this binding knows, an
-  element a pointer or array cannot reach, a text answer naming a release, a parameter it cannot marshal, and a
-  refusal without `detail` and `fix` texts. The foreign function backend lays a struct out with `MemoryLayout`s, and JNA
+  element a pointer or array cannot reach, and an operation of more than 7 parameters. The foreign function backend lays a struct out with `MemoryLayout`s, and JNA
   with its `Structure`'s own field alignment rule, so both bind every description and refuse the same ones.
 - **A call follows plans built at the load.** Each operation's native function, its signature from its parameters,
   and the plan of every parameter and member are made once; the context and every function pointer are read once from

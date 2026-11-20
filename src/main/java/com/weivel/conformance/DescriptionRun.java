@@ -202,7 +202,13 @@ final class DescriptionRun {
                 inputs.put(name, with.get(name));
             }
         }
-        return outcome(definition.operation(operation).call(inputs), answers, values);
+        DescribedAnswer answer;
+        try {
+            answer = definition.operation(operation).call(inputs);
+        } catch (IllegalArgumentException | UnsupportedOperationException callersMistake) {
+            return Collections.<String, Object>singletonMap("callersMistake", true);
+        }
+        return outcome(answer, answers, values);
     }
 
     private Map<String, Object> outcome(DescribedAnswer answer, Map<String, Description.Parameter> answers,

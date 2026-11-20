@@ -9,6 +9,9 @@ public enum RefusalStatus {
      * ({@code WEIVEL_STATUS_MALFORMED}): the caller's mistake, reported to no sink.
      */
     MALFORMED,
-    /** Memory ran out in the core and nothing changed ({@code WEIVEL_STATUS_OUT_OF_MEMORY}). */
+    /**
+     * Memory ran out and nothing changed ({@code WEIVEL_STATUS_OUT_OF_MEMORY}): in the core, or in the standard's check
+     * of a description a library load ran.
+     */
     OUT_OF_MEMORY
 }
