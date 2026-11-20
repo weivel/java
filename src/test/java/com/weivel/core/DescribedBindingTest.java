@@ -126,19 +126,6 @@ class DescribedBindingTest {
     }
 
     @Test
-    void aTextAnswerNamingAReleaseIsRefused() {
-        try (Opened mirror = Opened.service(0)) {
-            String release = firstRelease(mirror.description);
-            Description freed = withParameter(mirror.description, "find",
-                    parameter -> parameter.kind() == DescribedKind.TEXT && parameter.role() == Description.ANSWER,
-                    parameter -> new Description.Parameter(parameter.name(), parameter.kind(), parameter.role(),
-                            parameter.element(), parameter.type(), parameter.count(), Optional.of(release)));
-
-            assertRefusedWith(mirror, freed, "not yet ruled");
-        }
-    }
-
-    @Test
     void anOperationPastTheSizeItsDefinitionAnsweredIsNotOffered() {
         try (Opened mirror = Opened.service(0)) {
             long growAt = mirror.description.operation("grow").get().offset();
@@ -443,7 +430,7 @@ class DescribedBindingTest {
                 throw new IllegalStateException("the release failed");
             }
             return 0;
-        }, 0, true);
+        }, 0);
     }
 
     private static Throwable thrown(Runnable walk) {
@@ -483,15 +470,6 @@ class DescribedBindingTest {
     private static Object answered(DescribedAnswer answer) {
         DescribedAnswer.Answered answered = assertInstanceOf(DescribedAnswer.Answered.class, answer);
         return answered.value();
-    }
-
-    private static String firstRelease(Description description) {
-        for (Description.Operation operation : description.operations()) {
-            if (operation.returns() == Description.NOTHING) {
-                return operation.name();
-            }
-        }
-        throw new AssertionError("the description has no release");
     }
 
     /** The description with the first member {@code which} picks changed by {@code change}. */

@@ -1,7 +1,6 @@
 package com.weivel.core;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,17 +13,11 @@ import java.util.Set;
  * Binds a definition from its description, once, at the load: the layouts checked against the backend's own, the
  * context and every function pointer read once from the definition's struct, each native function made with the
  * signature its parameters give, and the plan of every parameter built, so that a call follows plans and looks
- * nothing up.
+ * nothing up. The description has passed the standard's check, which alone rules the shapes the convention takes:
+ * the kinds each role takes, one context and first, at most one refusal and last, and a release of two parameters.
  */
 final class DescribedBinder {
     private static final int MOST_PARAMETERS = 7;
-    private static final List<Integer> INPUT_KINDS = Arrays.asList(DescribedKind.CONTEXT, DescribedKind.U32,
-            DescribedKind.U64, DescribedKind.I64, DescribedKind.F64, DescribedKind.SIZE, DescribedKind.TEXT,
-            DescribedKind.TEXTS, DescribedKind.BYTES, DescribedKind.POINTER, DescribedKind.ARRAY,
-            DescribedKind.HANDLE);
-    private static final List<Integer> ANSWER_KINDS = Arrays.asList(DescribedKind.U32, DescribedKind.U64,
-            DescribedKind.I64, DescribedKind.F64, DescribedKind.SIZE, DescribedKind.TEXT, DescribedKind.POINTER,
-            DescribedKind.VALUE, DescribedKind.HANDLE);
     private static final long CELL = Layout.LONG.byteSize();
 
     private final NativeAccess access;
@@ -71,18 +64,17 @@ final class DescribedBinder {
         for (Description.Member member : type.members()) {
             if (member.kind() == DescribedKind.CONTEXT) {
                 context = pointerAt(member.offset());
+                break;
             }
         }
         for (Description.Operation operation : description.operations()) {
             if (operation.returns() == Description.NOTHING) {
-                releases.put(operation.name(), release(operation));
-            } else if (operation.returns() != Description.STATUS) {
-                throw layouts.refused("its operation " + operation.name() + " returns the form "
-                        + operation.returns() + ", which this binding does not know");
+                releases.put(operation.name(), new ReleasePlan(operation.name(), functionAt(operation.offset(),
+                        NativeSignature.of(NativeType.VOID, NativeType.ADDRESS, NativeType.ADDRESS)), context));
             }
         }
         for (MemberPlan member : layouts.everyMemberPlan()) {
-            member.release = handleRelease(member, "its member " + member.name);
+            member.release = handleRelease(member);
         }
         Map<String, BoundOperation> operations = new LinkedHashMap<>();
         for (Description.Operation operation : description.operations()) {
@@ -103,33 +95,8 @@ final class DescribedBinder {
         return pointer == 0 ? null : access.function(pointer, signature);
     }
 
-    private ReleasePlan release(Description.Operation operation) {
-        List<Description.Parameter> parameters = operation.parameters();
-        int contexts = 0;
-        for (Description.Parameter parameter : parameters) {
-            if (parameter.kind() == DescribedKind.CONTEXT) {
-                contexts++;
-            }
-        }
-        if (parameters.size() != 2 || contexts != 1) {
-            throw layouts.refused("its release " + operation.name() + " takes " + parameters.size()
-                    + " parameters, where a release takes the context and the one thing it frees");
-        }
-        return new ReleasePlan(operation.name(), functionAt(operation.offset(), NativeSignature.of(NativeType.VOID,
-                NativeType.ADDRESS, NativeType.ADDRESS)), context,
-                parameters.get(0).kind() == DescribedKind.CONTEXT);
-    }
-
-    private ReleasePlan handleRelease(MemberPlan plan, String where) {
-        if (plan.kind != DescribedKind.HANDLE || plan.releaseName == null) {
-            return null;
-        }
-        ReleasePlan release = releases.get(plan.releaseName);
-        if (release == null) {
-            throw layouts.refused(where + " is freed by " + plan.releaseName + ", which is no release of the "
-                    + "definition");
-        }
-        return release;
+    private ReleasePlan handleRelease(MemberPlan plan) {
+        return plan.kind == DescribedKind.HANDLE && plan.releaseName != null ? releases.get(plan.releaseName) : null;
     }
 
     private BoundOperation operation(Description.Operation operation) {
@@ -149,7 +116,6 @@ final class DescribedBinder {
         NativeType[] types = new NativeType[parameters.size()];
         List<String> inputNames = new ArrayList<>();
         List<String> answerNames = new ArrayList<>();
-        boolean refusal = false;
         for (int index = 0; index < parameters.size(); index++) {
             Description.Parameter parameter = parameters.get(index);
             types[index] = NativeType.ADDRESS;
@@ -163,12 +129,8 @@ final class DescribedBinder {
             } else if (parameter.role() == Description.ANSWER) {
                 steps[index] = answer(operation, parameter);
                 answerNames.add(parameter.name());
-            } else if (parameter.role() == Description.REFUSAL && !refusal) {
-                steps[index] = refusal(operation, parameter);
-                refusal = true;
             } else {
-                throw refused(name, "takes " + parameter.name() + " in role " + parameter.role() + ", which this "
-                        + "binding cannot marshal");
+                steps[index] = refusal(operation, parameter);
             }
         }
         return new BoundOperation(description.definition(), name,
@@ -179,9 +141,6 @@ final class DescribedBinder {
     private BoundOperation.Step input(Description.Operation operation, Description.Parameter parameter,
                                       Set<String> counted, NativeType[] types, int index) {
         int kind = parameter.kind();
-        if (!INPUT_KINDS.contains(kind)) {
-            throw unmarshalled(operation, parameter);
-        }
         if (counted.contains(parameter.name())) {
             types[index] = NativeType.LONG;
             return new DescribedSteps.Count();
@@ -201,19 +160,7 @@ final class DescribedBinder {
 
     private BoundOperation.Step answer(Description.Operation operation, Description.Parameter parameter) {
         int kind = parameter.kind();
-        if (!ANSWER_KINDS.contains(kind)) {
-            throw unmarshalled(operation, parameter);
-        }
-        if (kind == DescribedKind.POINTER && parameter.element() == DescribedKind.VALUE) {
-            throw refused(operation.name(), "answers " + parameter.name() + " as a pointer to a value, which is "
-                    + "answered as a tree");
-        }
-        if (kind == DescribedKind.TEXT && parameter.release().isPresent()) {
-            throw refused(operation.name(), "answers the text " + parameter.name() + " freed by "
-                    + parameter.release().get() + ", and which pointer a text's release is handed is not yet ruled, "
-                    + "so this binding frees none");
-        }
-        Optional<ReleasePlan> release = namedRelease(operation, parameter);
+        Optional<ReleasePlan> release = namedRelease(parameter);
         MemberPlan plan = reach(operation, parameter);
         if (kind == DescribedKind.HANDLE) {
             plan.release = release.orElse(null);
@@ -226,43 +173,22 @@ final class DescribedBinder {
         if (kind == DescribedKind.VALUE) {
             return new DescribedSteps.Answering(access, plan, ValueTrees.TREE_SIZE, true, release.orElse(null));
         }
-        if (release.isPresent()) {
-            throw refused(operation.name(), "frees its answer " + parameter.name() + " of kind " + kind
-                    + ", which owns nothing to free");
-        }
         return new DescribedSteps.Answering(access, plan, CELL, false, null);
     }
 
     private BoundOperation.Step refusal(Description.Operation operation, Description.Parameter parameter) {
-        if (parameter.kind() != DescribedKind.POINTER || parameter.element() != DescribedKind.STRUCT) {
-            throw unmarshalled(operation, parameter);
-        }
         StructPlan type = layouts.plan(parameter.type(), "its operation " + operation.name() + "'s "
                 + parameter.name());
-        long detail = textMember(operation, type, "detail");
-        long fix = textMember(operation, type, "fix");
-        return new DescribedSteps.Refusing(access, type, detail, fix, namedRelease(operation, parameter).orElse(null));
+        return new DescribedSteps.Refusing(access, type, textOffset(type, "detail"), textOffset(type, "fix"),
+                namedRelease(parameter).orElse(null));
     }
 
-    private long textMember(Description.Operation operation, StructPlan type, String member) {
-        for (Description.Member described : layouts.type(type.name).members()) {
-            if (described.name().equals(member) && described.kind() == DescribedKind.TEXT) {
-                return described.offset();
-            }
-        }
-        throw refused(operation.name(), "refuses through " + type.name + ", which carries no " + member + " text");
+    private static long textOffset(StructPlan type, String member) {
+        return type.visible[type.positionOf(member)].offset;
     }
 
-    private Optional<ReleasePlan> namedRelease(Description.Operation operation, Description.Parameter parameter) {
-        if (!parameter.release().isPresent()) {
-            return Optional.empty();
-        }
-        ReleasePlan release = releases.get(parameter.release().get());
-        if (release == null) {
-            throw refused(operation.name(), "frees " + parameter.name() + " by " + parameter.release().get()
-                    + ", which is no release of the definition");
-        }
-        return Optional.of(release);
+    private Optional<ReleasePlan> namedRelease(Description.Parameter parameter) {
+        return parameter.release().map(releases::get);
     }
 
     private MemberPlan reach(Description.Operation operation, Description.Parameter parameter) {
@@ -271,7 +197,7 @@ final class DescribedBinder {
         MemberPlan plan = layouts.reachOf(parameter.name(), parameter.kind(), parameter.element(), parameter.type(),
                 parameter.release(), 0, MemberPlan.NO_COUNT, where);
         if (parameter.role() == Description.INPUT) {
-            plan.release = handleRelease(plan, where);
+            plan.release = handleRelease(plan);
         }
         return plan;
     }
@@ -284,11 +210,6 @@ final class DescribedBinder {
             }
         }
         return -1;
-    }
-
-    private DescriptionRefused unmarshalled(Description.Operation operation, Description.Parameter parameter) {
-        return refused(operation.name(), "takes " + parameter.name() + " of kind " + parameter.kind() + " in role "
-                + parameter.role() + ", which this binding cannot marshal");
     }
 
     private DescriptionRefused refused(String operation, String detail) {

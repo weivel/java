@@ -2,10 +2,13 @@ package com.weivel.standard;
 
 import static com.weivel.standard.StandardReads.offset;
 
+import com.weivel.core.Answer;
 import com.weivel.core.DescriptionCheck;
 import com.weivel.core.ForeignMemory;
 import com.weivel.core.Layout;
 import com.weivel.core.Manifest;
+import com.weivel.core.Refusal;
+import com.weivel.core.RefusalStatus;
 import com.weivel.host.LibraryDeclaration;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -242,16 +245,20 @@ public final class Standard {
      * The check a host runs on every description, as {@code HostOptions.withDescriptionCheck} takes it, so a host binds
      * descriptions without ever loading the standard itself.
      *
-     * @return {@link #checkDescription} as a {@link DescriptionCheck}: empty on OK, otherwise the status, the fault's
-     *     path and its detail
+     * @return {@link #checkDescription} as a {@link DescriptionCheck}: OK as {@link Answer.Ok}, OUT_OF_MEMORY as
+     *     {@link Answer.Refused} of {@link RefusalStatus#OUT_OF_MEMORY}, and any other status as {@link Answer.Mistake}
+     *     carrying the status, the fault's path and its detail
      */
     public DescriptionCheck descriptionCheck() {
         return description -> {
             StandardAnswer<Void> checked = checkDescription(description);
             if (checked.status() == StandardStatus.OK) {
-                return Optional.empty();
+                return new Answer.Ok<>(null);
             }
-            return Optional.of("status " + checked.status() + checked.refusal()
+            if (checked.status() == StandardStatus.OUT_OF_MEMORY) {
+                return new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty());
+            }
+            return new Answer.Mistake<>("status " + checked.status() + checked.refusal()
                     .map(refusal -> " at " + (refusal.path().isEmpty() ? "the description" : refusal.path()) + ": "
                             + refusal.detail())
                     .orElse(""));

@@ -331,8 +331,9 @@ public final class Host implements AutoCloseable {
      *     library, a library lacking a declared symbol, or a definition answering NULL or a struct whose
      *     {@code size} is below {@code 2 * sizeof(void *)}, a description declared on a host given no description
      *     check, a description the check refuses, or one whose layout disagrees with this platform's or that the
-     *     binding cannot bind; the core's refusal of a registration;
-     *     {@link Answer.Destroyed} once the destroy has been called, before any mistake is judged
+     *     binding cannot bind; {@link Answer.Refused} of {@code OUT_OF_MEMORY} when the description check ran out of
+     *     memory; the core's refusal of a registration; {@link Answer.Destroyed} once the destroy has been called,
+     *     before any mistake is judged
      * @implNote An id is found registered already from the layer's own records, never by asking the core. One a
      *     plugin registers on another thread while the load runs can still be replaced by the library's registration,
      *     since the core lets {@code WEIVEL_HOST} replace one; closing that needs a register-if-absent call for the

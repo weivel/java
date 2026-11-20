@@ -21,6 +21,8 @@ import com.weivel.core.DescribedHandle;
 import com.weivel.core.DescribedKind;
 import com.weivel.core.Description;
 import com.weivel.core.ForeignMemory;
+import com.weivel.core.Refusal;
+import com.weivel.core.RefusalStatus;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -62,6 +65,18 @@ class DescribedLibrariesTest {
 
             assertInstanceOf(Answer.Mistake.class, loaded);
             assertTrue(((Answer.Mistake<?>) loaded).detail().contains("no description check"), loaded.toString());
+        }
+    }
+
+    @Test
+    void aCheckRunningOutOfMemoryFailsTheLoadAsOutOfMemoryNeverAsTheCallersMistake() throws Exception {
+        try (HostFixture fixture = new HostFixture(
+                description -> new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty()))) {
+            Answer<LoadedLibrary> loaded = fixture.host.loadLibrary(DescribedFixture.binary(), declaration());
+
+            Answer.Refused<?> refused = assertInstanceOf(Answer.Refused.class, loaded);
+            assertEquals(RefusalStatus.OUT_OF_MEMORY, refused.status());
+            assertFalse(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()) instanceof Answer.Mistake);
         }
     }
 

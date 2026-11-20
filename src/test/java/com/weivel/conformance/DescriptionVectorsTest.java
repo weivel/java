@@ -77,6 +77,18 @@ class DescriptionVectorsTest {
     }
 
     @Test
+    @DisplayName("description/binding/an-input-the-operation-does-not-take-is-the-callers-mistake")
+    void anInputTheOperationDoesNotTakeIsTheCallersMistake() {
+        assertWitnessed("description/binding/an-input-the-operation-does-not-take-is-the-callers-mistake");
+    }
+
+    @Test
+    @DisplayName("description/binding/an-operation-its-provider-does-not-offer-is-the-callers-mistake")
+    void anOperationItsProviderDoesNotOfferIsTheCallersMistake() {
+        assertWitnessed("description/binding/an-operation-its-provider-does-not-offer-is-the-callers-mistake");
+    }
+
+    @Test
     @DisplayName("description/binding/a-none-answer-arrives-as-none")
     void aNoneAnswerArrivesAsNone() {
         assertWitnessed("description/binding/a-none-answer-arrives-as-none");

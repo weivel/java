@@ -112,7 +112,8 @@ public final class LibraryBinary implements AutoCloseable {
      * @param gate who decides whether a call may still enter the binary, for every call the bound definition makes
      * @return the bound definition; {@link Answer.Mistake} for anything {@link #definition} refuses, a description
      *     symbol the library does not export or that answers NULL, a description the check refuses, one whose layout
-     *     disagrees with this platform's or that this binding cannot bind, and a backend that binds no description yet
+     *     disagrees with this platform's or that this binding cannot bind, and a backend that binds no description yet;
+     *     {@link Answer.Refused} of {@link RefusalStatus#OUT_OF_MEMORY} when the check ran out of memory
      */
     public Answer<BoundDefinition> described(String definitionSymbol, String descriptionSymbol,
                                              DescriptionCheck check, CallGate gate) {
@@ -131,10 +132,13 @@ public final class LibraryBinary implements AutoCloseable {
         if (description == 0) {
             return new Answer.Mistake<>("the description " + descriptionSymbol + " answered NULL");
         }
-        Optional<String> refusal = check.refusalOf(access.addressed(description, sizeAt(description)));
-        if (refusal.isPresent()) {
+        Answer<Void> checked = check.check(access.addressed(description, sizeAt(description)));
+        if (checked instanceof Answer.Mistake) {
             return new Answer.Mistake<>("the standard's check refuses the description " + descriptionSymbol + ": "
-                    + refusal.get());
+                    + ((Answer.Mistake<Void>) checked).detail());
+        }
+        if (!(checked instanceof Answer.Ok)) {
+            return Answer.retyped(checked);
         }
         handles.gate(gate);
         try {
