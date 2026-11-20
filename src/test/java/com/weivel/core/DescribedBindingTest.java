@@ -301,6 +301,35 @@ class DescribedBindingTest {
         }
     }
 
+    /** value.h holds each key of a record once, so a provider's record repeating one is refused, naming it. */
+    @Test
+    void aRecordThatRepeatsAKeyIsRefusedAsTheProvidersFault() {
+        NativeAccess access = NativeBackends.current();
+        Layout node = DescriptionLayouts.VALUE;
+        Layout entry = DescriptionLayouts.ENTRY;
+        try (NativeArena arena = new NativeArena(access)) {
+            long key = arena.allocateAddress(4);
+            access.writeBytes(key, 0, new byte[] {'k', 'e', 'y'});
+            long entries = arena.allocateAddress(2 * entry.byteSize());
+            for (int index = 0; index < 2; index++) {
+                long at = entries + index * entry.byteSize();
+                access.putLong(at, entry.offsetOf("key"), key);
+                access.putLong(at, entry.offsetOf("key_length"), 3);
+                access.putInt(at + entry.offsetOf("value"), node.offsetOf("kind"), ValueTrees.NUMBER);
+                access.putDouble(at + entry.offsetOf("value"), node.offsetOf("number"), index + 1);
+            }
+            long record = arena.allocateAddress(node.byteSize());
+            access.putInt(record, node.offsetOf("kind"), ValueTrees.RECORD);
+            access.putLong(record, node.offsetOf("entries"), entries);
+            access.putLong(record, node.offsetOf("count"), 2);
+
+            IllegalStateException refused = assertThrows(IllegalStateException.class,
+                    () -> ValueTrees.read(access, record));
+
+            assertTrue(refused.getMessage().contains("the key key twice"), refused.getMessage());
+        }
+    }
+
     /**
      * A release made while the binary's gate is shut, as one racing the last holder at the unload is, frees nothing
      * then; the close frees it, once.
