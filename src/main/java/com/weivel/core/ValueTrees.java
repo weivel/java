@@ -61,6 +61,11 @@ final class ValueTrees {
      *     for its elements and the walk writing them agree even while another thread changes it.
      */
     static void write(NativeAccess access, NativeArena arena, long node, Object value, String where) {
+        write(access, arena, node, value, CallPath.of(where));
+    }
+
+    /** As {@link #write(NativeAccess, NativeArena, long, Object, String)}, at a place inside a call's input. */
+    static void write(NativeAccess access, NativeArena arena, long node, Object value, CallPath where) {
         Deque<Pending> pending = new ArrayDeque<>();
         pending.push(new Pending(node, value, where, 0));
         while (!pending.isEmpty()) {
@@ -107,7 +112,7 @@ final class ValueTrees {
         }
         long nodes = arena.allocateAddress(snapshot.length * NODE_SIZE);
         for (int index = 0; index < snapshot.length; index++) {
-            pending.push(new Pending(nodes + index * NODE_SIZE, snapshot[index], list.where + "[" + index + "]",
+            pending.push(new Pending(nodes + index * NODE_SIZE, snapshot[index], list.where.element(index),
                     list.depth + 1));
         }
         access.putLong(list.node, ITEMS, nodes);
@@ -130,17 +135,17 @@ final class ValueTrees {
             }
             String key = (String) member.getKey();
             long entry = entries + index * ENTRY_SIZE;
-            byte[] encoded = Scalars.utf8(key, record.where + "'s key " + key);
+            byte[] encoded = Scalars.utf8(key, record.where.key(key));
             access.putLong(entry, KEY, placed(access, arena, encoded));
             access.putLong(entry, KEY_LENGTH, encoded.length);
-            pending.push(new Pending(entry + ENTRY_VALUE, member.getValue(), record.where + "." + key,
+            pending.push(new Pending(entry + ENTRY_VALUE, member.getValue(), record.where.member(key),
                     record.depth + 1));
         }
         access.putLong(record.node, ENTRIES, entries);
         access.putLong(record.node, COUNT, snapshot.length);
     }
 
-    private static double number(Number number, String where) {
+    private static double number(Number number, CallPath where) {
         if (number instanceof Long || number instanceof Integer || number instanceof Short
                 || number instanceof Byte) {
             long integer = number.longValue();
@@ -250,10 +255,10 @@ final class ValueTrees {
     private static final class Pending {
         final long node;
         final Object value;
-        final String where;
+        final CallPath where;
         final int depth;
 
-        Pending(long node, Object value, String where, int depth) {
+        Pending(long node, Object value, CallPath where, int depth) {
             this.node = node;
             this.value = value;
             this.where = where;

@@ -33,12 +33,12 @@ final class DescribedSteps {
     static final class Scalar extends BoundOperation.Step {
         private final String name;
         private final int kind;
-        private final String where;
+        private final CallPath where;
 
         Scalar(String operation, String name, int kind) {
             this.name = name;
             this.kind = kind;
-            this.where = operation + "'s " + name;
+            this.where = CallPath.of(operation + "'s " + name);
         }
 
         @Override
@@ -51,12 +51,12 @@ final class DescribedSteps {
     static final class Reached extends BoundOperation.Step {
         private final MemberPlan plan;
         private final int countIndex;
-        private final String where;
+        private final CallPath where;
 
         Reached(String operation, MemberPlan plan, int countIndex) {
             this.plan = plan;
             this.countIndex = countIndex;
-            this.where = operation + "'s " + plan.name;
+            this.where = CallPath.of(operation + "'s " + plan.name);
         }
 
         @Override

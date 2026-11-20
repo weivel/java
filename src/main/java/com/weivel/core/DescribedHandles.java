@@ -31,7 +31,7 @@ final class DescribedHandles {
      *
      * @throws IllegalArgumentException for anything but a live handle of this library and of {@code type}
      */
-    DescribedHandle use(Object value, String type, String where) {
+    DescribedHandle use(Object value, String type, CallPath where) {
         if (!(value instanceof DescribedHandle)) {
             throw new IllegalArgumentException(where + " is a handle of " + type + ", written as the DescribedHandle "
                     + "an operation answered, not " + Scalars.described(value));

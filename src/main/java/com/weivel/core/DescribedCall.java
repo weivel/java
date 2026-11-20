@@ -4,7 +4,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -83,7 +82,7 @@ final class DescribedCall {
      *     write, a value its member's kind does not hold, or structs nested deeper than a value tree may be
      */
     void writeStruct(StructPlan plan, long base, Object value, String where) {
-        writes.push(new StructWrite(plan, base, value, where, 0));
+        writes.push(new StructWrite(plan, base, value, CallPath.of(where), 0));
         drainWrites();
     }
 
@@ -93,6 +92,11 @@ final class DescribedCall {
      * as 0. A handle handed in is in use until {@link #leaveUsedHandles}.
      */
     long reached(MemberPlan plan, Object value, String where) {
+        return reached(plan, value, CallPath.of(where));
+    }
+
+    /** As {@link #reached(MemberPlan, Object, String)}, for an input whose place its step named at the bind. */
+    long reached(MemberPlan plan, Object value, CallPath where) {
         long address = reached(plan, value, where, 0);
         long count = counted;
         drainWrites();
@@ -127,13 +131,13 @@ final class DescribedCall {
         refuseUnknownNames(members, plan, next.where);
         for (MemberPlan member : plan.visible) {
             if (members.containsKey(member.name)) {
-                writeMember(member, next.base, members.get(member.name), next.where + "." + member.name,
+                writeMember(member, next.base, members.get(member.name), next.where.member(member.name),
                         next.depth);
             }
         }
     }
 
-    private static void refuseUnknownNames(Map<?, ?> members, StructPlan plan, String where) {
+    private static void refuseUnknownNames(Map<?, ?> members, StructPlan plan, CallPath where) {
         if (plan.visibleNames.containsAll(members.keySet())) {
             return;
         }
@@ -145,7 +149,7 @@ final class DescribedCall {
         }
     }
 
-    private void writeMember(MemberPlan member, long base, Object value, String where, int depth) {
+    private void writeMember(MemberPlan member, long base, Object value, CallPath where, int depth) {
         long at = base + member.offset;
         if (DescribedLayouts.isScalar(member.kind)) {
             Scalars.write(access, member.kind, at, Scalars.bits(member.kind, value, where));
@@ -161,7 +165,7 @@ final class DescribedCall {
         }
     }
 
-    private long reached(MemberPlan plan, Object value, String where, int depth) {
+    private long reached(MemberPlan plan, Object value, CallPath where, int depth) {
         counted = 0;
         switch (plan.kind) {
             case DescribedKind.TEXT:
@@ -186,7 +190,7 @@ final class DescribedCall {
         return handle.pointer();
     }
 
-    private long text(Object value, String where) {
+    private long text(Object value, CallPath where) {
         if (value == null) {
             return 0;
         }
@@ -200,20 +204,20 @@ final class DescribedCall {
         return address;
     }
 
-    private long texts(Object value, String where) {
+    private long texts(Object value, CallPath where) {
         Object[] texts = snapshot(value, where);
         if (texts.length == 0) {
             return 0;
         }
         long items = arena.allocateAddress(texts.length * WORD);
         for (int index = 0; index < texts.length; index++) {
-            access.putLong(items, index * WORD, text(texts[index], where + "[" + index + "]"));
+            access.putLong(items, index * WORD, text(texts[index], where.element(index)));
         }
         counted = texts.length;
         return items;
     }
 
-    private long bytes(Object value, String where) {
+    private long bytes(Object value, CallPath where) {
         if (!(value instanceof byte[])) {
             throw new IllegalArgumentException(where + " is bytes, written as a byte[], not "
                     + Scalars.described(value));
@@ -228,7 +232,7 @@ final class DescribedCall {
         return address;
     }
 
-    private long pointed(MemberPlan plan, Object value, String where, int depth) {
+    private long pointed(MemberPlan plan, Object value, CallPath where, int depth) {
         if (value == null && plan.element == DescribedKind.STRUCT) {
             return 0;
         }
@@ -237,20 +241,20 @@ final class DescribedCall {
         return address;
     }
 
-    private long array(MemberPlan plan, Object value, String where, int depth) {
+    private long array(MemberPlan plan, Object value, CallPath where, int depth) {
         Object[] items = snapshot(value, where);
         if (items.length == 0) {
             return 0;
         }
         long address = arena.allocateAddress(items.length * plan.stride);
         for (int index = 0; index < items.length; index++) {
-            writeElement(plan, address + index * plan.stride, items[index], where + "[" + index + "]", depth);
+            writeElement(plan, address + index * plan.stride, items[index], where.element(index), depth);
         }
         counted = items.length;
         return address;
     }
 
-    private void writeElement(MemberPlan plan, long address, Object value, String where, int depth) {
+    private void writeElement(MemberPlan plan, long address, Object value, CallPath where, int depth) {
         if (plan.element == DescribedKind.STRUCT) {
             writes.push(new StructWrite(plan.target, address, value, where, depth));
         } else if (plan.element == DescribedKind.VALUE) {
@@ -264,7 +268,7 @@ final class DescribedCall {
      * A counted input's elements, taken once, so the block sized for them and the walk writing them agree however the
      * list changes meanwhile.
      */
-    private static Object[] snapshot(Object value, String where) {
+    private static Object[] snapshot(Object value, CallPath where) {
         if (!(value instanceof List)) {
             throw new IllegalArgumentException(where + " is counted, written as a List, not "
                     + Scalars.described(value));
@@ -311,27 +315,29 @@ final class DescribedCall {
             throw new IllegalStateException("the provider answered structs nested deeper than "
                     + ValueTrees.DEPTH_LIMIT + " levels");
         }
-        Map<String, Object> members = new LinkedHashMap<>();
+        StructValues members = new StructValues(plan);
         reads.push(new StructRead(plan, base, members, depth));
-        return Collections.unmodifiableMap(members);
+        return members;
     }
 
-    private void readMembers(StructPlan plan, long base, Map<String, Object> members, int depth) {
-        for (MemberPlan member : plan.visible) {
+    private void readMembers(StructPlan plan, long base, StructValues members, int depth) {
+        MemberPlan[] visible = plan.visible;
+        for (int position = 0; position < visible.length; position++) {
+            MemberPlan member = visible[position];
             long at = base + member.offset;
             if (DescribedLayouts.isScalar(member.kind)) {
-                members.put(member.name, Scalars.read(access, member.kind, at));
+                members.set(position, Scalars.read(access, member.kind, at));
             } else if (member.kind == DescribedKind.STRUCT) {
-                members.put(member.name, startStruct(member.target, at, depth + 1));
+                members.set(position, startStruct(member.target, at, depth + 1));
             } else if (member.kind == DescribedKind.VALUE) {
                 if (ValueTrees.kindAt(access, at) != ValueTrees.NONE) {
-                    members.put(member.name, ValueTrees.read(access, at));
+                    members.set(position, ValueTrees.read(access, at));
                 }
             } else {
                 long count = member.isCounted() ? access.getLong(base + member.countOffset, 0) : 0;
                 Object read = readReached(member, access.getLong(at, 0), count, depth + 1);
                 if (read != null || member.kind == DescribedKind.TEXT) {
-                    members.put(member.name, read);
+                    members.set(position, read);
                 }
             }
         }
@@ -402,10 +408,10 @@ final class DescribedCall {
         final StructPlan plan;
         final long base;
         final Object value;
-        final String where;
+        final CallPath where;
         final int depth;
 
-        StructWrite(StructPlan plan, long base, Object value, String where, int depth) {
+        StructWrite(StructPlan plan, long base, Object value, CallPath where, int depth) {
             this.plan = plan;
             this.base = base;
             this.value = value;
@@ -418,10 +424,10 @@ final class DescribedCall {
     private static final class StructRead {
         final StructPlan plan;
         final long base;
-        final Map<String, Object> into;
+        final StructValues into;
         final int depth;
 
-        StructRead(StructPlan plan, long base, Map<String, Object> into, int depth) {
+        StructRead(StructPlan plan, long base, StructValues into, int depth) {
             this.plan = plan;
             this.base = base;
             this.into = into;

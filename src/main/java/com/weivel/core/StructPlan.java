@@ -1,7 +1,9 @@
 package com.weivel.core;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -15,6 +17,7 @@ final class StructPlan {
     final boolean leadingSize;
     MemberPlan[] visible = new MemberPlan[0];
     Set<String> visibleNames = Collections.emptySet();
+    private Map<String, Integer> positions = Collections.emptyMap();
 
     StructPlan(String name, long size, boolean leadingSize) {
         this.name = name;
@@ -24,10 +27,18 @@ final class StructPlan {
 
     void visible(MemberPlan[] members) {
         Set<String> names = new LinkedHashSet<>();
-        for (MemberPlan member : members) {
-            names.add(member.name);
+        Map<String, Integer> byName = new HashMap<>();
+        for (int position = 0; position < members.length; position++) {
+            names.add(members[position].name);
+            byName.put(members[position].name, position);
         }
         visible = members;
         visibleNames = Collections.unmodifiableSet(names);
+        positions = byName;
+    }
+
+    /** Where the member named {@code name} stands among the visible ones; null for a name the struct has not. */
+    Integer positionOf(Object name) {
+        return positions.get(name);
     }
 }
