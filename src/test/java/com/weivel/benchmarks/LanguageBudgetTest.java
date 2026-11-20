@@ -57,13 +57,10 @@ class LanguageBudgetTest {
     }
 
     @Test
-    void leavesTheDescribedCallUnmeasuredUntilALineBoundsItAndThenFailsAPlatformWithNone() {
-        LanguageBudget unbounded = LanguageBudget.parse(BUDGET);
+    void boundsTheDescribedCallWhereALineIsAndFailsABackendOrPlatformWithNone() {
         LanguageBudget linuxOnly = LanguageBudget.parse(BUDGET + "described-call-ffm linux 2\n");
 
-        assertFalse(unbounded.isBoundAnywhere(RatioGate.DESCRIBED_CALL));
-        assertTrue(unbounded.isBoundAnywhere(RatioGate.LIBRARY_CALL));
-        assertTrue(linuxOnly.isBoundAnywhere(RatioGate.DESCRIBED_CALL));
+        assertFalse(LanguageBudget.parse(BUDGET).ratioBound(RatioGate.DESCRIBED_CALL, "ffm", "linux").isPresent());
         assertEquals(4.0, linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "ffm", "linux").getAsDouble());
         assertFalse(linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "ffm", "windows").isPresent());
         assertFalse(linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "jna", "linux").isPresent());

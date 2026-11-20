@@ -107,9 +107,7 @@ class BenchmarksTest {
                             + "weivel_median_ns=%.2f echo_median_ns=%.2f bare_p99_ns=%.2f weivel_p99_ns=%.2f",
                     Summary.of(pair.roundRatios()).median(), pair.bare().median(), pair.weivel().median(),
                     measured.echo().median(), pair.bare().percentile99(), pair.weivel().percentile99()));
-            if (isGating() && !budget().isBoundAnywhere(RatioGate.DESCRIBED_CALL)) {
-                report(gate, repetition, "unbounded: the pinned kit bounds described-call nowhere yet");
-            } else if (isGating()) {
+            if (isGating()) {
                 assertPassed(Gates.ratio(budget(), RatioGate.DESCRIBED_CALL, binary.backend(), KitPlatform.current(),
                         pair.roundRatios()));
             }
