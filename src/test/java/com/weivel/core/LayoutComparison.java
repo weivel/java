@@ -7,8 +7,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Compares the layouts a package declares by hand with the ones the C compiler printed, by struct and field name. */
 public final class LayoutComparison {
@@ -22,6 +24,15 @@ public final class LayoutComparison {
         for (Layout layout : declared) {
             assertMatches(layout, printed);
         }
+    }
+
+    /** The names of the standard's structs the core declares by hand, those of a description and of a value tree. */
+    public static Set<String> descriptionStructNames() {
+        Set<String> names = new LinkedHashSet<>();
+        for (Layout layout : declaredStructLayouts(DescriptionLayouts.class)) {
+            names.add(layout.name().orElse(""));
+        }
+        return names;
     }
 
     /** Asserts that one declared struct layout has C's fields, offsets, sizes and size. */

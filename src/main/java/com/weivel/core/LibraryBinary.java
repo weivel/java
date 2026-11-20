@@ -19,12 +19,15 @@ public final class LibraryBinary implements AutoCloseable {
     private final OpenLibrary library;
     private final NativeFunction release;
     private final SpareBlock spare;
+    private final SpareArena arenas;
+    private final DescribedHandles handles = new DescribedHandles();
 
     private LibraryBinary(NativeAccess access, OpenLibrary library, NativeFunction release) {
         this.access = access;
         this.library = library;
         this.release = release;
         this.spare = new SpareBlock(access);
+        this.arenas = new SpareArena(access);
     }
 
     /**
@@ -90,6 +93,68 @@ public final class LibraryBinary implements AutoCloseable {
      *     whose {@code size} is below {@code 2 * sizeof(void *)}, the size and one pointer
      */
     public Answer<Object> definition(String symbol) {
+        Answer<Long> address = definitionAddress(symbol);
+        if (!(address instanceof Answer.Ok)) {
+            return Answer.retyped(address);
+        }
+        long definition = ((Answer.Ok<Long>) address).value();
+        return new Answer.Ok<>(access.addressed(definition, sizeAt(definition)));
+    }
+
+    /**
+     * Binds a definition from the description its library answers for it, as {@link #definition} answers the
+     * definition itself: the description is checked by {@code check} before anything else of it is read, every struct
+     * it names is laid out by this platform's own rules and held against it, and every operation is bound once here.
+     *
+     * @param definitionSymbol the definition's symbol
+     * @param descriptionSymbol the symbol answering its {@code weivel_standard_description}
+     * @param check the standard's description check, which its caller hands the layer
+     * @param gate who decides whether a call may still enter the binary, for every call the bound definition makes
+     * @return the bound definition; {@link Answer.Mistake} for anything {@link #definition} refuses, a description
+     *     symbol the library does not export or that answers NULL, a description the check refuses, one whose layout
+     *     disagrees with this platform's or that this binding cannot bind, and a backend that binds no description yet
+     */
+    public Answer<BoundDefinition> described(String definitionSymbol, String descriptionSymbol,
+                                             DescriptionCheck check, CallGate gate) {
+        Objects.requireNonNull(descriptionSymbol, "descriptionSymbol");
+        Objects.requireNonNull(check, "check");
+        Objects.requireNonNull(gate, "gate");
+        Answer<Long> address = definitionAddress(definitionSymbol);
+        if (!(address instanceof Answer.Ok)) {
+            return Answer.retyped(address);
+        }
+        long definition = ((Answer.Ok<Long>) address).value();
+        if (!library.has(descriptionSymbol)) {
+            return new Answer.Mistake<>("the library exports no function " + descriptionSymbol);
+        }
+        long description = library.function(descriptionSymbol, DEFINITION).call();
+        if (description == 0) {
+            return new Answer.Mistake<>("the description " + descriptionSymbol + " answered NULL");
+        }
+        Optional<String> refusal = check.refusalOf(access.addressed(description, sizeAt(description)));
+        if (refusal.isPresent()) {
+            return new Answer.Mistake<>("the standard's check refuses the description " + descriptionSymbol + ": "
+                    + refusal.get());
+        }
+        handles.gate(gate);
+        try {
+            return new Answer.Ok<>(DescribedBinder.bind(access, new DescriptionReader(access).read(description),
+                    definition, access.addressed(definition, sizeAt(definition)),
+                    new BoundOperation.Bound(access, arenas, handles, gate)));
+        } catch (DescriptionRefused | UnsupportedOperationException refused) {
+            return new Answer.Mistake<>(refused.getMessage());
+        }
+    }
+
+    /**
+     * Releases every handle a described definition of this binary answered and nobody released yet, through the
+     * release each one's description names; the binary must still be open.
+     */
+    public void releaseHandles() {
+        handles.releaseAll();
+    }
+
+    private Answer<Long> definitionAddress(String symbol) {
         Objects.requireNonNull(symbol, "symbol");
         if (!library.has(symbol)) {
             return new Answer.Mistake<>("the library exports no function " + symbol);
@@ -98,13 +163,17 @@ public final class LibraryBinary implements AutoCloseable {
         if (address == 0) {
             return new Answer.Mistake<>("the definition " + symbol + " answered NULL");
         }
-        long size = Integer.toUnsignedLong(access.getInt(address, 0));
+        long size = sizeAt(address);
         long smallest = 2 * access.addressSize();
         if (size < smallest) {
             return new Answer.Mistake<>("the definition " + symbol + " answered a struct of " + size
                     + " bytes, below the " + smallest + " of its size and one pointer");
         }
-        return new Answer.Ok<>(access.addressed(address, size));
+        return new Answer.Ok<>(address);
+    }
+
+    private long sizeAt(long address) {
+        return Integer.toUnsignedLong(access.getInt(address, 0));
     }
 
     /**
@@ -116,5 +185,6 @@ public final class LibraryBinary implements AutoCloseable {
     public void close() {
         library.close();
         spare.close();
+        arenas.close();
     }
 }

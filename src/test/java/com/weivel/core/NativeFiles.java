@@ -25,6 +25,14 @@ final class NativeFiles {
         return existing("weivel.test.coreLayouts");
     }
 
+    static Path standardLayouts() {
+        return existing("weivel.test.standardLayouts");
+    }
+
+    static Path describedBinary() {
+        return existing("weivel.test.describedBinary");
+    }
+
     static Path coreHeader() {
         return existing("weivel.test.coreHeader");
     }

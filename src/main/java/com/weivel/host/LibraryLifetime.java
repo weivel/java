@@ -1,5 +1,6 @@
 package com.weivel.host;
 
+import com.weivel.core.CallGate;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -31,6 +32,36 @@ final class LibraryLifetime {
             }
         } while (!state.compareAndSet(current, current + 1));
         return true;
+    }
+
+    /**
+     * Counts a call through a described definition in while anything still holds the binary open, closed to calls or
+     * not, since a holder keeps calling a definition it still holds after the unload; false once the binary closed.
+     */
+    boolean enterWhileHeld() {
+        long current;
+        do {
+            current = state.get();
+            if ((current & ~CLOSED_TO_CALLS) == 0) {
+                return false;
+            }
+        } while (!state.compareAndSet(current, current + 1));
+        return true;
+    }
+
+    /** The gate a described definition of the library calls through: {@link #enterWhileHeld} and {@link #leave}. */
+    CallGate whileHeld() {
+        return new CallGate() {
+            @Override
+            public boolean enter() {
+                return enterWhileHeld();
+            }
+
+            @Override
+            public void leave() {
+                LibraryLifetime.this.leave();
+            }
+        };
     }
 
     void leave() {

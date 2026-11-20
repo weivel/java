@@ -9,6 +9,8 @@ final class CountingAccess implements NativeAccess {
     private final NativeAccess backend = NativeBackends.current();
     private final AtomicLong allocations = new AtomicLong();
     private final AtomicLong frees = new AtomicLong();
+    private final AtomicLong layouts = new AtomicLong();
+    private final AtomicLong functions = new AtomicLong();
 
     long allocations() {
         return allocations.get();
@@ -16,6 +18,11 @@ final class CountingAccess implements NativeAccess {
 
     long frees() {
         return frees.get();
+    }
+
+    /** How many structs were laid out and how many native functions made, the work a bind does once. */
+    long boundWork() {
+        return layouts.get() + functions.get();
     }
 
     @Override
@@ -122,6 +129,13 @@ final class CountingAccess implements NativeAccess {
 
     @Override
     public NativeFunction function(long address, NativeSignature signature) {
+        functions.incrementAndGet();
         return backend.function(address, signature);
+    }
+
+    @Override
+    public FfiStruct.Placement layOut(FfiStruct struct) {
+        layouts.incrementAndGet();
+        return backend.layOut(struct);
     }
 }

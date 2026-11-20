@@ -87,4 +87,12 @@ interface NativeAccess {
 
     /** The function at a native address, as a function pointer a library answered, called as {@code signature} says. */
     NativeFunction function(long address, NativeSignature signature);
+
+    /**
+     * Lays a struct out by this backend's own rules for C structs, its embedded structs included, so the offsets a
+     * description states can be held against them.
+     *
+     * @throws UnsupportedOperationException saying so, on a backend that does not bind descriptions yet
+     */
+    FfiStruct.Placement layOut(FfiStruct struct);
 }

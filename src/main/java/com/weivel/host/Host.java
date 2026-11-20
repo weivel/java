@@ -15,6 +15,7 @@ import com.weivel.core.EdgeSource;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
 import com.weivel.core.LedgerRow;
+import com.weivel.core.DescriptionCheck;
 import com.weivel.core.LibraryBinary;
 import com.weivel.core.LibraryFunction;
 import com.weivel.core.Manifest;
@@ -85,6 +86,7 @@ public final class Host implements AutoCloseable {
     private final Optional<SystemScheduler> ownScheduler;
     private final Opening opening;
     private final Pauses pauses;
+    private final Optional<DescriptionCheck> descriptionCheck;
     private final ReentrantLock lock = new ReentrantLock();
     private final Map<Long, PluginRecord> plugins = new HashMap<>();
     private final List<PluginRecord> opened = new ArrayList<>();
@@ -105,13 +107,14 @@ public final class Host implements AutoCloseable {
     private boolean closed;
 
     private Host(Core core, CoreTimer timer, PluginContexts contexts, Optional<SystemScheduler> ownScheduler,
-                 Opening opening, Pauses pauses) {
+                 Opening opening, Pauses pauses, Optional<DescriptionCheck> descriptionCheck) {
         this.core = core;
         this.timer = timer;
         this.contexts = contexts;
         this.ownScheduler = ownScheduler;
         this.opening = opening;
         this.pauses = pauses;
+        this.descriptionCheck = descriptionCheck;
     }
 
     /**
@@ -146,7 +149,7 @@ public final class Host implements AutoCloseable {
         }
         CoreTimer timer = ((Answer.Ok<CoreTimer>) started).value();
         PluginContexts contexts = PluginContexts.create(core, new Handles(), timer, options.log());
-        return new Answer.Ok<>(new Host(core, timer, contexts, own, opening, pauses));
+        return new Answer.Ok<>(new Host(core, timer, contexts, own, opening, pauses, options.descriptionCheck()));
     }
 
     /**
@@ -309,7 +312,9 @@ public final class Host implements AutoCloseable {
     /**
      * Loads a C library and registers each service it declares under {@code WEIVEL_HOST}: a service of bytes
      * functions as a {@link LibraryService}, and a definition service as the language's own object carrying the
-     * address its definition's symbol answered, called once here, registered awaiting releases. An activation plan
+     * address its definition's symbol answered, called once here, registered awaiting releases; a definition whose
+     * service declares a description is registered as the {@link com.weivel.core.BoundDefinition} bound from it, once
+     * the description check the host was given passed it. An activation plan
      * counts each as provided by the host, and a consumer resolving one receives that very object. The host never
      * reads a declaration from a file: the standard does, or the caller builds it.
      *
@@ -324,7 +329,9 @@ public final class Host implements AutoCloseable {
      *     bytes function with no release symbol declared, an id or a function name listed twice, an id a registration
      *     under this host holds already (a plugin's, another live library's or the host's own), a path that names no
      *     library, a library lacking a declared symbol, or a definition answering NULL or a struct whose
-     *     {@code size} is below {@code 2 * sizeof(void *)}; the core's refusal of a registration;
+     *     {@code size} is below {@code 2 * sizeof(void *)}, a description declared on a host given no description
+     *     check, a description the check refuses, or one whose layout disagrees with this platform's or that the
+     *     binding cannot bind; the core's refusal of a registration;
      *     {@link Answer.Destroyed} once the destroy has been called, before any mistake is judged
      * @implNote An id is found registered already from the layer's own records, never by asking the core. One a
      *     plugin registers on another thread while the load runs can still be replaced by the library's registration,
@@ -412,7 +419,7 @@ public final class Host implements AutoCloseable {
         Map<String, Object> objects = new LinkedHashMap<>();
         for (LibraryDeclaration.Service service : declaration.services()) {
             Answer<?> built = LibraryChecks.isADefinition(service)
-                    ? binary.definition(service.functions().get(0).symbol())
+                    ? definition(binary, service, lifetime)
                     : bytesService(binary, service, lifetime);
             if (!(built instanceof Answer.Ok)) {
                 lifetime.closeToCalls();
@@ -420,7 +427,23 @@ public final class Host implements AutoCloseable {
             }
             objects.put(service.id(), ((Answer.Ok<?>) built).value());
         }
-        return new Answer.Ok<>(new LoadedLibrary(this, declaration, objects, lifetime));
+        return new Answer.Ok<>(new LoadedLibrary(this, declaration, objects, lifetime, binary::releaseHandles));
+    }
+
+    /**
+     * A definition service's object: the definition itself, or the definition bound from the description its service
+     * declares, after the standard's check the host was given.
+     */
+    private Answer<?> definition(LibraryBinary binary, LibraryDeclaration.Service service, LibraryLifetime lifetime) {
+        String symbol = service.functions().get(0).symbol();
+        if (!service.description().isPresent()) {
+            return binary.definition(symbol);
+        }
+        if (!descriptionCheck.isPresent()) {
+            return new Answer.Mistake<>("the service " + service.id() + " declares a description, and the host was "
+                    + "given no description check to run on it: create it with HostOptions.withDescriptionCheck");
+        }
+        return binary.described(symbol, service.description().get(), descriptionCheck.get(), lifetime.whileHeld());
     }
 
     private Answer<LibraryService> bytesService(LibraryBinary binary, LibraryDeclaration.Service service,
@@ -557,7 +580,7 @@ public final class Host implements AutoCloseable {
     }
 
     private void unloadTaken(LoadedLibrary library, List<HostService> registrations) {
-        library.lifetime().closeToCalls();
+        closeToCalls(library);
         pauses.beforeALibrarysServicesAreUnregistered(library.declaration().importName());
         try {
             for (HostService registration : registrations) {
@@ -565,6 +588,18 @@ public final class Host implements AutoCloseable {
             }
         } finally {
             dropLibrary(library);
+        }
+    }
+
+    /**
+     * Closes a library to calls, first releasing every handle its described definitions answered and nobody released,
+     * while the host's own hold still keeps the binary open.
+     */
+    private static void closeToCalls(LoadedLibrary library) {
+        try {
+            library.releaseHandles();
+        } finally {
+            library.lifetime().closeToCalls();
         }
     }
 
@@ -597,7 +632,7 @@ public final class Host implements AutoCloseable {
         LoadedLibrary next;
         while ((next = nextToUnload()) != null) {
             try {
-                next.lifetime().closeToCalls();
+                closeToCalls(next);
             } finally {
                 dropLibrary(next);
             }

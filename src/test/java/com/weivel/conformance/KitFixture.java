@@ -51,11 +51,16 @@ final class KitFixture {
 
     private static LayerDriver loadedDriver() {
         Answer<LayerDriver> loaded = LayerDriver.load(CORE, Paths.get(property("weivel.test.standardBinary")),
-                Paths.get(property("weivel.test.echoBinary")));
+                Paths.get(property("weivel.test.echoBinary")), Paths.get(property("weivel.test.describedBinary")));
         if (!(loaded instanceof Answer.Ok)) {
             throw new IllegalStateException("the driver did not load: " + loaded);
         }
         return ((Answer.Ok<LayerDriver>) loaded).value();
+    }
+
+    /** Whether the suite runs on JNA, which binds no description yet. */
+    static boolean onJna() {
+        return property("weivel.test.backend").equals("jna");
     }
 
     private static String property(String name) {

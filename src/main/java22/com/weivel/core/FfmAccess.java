@@ -2,6 +2,7 @@ package com.weivel.core;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_DOUBLE_UNALIGNED;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED;
@@ -13,6 +14,7 @@ import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.StructLayout;
 import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -21,6 +23,7 @@ import java.lang.ref.Reference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +50,9 @@ final class FfmAccess implements NativeAccess {
             SIZE_T));
     private static final MethodHandle FREE = standardFunction("free", FunctionDescriptor.ofVoid(JAVA_LONG));
     private static final int MOST_PARAMETERS = 7;
+    private static final MethodHandle BITS_TO_DOUBLE = doubleConversion("longBitsToDouble", double.class, long.class);
+    private static final MethodHandle DOUBLE_TO_BITS = doubleConversion("doubleToRawLongBits", long.class,
+            double.class);
 
     private FfmAccess() {
     }
@@ -207,6 +213,73 @@ final class FfmAccess implements NativeAccess {
                 FfmLibrary.descriptorOf(signature)), signature), signature.parameters().size());
     }
 
+    /**
+     * Lays the struct out as the foreign function API lays out a C struct: each field at the next offset its layout's
+     * alignment allows, the struct padded to its widest alignment, every scalar of the platform's own canonical
+     * layout, and {@link MemoryLayout#structLayout} itself refusing any field the padding left misaligned.
+     *
+     * @implNote The API takes a struct's padding as given rather than inserting it, so this is the rule a C compiler
+     *     and jextract follow, applied to the API's own layouts; a description is held against it field by field.
+     */
+    @Override
+    public FfiStruct.Placement layOut(FfiStruct struct) {
+        StructLayout layout = structLayoutOf(struct);
+        List<FfiStruct.Field> fields = struct.fields();
+        long[] offsets = new long[fields.size()];
+        long[] sizes = new long[fields.size()];
+        for (int index = 0; index < fields.size(); index++) {
+            MemoryLayout.PathElement field = MemoryLayout.PathElement.groupElement(fields.get(index).name());
+            offsets[index] = layout.byteOffset(field);
+            sizes[index] = layout.select(field).byteSize();
+        }
+        return new FfiStruct.Placement(layout.byteSize(), offsets, sizes);
+    }
+
+    private static StructLayout structLayoutOf(FfiStruct struct) {
+        List<MemoryLayout> members = new ArrayList<>();
+        long offset = 0;
+        long alignment = 1;
+        for (FfiStruct.Field field : struct.fields()) {
+            MemoryLayout member = fieldLayout(field).withName(field.name());
+            long padding = paddingBefore(offset, member.byteAlignment());
+            if (padding > 0) {
+                members.add(MemoryLayout.paddingLayout(padding));
+            }
+            members.add(member);
+            offset += padding + member.byteSize();
+            alignment = Math.max(alignment, member.byteAlignment());
+        }
+        long trailing = paddingBefore(offset, alignment);
+        if (trailing > 0) {
+            members.add(MemoryLayout.paddingLayout(trailing));
+        }
+        return MemoryLayout.structLayout(members.toArray(new MemoryLayout[0])).withName(struct.name());
+    }
+
+    private static long paddingBefore(long offset, long alignment) {
+        return (alignment - offset % alignment) % alignment;
+    }
+
+    private static MemoryLayout fieldLayout(FfiStruct.Field field) {
+        return switch (field.shape()) {
+            case U32 -> JAVA_INT;
+            case U64, I64 -> JAVA_LONG;
+            case F64 -> JAVA_DOUBLE;
+            case SIZE -> SIZE_T;
+            case POINTER -> ADDRESS;
+            case STRUCT -> structLayoutOf(field.embedded());
+        };
+    }
+
+    private static MethodHandle doubleConversion(String name, Class<?> returned, Class<?> parameter) {
+        try {
+            return MethodHandles.publicLookup().findStatic(Double.class, name, MethodType.methodType(returned,
+                    parameter));
+        } catch (ReflectiveOperationException missing) {
+            throw new IllegalStateException(missing);
+        }
+    }
+
     private static MethodHandle standardFunction(String symbol, FunctionDescriptor descriptor) {
         return LINKER.downcallHandle(LINKER.defaultLookup().find(symbol).get(), descriptor);
     }
@@ -266,11 +339,20 @@ final class FfmAccess implements NativeAccess {
 
         /**
          * Adapts a downcall handle to take every argument as a {@code long} and answer a {@code long}: an {@code int}
-         * narrowed, an {@code int} answer widened, a {@code void} answered 0.
+         * narrowed, an {@code int} answer widened, a {@code double} carried as its raw bits both ways, a {@code void}
+         * answered 0.
          */
         private static MethodHandle adapted(MethodHandle downcall, NativeSignature signature) {
             MethodHandle adapted = downcall;
             List<NativeType> parameters = signature.parameters();
+            for (int index = 0; index < parameters.size(); index++) {
+                if (parameters.get(index) == NativeType.DOUBLE) {
+                    adapted = MethodHandles.filterArguments(adapted, index, BITS_TO_DOUBLE);
+                }
+            }
+            if (signature.returned() == NativeType.DOUBLE) {
+                adapted = MethodHandles.filterReturnValue(adapted, DOUBLE_TO_BITS);
+            }
             Class<?>[] longs = new Class<?>[parameters.size()];
             Arrays.fill(longs, long.class);
             return MethodHandles.explicitCastArguments(adapted, MethodType.methodType(long.class, longs));
@@ -297,6 +379,7 @@ final class FfmAccess implements NativeAccess {
                 case INT -> JAVA_INT;
                 case LONG -> JAVA_LONG;
                 case ADDRESS -> JAVA_LONG;
+                case DOUBLE -> JAVA_DOUBLE;
                 case VOID -> throw new IllegalArgumentException("void is no parameter");
             };
         }

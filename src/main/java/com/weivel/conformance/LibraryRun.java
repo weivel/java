@@ -69,8 +69,6 @@ final class LibraryRun {
     private final Set<Integer> consumed = new HashSet<>();
     private final List<Object> unloads = new ArrayList<>();
     private Answer<LoadedLibrary> load;
-    private int failuresBeforeTheSteps;
-    private int logsBeforeTheSteps;
 
     private LibraryRun(DriverWorld world, Path echoBinary, Optional<LibraryDeclaration> declaration,
                        ForeignMemory memory) {
@@ -103,13 +101,14 @@ final class LibraryRun {
         return run.observers();
     }
 
-    private static LibraryDeclaration declarationOf(String where, Map<String, Object> declaration) {
+    /** A declaration as a vector writes it, a service's {@code description} symbol included where it declares one. */
+    static LibraryDeclaration declarationOf(String where, Map<String, Object> declaration) {
         String declarationWhere = where + "'s declaration";
         Shapes.refuseUnknownKeys(declarationWhere, declaration, "importName", "version", "release", "services");
         List<LibraryDeclaration.Service> services = new ArrayList<>();
         for (Map<String, Object> service : Shapes.objects(declarationWhere, declaration, "services")) {
             String serviceWhere = declarationWhere + "'s service";
-            Shapes.refuseUnknownKeys(serviceWhere, service, "id", "functions");
+            Shapes.refuseUnknownKeys(serviceWhere, service, "id", "description", "functions");
             List<LibraryDeclaration.Function> functions = new ArrayList<>();
             for (Map<String, Object> function : Shapes.objects(serviceWhere, service, "functions")) {
                 Shapes.refuseUnknownKeys(serviceWhere + "'s function", function, "name", "symbol", "kind");
@@ -117,7 +116,10 @@ final class LibraryRun {
                         Shapes.text(serviceWhere, function, "symbol"),
                         kindOf(serviceWhere, Shapes.text(serviceWhere, function, "kind")), 0));
             }
-            services.add(new LibraryDeclaration.Service(Shapes.text(serviceWhere, service, "id"), functions));
+            services.add(new LibraryDeclaration.Service(Shapes.text(serviceWhere, service, "id"), functions,
+                    service.containsKey("description")
+                            ? Optional.of(Shapes.text(serviceWhere, service, "description"))
+                            : Optional.<String>empty()));
         }
         return new LibraryDeclaration(Shapes.text(declarationWhere, declaration, "importName"),
                 Shapes.text(declarationWhere, declaration, "version"),
@@ -144,7 +146,7 @@ final class LibraryRun {
      * @implNote Read before the first step, while nothing held the binary, a closed suite load let the platform map
      * the layer's load at another address, and {@code sameObject} read false on a layer registering the right one.
      */
-    private static Map<String, Long> answeredAddresses(Path echoBinary, Optional<LibraryDeclaration> declaration) {
+    static Map<String, Long> answeredAddresses(Path echoBinary, Optional<LibraryDeclaration> declaration) {
         Map<String, String> symbols = new LinkedHashMap<>();
         for (LibraryDeclaration.Service service : servicesOf(declaration)) {
             LibraryDeclaration.Function first = service.functions().get(0);
@@ -197,8 +199,7 @@ final class LibraryRun {
         for (String plugin : opened) {
             world.context(plugin).listen(event -> heard(plugin, event));
         }
-        failuresBeforeTheSteps = world.failures().size();
-        logsBeforeTheSteps = world.logs().size();
+        world.startTheSteps();
     }
 
     private void registerInFlight(Manifest manifest) {
@@ -255,6 +256,8 @@ final class LibraryRun {
             load = world.host.loadLibrary(echoBinary, declaration.get());
             if (load instanceof Answer.Ok) {
                 answeredAddresses.putAll(answeredAddresses(echoBinary, declaration));
+            } else if (load instanceof Answer.Mistake) {
+                world.loadRefused(((Answer.Mistake<LoadedLibrary>) load).detail());
             }
         } else if (named.equals("unload")) {
             Shapes.refuseUnknownKeys(where, step, "unload");
@@ -507,21 +510,7 @@ final class LibraryRun {
         observers.put("revoked", expectation -> sortedRevocations());
         observers.put("unloads", expectation -> new ArrayList<>(unloads));
         observers.put("holdingsReleased", expectation -> new ArrayList<>(holdingsReleased));
-        observers.put("reported", expectation -> reported());
+        observers.put("reported", expectation -> world.reported());
         return observers;
-    }
-
-    /** What the error sink and the log received from the first step on, the sink's first. */
-    private List<Object> reported() {
-        List<Object> written = new ArrayList<>();
-        List<?> failures = world.failures();
-        List<?> logs = world.logs();
-        for (Object record : failures.subList(failuresBeforeTheSteps, failures.size())) {
-            written.add(String.valueOf(record));
-        }
-        for (Object record : logs.subList(logsBeforeTheSteps, logs.size())) {
-            written.add(String.valueOf(record));
-        }
-        return written;
     }
 }

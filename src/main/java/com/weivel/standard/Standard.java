@@ -2,6 +2,7 @@ package com.weivel.standard;
 
 import static com.weivel.standard.StandardReads.offset;
 
+import com.weivel.core.DescriptionCheck;
 import com.weivel.core.ForeignMemory;
 import com.weivel.core.Layout;
 import com.weivel.core.Manifest;
@@ -213,6 +214,48 @@ public final class Standard {
                 releaseBoth(StandardFunction.LIBRARY_RELEASE, library, StandardFunction.REFUSAL_RELEASE, refusal);
             }
         }
+    }
+
+    /**
+     * Checks that a service's description can be bound as it says, as {@code weivel_standard_description_check}
+     * does, reading it only.
+     *
+     * @param description the description a library answered, as a {@code MemorySegment} on the foreign function API
+     *     or a JNA {@code Pointer} on JNA, carrying its address
+     * @return OK; MALFORMED with the first fault's path, and MALFORMED_CALL at path "" for a description below its
+     *     first shape
+     */
+    public StandardAnswer<Void> checkDescription(Object description) {
+        long address = ForeignMemory.addressOf(Objects.requireNonNull(description, "description"));
+        try (ForeignMemory memory = binary.memory()) {
+            long refusal = sized(memory, StandardLayouts.REFUSAL);
+            try {
+                StandardStatus status = status(StandardFunction.DESCRIPTION_CHECK, address, refusal);
+                return StandardAnswer.of(status, Optional.<Void>empty(), StandardReads.refusal(memory, refusal));
+            } finally {
+                binary.release(StandardFunction.REFUSAL_RELEASE, refusal);
+            }
+        }
+    }
+
+    /**
+     * The check a host runs on every description, as {@code HostOptions.withDescriptionCheck} takes it, so a host binds
+     * descriptions without ever loading the standard itself.
+     *
+     * @return {@link #checkDescription} as a {@link DescriptionCheck}: empty on OK, otherwise the status, the fault's
+     *     path and its detail
+     */
+    public DescriptionCheck descriptionCheck() {
+        return description -> {
+            StandardAnswer<Void> checked = checkDescription(description);
+            if (checked.status() == StandardStatus.OK) {
+                return Optional.empty();
+            }
+            return Optional.of("status " + checked.status() + checked.refusal()
+                    .map(refusal -> " at " + (refusal.path().isEmpty() ? "the description" : refusal.path()) + ": "
+                            + refusal.detail())
+                    .orElse(""));
+        };
     }
 
     /**

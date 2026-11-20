@@ -2,6 +2,7 @@ package com.weivel.host;
 
 import com.weivel.context.HostLog;
 import com.weivel.core.CoreOptions;
+import com.weivel.core.DescriptionCheck;
 import com.weivel.core.ErrorSink;
 import com.weivel.timer.Scheduler;
 import com.weivel.timer.TimerObserver;
@@ -18,14 +19,16 @@ public final class HostOptions {
     private final HostLog log;
     private final ErrorSink sink;
     private final TimerObserver timerObserver;
+    private final Optional<DescriptionCheck> descriptionCheck;
 
     private HostOptions(CoreOptions core, Optional<Scheduler> scheduler, HostLog log, ErrorSink sink,
-                        TimerObserver timerObserver) {
+                        TimerObserver timerObserver, Optional<DescriptionCheck> descriptionCheck) {
         this.core = core;
         this.scheduler = scheduler;
         this.log = log;
         this.sink = sink;
         this.timerObserver = timerObserver;
+        this.descriptionCheck = descriptionCheck;
     }
 
     /**
@@ -36,7 +39,7 @@ public final class HostOptions {
      */
     public static HostOptions defaults() {
         return new HostOptions(CoreOptions.defaults(), Optional.<Scheduler>empty(), STANDARD_ERROR_LOG,
-                ErrorSink.STANDARD_ERROR, TimerObserver.NONE);
+                ErrorSink.STANDARD_ERROR, TimerObserver.NONE, Optional.<DescriptionCheck>empty());
     }
 
     /**
@@ -46,7 +49,8 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withCore(CoreOptions chosen) {
-        return new HostOptions(Objects.requireNonNull(chosen, "chosen"), scheduler, log, sink, timerObserver);
+        return new HostOptions(Objects.requireNonNull(chosen, "chosen"), scheduler, log, sink, timerObserver,
+                descriptionCheck);
     }
 
     /**
@@ -57,7 +61,7 @@ public final class HostOptions {
      */
     public HostOptions withScheduler(Scheduler chosen) {
         return new HostOptions(core, Optional.of(Objects.requireNonNull(chosen, "chosen")), log, sink,
-                timerObserver);
+                timerObserver, descriptionCheck);
     }
 
     /**
@@ -67,7 +71,8 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withLog(HostLog chosen) {
-        return new HostOptions(core, scheduler, Objects.requireNonNull(chosen, "chosen"), sink, timerObserver);
+        return new HostOptions(core, scheduler, Objects.requireNonNull(chosen, "chosen"), sink, timerObserver,
+                descriptionCheck);
     }
 
     /**
@@ -77,7 +82,8 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withErrorSink(ErrorSink chosen) {
-        return new HostOptions(core, scheduler, log, Objects.requireNonNull(chosen, "chosen"), timerObserver);
+        return new HostOptions(core, scheduler, log, Objects.requireNonNull(chosen, "chosen"), timerObserver,
+                descriptionCheck);
     }
 
     /**
@@ -87,7 +93,30 @@ public final class HostOptions {
      * @return the copy
      */
     public HostOptions withTimerObserver(TimerObserver chosen) {
-        return new HostOptions(core, scheduler, log, sink, Objects.requireNonNull(chosen, "chosen"));
+        return new HostOptions(core, scheduler, log, sink, Objects.requireNonNull(chosen, "chosen"),
+                descriptionCheck);
+    }
+
+    /**
+     * Gives the host the standard's description check, which it runs on every description a library declares before
+     * binding the definition it describes. The host never loads the standard itself, so a host given none refuses
+     * every library that declares a description.
+     *
+     * @param chosen the check, as {@code Standard.descriptionCheck()} answers it
+     * @return the copy
+     */
+    public HostOptions withDescriptionCheck(DescriptionCheck chosen) {
+        return new HostOptions(core, scheduler, log, sink, timerObserver,
+                Optional.of(Objects.requireNonNull(chosen, "chosen")));
+    }
+
+    /**
+     * Answers {@code descriptionCheck}.
+     *
+     * @return the standard's description check; empty when the host was given none
+     */
+    public Optional<DescriptionCheck> descriptionCheck() {
+        return descriptionCheck;
     }
 
     /**

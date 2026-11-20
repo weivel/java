@@ -126,16 +126,55 @@ finished. A host its caller gives no scheduler arms the language's own timer rat
 
 `loadLibrary` loads a C library from a `LibraryDeclaration` the caller builds or the standard reads, and the library's
 path, and registers each declared service under `WEIVEL_HOST`: a service of bytes functions as a `LibraryService`,
-whose functions a consumer calls by name as plain Java calls, and a definition service as the language's own object
-carrying the very address its definition's symbol answered, called once at the load: a `MemorySegment` of the
-struct's `size` bytes on the foreign function backend, a JNA `Pointer` on JNA. A definition answering NULL, or a
-struct whose `size` is below `2 * sizeof(void *)`, refuses the load as the caller's mistake before anything is
-registered. A definition is registered awaiting releases: `unloadLibrary` unregisters it at once, each holder hears a
-`PluginEvent.Revoked` that `awaitsRelease`, and lets go by handing that revocation to
+whose functions a consumer calls by name as plain Java calls, and a definition service that declares no
+description as the language's own object carrying the very address its definition's symbol answered, called once at
+the load: a `MemorySegment` of the struct's `size` bytes on the foreign function backend, a JNA `Pointer` on JNA. A
+definition answering NULL, or a struct whose `size` is below `2 * sizeof(void *)`, refuses the load as the caller's
+mistake before anything is registered.
+
+A definition whose service declares a `description` symbol is registered as a `BoundDefinition`, bound once at the
+load from the standard's `weivel_standard_description` its library answers, so a Java plugin calls a C library that
+ships no Java source:
+
+- **The check is the caller's.** The host never loads the standard, so it runs the check its caller hands it through
+  `HostOptions.withDescriptionCheck`, as `Standard.descriptionCheck()` answers it, before it reads anything else of a
+  description. A host given none refuses a described library as the caller's mistake, and so does a description the
+  check refuses, a description symbol missing or answering NULL, and a definition ending before its first shape.
+- **The layout is the platform's.** Every described struct, embedded structs and value nodes included, is laid out by
+  the native backend's own rules, and every member's offset and size and every struct's size must be what the
+  description states, or the load is refused naming the member. So is a kind above the last this binding knows, an
+  element a pointer or array cannot reach, a text answer naming a release, a parameter it cannot marshal, and a
+  refusal without `detail` and `fix` texts. The foreign function backend lays a struct out with `MemoryLayout`s; JNA
+  binds no description yet and refuses every one saying it is not yet bound on JNA.
+- **A call follows plans built at the load.** Each operation's native function, its signature from its parameters,
+  and the plan of every parameter and member are made once; the context and every function pointer are read once from
+  the definition's struct. An operation past the `size` its definition answered, or NULL there, is not offered, and
+  calling it throws `UnsupportedOperationException`. A call takes one arena its library keeps, writes every input
+  straight into it, makes the one native call, copies every answer out and releases each answer and the refusal
+  through the release its description names once it holds anything, before it answers; an arena that has grown to
+  hold a call allocates nothing.
+- **Values are Java's.** `BoundOperation.call` takes a `Map` keyed by input name. Every integer kind is a `Long`: a
+  U32 from 0 to 2^32 - 1, an I64 as itself, a U64 or size as its 64 bits, so one at or above 2^63 reads negative and
+  is read with `Long.toUnsignedString`. An F64 is a `Double`, a text a `String` or null, texts a `List`, bytes a
+  `byte[]`, a struct an unmodifiable `Map` in its members' order, an array a `List`, and a value tree the natural Java
+  value. A struct is a map rather than a generated accessor because no library ships source for its structs, so no
+  plugin could name an accessor's type anyway. A leading `size`, every count, the context and storage are the
+  binding's: writing one, an unknown name, a value outside its kind or a text holding a NUL throws
+  `IllegalArgumentException` before anything is called.
+- **Outcomes are values.** A call answers `DescribedAnswer.Answered` with each answer by name, a NULL pointer, a NULL
+  handle and a value of kind NONE left out; `None`; `Refused` with the provider's `detail` and `fix`; `Failed` with any
+  other status; or `Unloaded` once the binary has closed. A holder still holding a definition after the unload calls it
+  while the binary stays open, as a holding outlives the unload.
+- **A handle is an object.** A handle answer is a `DescribedHandle` its holder frees with `release()`, once; handed
+  back as an input it must be a live handle of the same library and type. The unload releases every handle still held,
+  while the binary is still open.
+
+A definition, described or not, is registered awaiting releases: `unloadLibrary` unregisters it at once, each holder
+hears a `PluginEvent.Revoked` that `awaitsRelease`, and lets go by handing that revocation to
 `PluginContext.releaseHolding` once it no longer uses the object, however it came to hold it, by a get, a want or a
 watch; the revocation names the registration, so an object registered under several is let go of under that one
-alone. A holder released, quarantined or forgotten has let go with it, and a call through a definition after its
-holder let go is undefined. The binary closes once the core's `WEIVEL_EVENT_HOLDINGS_RELEASED` of every definition
+alone. A holder released, quarantined or forgotten has let go with it, and a call through an undescribed definition
+after its holder let go is undefined, where a bound one answers `Unloaded` once its binary has closed. The binary closes once the core's `WEIVEL_EVENT_HOLDINGS_RELEASED` of every definition
 service has been dispatched and no bytes call runs in it, or, for a definition the destroy finds still registered,
 once the destroy has destroyed the core, since a collected language has no free of the host to wait for; every
 address a definition answered is invalid from then on. `LoadedLibrary.definitions()` hands those addresses to a
@@ -170,7 +209,9 @@ interfaces, a refusal thrown as a `ServiceRefusal`.
 `com.weivel.conformance` is the driver for the layer suite. `LayerDriver` reads the pinned kit's layer vectors
 through the standard's JSON reader, bound through `ForeignLibrary`, and writes no file; it builds each vector's plugins
 as manifest values and entries, drives them through the host's public surface on the real core, a `want` vector on a
-clock and scheduler of the suite's own and a `library` vector with the core's echo library, and answers a `LayerWitness` in the shape of the vector's `then`. The suite
+clock and scheduler of the suite's own, a `library` vector with the core's echo library and a `description` vector
+with the standard's described library, every host given the standard's description check, and answers a
+`LayerWitness` in the shape of the vector's `then`. The suite
 has one test per vector, its display name the vector's id, and a coverage test that discovers those names through
 the JUnit Platform Launcher and fails on a vector none names.
 
@@ -209,7 +250,8 @@ Java 25 toolchains when they are not installed; the native build needs CMake 3.1
 `PATH`. The build reads the core, the standard and the conformance kit from `siblings/core`, `siblings/standard` and
 `siblings/conformance` at the commits `repo.json` pins: CI checks them out there, and locally they are links or
 clones of those checkouts. Gradle builds the core's shared library, its echo test library and its `layouts` program, and
-the standard's shared library and `layouts` program, with CMake in Release, and the tests run against those binaries.
+the standard's shared library, its described test library `weivel_standard_described` and its `layouts` program, with
+CMake in Release, and the tests run against those binaries.
 Each native build declares every sibling's sources it compiles as its inputs, the core's among the standard's, so a
 change to either rebuilds it.
 

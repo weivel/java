@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** What the driver saw of one vector's run. */
 public final class LayerWitness {
@@ -14,12 +15,24 @@ public final class LayerWitness {
     private final Map<String, Object> observed;
     private final List<LogRecord> logs;
     private final List<Failure> failures;
+    private final Optional<String> loadMistake;
 
-    LayerWitness(String id, Map<String, Object> observed, List<LogRecord> logs, List<Failure> failures) {
+    LayerWitness(String id, Map<String, Object> observed, List<LogRecord> logs, List<Failure> failures,
+                 Optional<String> loadMistake) {
         this.id = Objects.requireNonNull(id, "id");
         this.observed = Collections.unmodifiableMap(observed);
         this.logs = Collections.unmodifiableList(new ArrayList<>(logs));
         this.failures = Collections.unmodifiableList(new ArrayList<>(failures));
+        this.loadMistake = loadMistake;
+    }
+
+    /**
+     * Answers {@code loadMistake}.
+     *
+     * @return why the host refused the vector's load as the caller's mistake; empty when it loaded, or made no load
+     */
+    public Optional<String> loadMistake() {
+        return loadMistake;
     }
 
     /**

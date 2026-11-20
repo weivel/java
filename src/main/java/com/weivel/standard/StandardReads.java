@@ -144,9 +144,13 @@ final class StandardReads {
         Layout layout = StandardLayouts.LIBRARY;
         long services = memory.getLong(library, offset(layout, "services"));
         long serviceCount = memory.getLong(library, offset(layout, "service_count"));
+        long descriptions = memory.getLong(library, offset(layout, "descriptions"));
         List<LibraryDeclaration.Service> declared = new ArrayList<>();
         for (long index = 0; index < serviceCount; index++) {
-            declared.add(service(memory, services + index * StandardLayouts.LIBRARY_SERVICE.byteSize()));
+            Optional<String> description = descriptions == 0 ? Optional.<String>empty()
+                    : optionalText(memory, memory.getLong(descriptions, index * WORD));
+            declared.add(service(memory, services + index * StandardLayouts.LIBRARY_SERVICE.byteSize(),
+                    description));
         }
         long release = memory.getLong(library, offset(layout, "release"));
         return new LibraryDeclaration(memory.readText(memory.getLong(library, offset(layout, "import_name"))),
@@ -154,7 +158,8 @@ final class StandardReads {
                 release == 0 ? Optional.<String>empty() : Optional.of(memory.readText(release)), declared);
     }
 
-    private static LibraryDeclaration.Service service(ForeignMemory memory, long service) {
+    private static LibraryDeclaration.Service service(ForeignMemory memory, long service,
+                                                      Optional<String> description) {
         Layout layout = StandardLayouts.LIBRARY_SERVICE;
         long functions = memory.getLong(service, offset(layout, "functions"));
         long functionCount = memory.getLong(service, offset(layout, "function_count"));
@@ -163,7 +168,7 @@ final class StandardReads {
             declared.add(function(memory, functions + index * StandardLayouts.LIBRARY_FUNCTION.byteSize()));
         }
         return new LibraryDeclaration.Service(memory.readText(memory.getLong(service, offset(layout, "id"))),
-                declared);
+                declared, description);
     }
 
     private static LibraryDeclaration.Function function(ForeignMemory memory, long function) {
