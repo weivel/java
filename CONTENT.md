@@ -230,7 +230,15 @@ pointer out of the struct once before its timed loop, from the one address it is
 platform's noise, as the same-language pair is. It is sampled apart from that pair, in 101 rounds after a discarded
 warm-up: on the foreign function backend 1 000 000 warm-up calls and batches of 500 000, on JNA 200 000 warm-up calls
 and batches of 20 000, so a batch lasts some milliseconds on each; a foreign function batch of 20 000 calls left two
-identical direct paths twice Linux's worst noise apart. Paths are
+identical direct paths twice Linux's worst noise apart.
+`described-call` is the standard's described mirror's `reflect`, a sample holding a text and a counted array of three
+texts in and its reflection out, called on the `BoundOperation` a consumer's resolved `BoundDefinition` answers, over
+the same operation through the mirror's own function pointers called bare on the same backend, the fixture's structs
+declared by hand in the benchmark alone, for 64-bit platforms. Both write the same input every call and read the
+answered label and tags back, release the reflection, and release the refusal only once it is filled, as the binding
+does. The echo library's bytes call through the host is sampled in the same rounds, and its time printed beside the
+pair's. It is sampled as `library-call` is. Until the pinned kit bounds it on some backend and platform its samples
+are printed unjudged; once it bounds it anywhere, a backend and platform with no line fails it. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,
 and judged on the median of the per-round ratios. A run with nothing measured fails, and so does a backend or platform
 the budget gives no line: no bound is never a pass. "Next to no overhead" is judged on the foreign function backend;

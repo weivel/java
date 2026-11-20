@@ -14,6 +14,7 @@ import com.weivel.handles.Handles;
 import com.weivel.timer.CoreTimer;
 import com.weivel.timer.Schedulers;
 import com.weivel.timer.SystemScheduler;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -90,12 +91,15 @@ final class CoreWorld implements AutoCloseable {
     }
 
     static Manifest manifest(String importName, List<String> provides, List<String> consumes) {
-        List<Manifest.ServiceOffer> offers = provides.isEmpty() ? Collections.<Manifest.ServiceOffer>emptyList()
-                : Collections.singletonList(new Manifest.ServiceOffer(provides.get(0),
-                        Collections.<NamedNumber>emptyList()));
-        List<Manifest.ServiceWant> wants = consumes.isEmpty() ? Collections.<Manifest.ServiceWant>emptyList()
-                : Collections.singletonList(new Manifest.ServiceWant(consumes.get(0), Optional.<String>empty(),
-                        Choice.NO, Choice.NO, Collections.<NamedNumber>emptyList()));
+        List<Manifest.ServiceOffer> offers = new ArrayList<>();
+        for (String provided : provides) {
+            offers.add(new Manifest.ServiceOffer(provided, Collections.<NamedNumber>emptyList()));
+        }
+        List<Manifest.ServiceWant> wants = new ArrayList<>();
+        for (String consumed : consumes) {
+            wants.add(new Manifest.ServiceWant(consumed, Optional.<String>empty(), Choice.NO, Choice.NO,
+                    Collections.<NamedNumber>emptyList()));
+        }
         return new Manifest(importName, 0, Optional.<String>empty(), Collections.<String>emptyList(),
                 Collections.<String>emptyList(), Collections.<String>emptyList(), offers, wants,
                 Collections.<String>emptyList(), Optional.<String>empty());

@@ -57,6 +57,21 @@ class LanguageBudgetTest {
     }
 
     @Test
+    void leavesTheDescribedCallUnmeasuredUntilALineBoundsItAndThenFailsAPlatformWithNone() {
+        LanguageBudget unbounded = LanguageBudget.parse(BUDGET);
+        LanguageBudget linuxOnly = LanguageBudget.parse(BUDGET + "described-call-ffm linux 2\n");
+
+        assertFalse(unbounded.isBoundAnywhere(RatioGate.DESCRIBED_CALL));
+        assertTrue(unbounded.isBoundAnywhere(RatioGate.LIBRARY_CALL));
+        assertTrue(linuxOnly.isBoundAnywhere(RatioGate.DESCRIBED_CALL));
+        assertEquals(4.0, linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "ffm", "linux").getAsDouble());
+        assertFalse(linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "ffm", "windows").isPresent());
+        assertFalse(linuxOnly.ratioBound(RatioGate.DESCRIBED_CALL, "jna", "linux").isPresent());
+        assertFalse(Gates.ratio(linuxOnly, RatioGate.DESCRIBED_CALL, "jna", Optional.of("linux"),
+                new double[] {1.0}).passed());
+    }
+
+    @Test
     void readsEachPlatformsNoiseAndNoiseMargin() {
         LanguageBudget budget = LanguageBudget.parse(BUDGET);
 
