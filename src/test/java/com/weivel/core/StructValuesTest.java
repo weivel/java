@@ -6,8 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -50,6 +55,30 @@ class StructValuesTest {
         names.next();
         assertThrows(UnsupportedOperationException.class, names::remove);
         assertEquals("here", values.get("label"));
+    }
+
+    @Test
+    void serializesAsAnUnmodifiableLinkedHashMapOfItsMembers() throws Exception {
+        StructValues inner = new StructValues(plan("x"));
+        inner.set(0, 3L);
+        StructValues values = new StructValues(plan("label", "best", "origin"));
+        values.set(0, null);
+        values.set(2, inner);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(values);
+        }
+
+        Object read;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            read = in.readObject();
+        }
+
+        Map<?, ?> copy = (Map<?, ?>) read;
+        assertEquals(values, copy);
+        assertEquals(Arrays.asList("label", "origin"), new ArrayList<>(copy.keySet()));
+        assertEquals(Collections.singletonMap("x", 3L), copy.get("origin"));
+        assertThrows(UnsupportedOperationException.class, () -> ((Map<Object, Object>) copy).put("x", 1));
     }
 
     private static StructPlan plan(String... names) {

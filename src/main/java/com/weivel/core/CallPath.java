@@ -39,17 +39,32 @@ final class CallPath {
         return new CallPath(this, "'s key ", key, NO_INDEX);
     }
 
+    /**
+     * The place spelled out, root first.
+     *
+     * @implNote The segments are gathered up the parent links into an array and appended in reverse rather than by
+     *     recursing: a refused place can hold thousands of segments, and a refusal must not overflow a small stack.
+     */
     @Override
     public String toString() {
+        int segments = 0;
+        for (CallPath at = this; at != null; at = at.parent) {
+            segments++;
+        }
+        CallPath[] rootFirst = new CallPath[segments];
+        CallPath at = this;
+        for (int position = segments - 1; position >= 0; position--) {
+            rootFirst[position] = at;
+            at = at.parent;
+        }
         StringBuilder spelled = new StringBuilder();
-        spell(spelled);
+        for (CallPath segment : rootFirst) {
+            segment.appendTo(spelled);
+        }
         return spelled.toString();
     }
 
-    private void spell(StringBuilder spelled) {
-        if (parent != null) {
-            parent.spell(spelled);
-        }
+    private void appendTo(StringBuilder spelled) {
         if (index == NO_INDEX) {
             spelled.append(joiner).append(text);
         } else {
