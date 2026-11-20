@@ -9,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.weivel.context.PluginEvent;
 import com.weivel.core.Answer;
@@ -42,7 +40,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aPluginIsHandedTheBoundDefinitionStandingForTheProvidersOwnStruct() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
             TestEntry consumer = activated(fixture, mirrorId(), walkerId());
@@ -69,19 +66,7 @@ class DescribedLibrariesTest {
     }
 
     @Test
-    void onJnaADescribedLibraryIsRefusedAsNotYetBound() throws Exception {
-        assumeTrue(DescribedFixture.onJna());
-        try (HostFixture fixture = checking()) {
-            Answer<LoadedLibrary> loaded = fixture.host.loadLibrary(DescribedFixture.binary(), declaration());
-
-            assertInstanceOf(Answer.Mistake.class, loaded);
-            assertTrue(((Answer.Mistake<?>) loaded).detail().contains("not yet bound on JNA"), loaded.toString());
-        }
-    }
-
-    @Test
     void sixtyFourBitIntegersCrossWholeBeyondTwoToTheFiftyThree() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
 
@@ -95,7 +80,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aValueItsKindDoesNotHoldIsRefusedBeforeAnythingIsCalled() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
             List<Long> before = releaseCounts(mirror, null);
@@ -117,7 +101,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aCountIsSetFromWhatItCountsAndNullBytesAreNone() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
 
@@ -128,7 +111,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aStructAnswersAsAnUnmodifiableMapInItsMembersOrder() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
             Map<String, Object> sample = new LinkedHashMap<>();
@@ -151,7 +133,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aValueTreeAnswersAsTheNaturalJavaValues() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
             Map<String, Object> held = new LinkedHashMap<>();
@@ -172,7 +153,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aNoneAndARefusalAreToldApartFromAnAnswer() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
 
@@ -188,7 +168,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aHandleIsReleasedOnceByItsHolderAndRefusedAsAnInputAfterwards() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             Map<String, BoundDefinition> bound = loaded(fixture);
             BoundDefinition walker = bound.get(walkerId());
@@ -208,7 +187,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aHandleStillHeldIsReleasedAtTheUnloadAndNotAgainAfterwards() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
             TestEntry consumer = activated(fixture, mirrorId(), walkerId());
@@ -230,7 +208,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aCallOnceTheBinaryClosedAnswersUnloadedAndCallsNothing() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
             BoundDefinition mirror = (BoundDefinition) library.definitions().get(mirrorId());
@@ -243,7 +220,6 @@ class DescribedLibrariesTest {
 
     @Test
     void anOperationTheProviderOffersIsAnsweredByItsOwnObjectWithNoLookup() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
             BoundOperation halve = mirror.operation("halve");
@@ -256,7 +232,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aListOrRecordIsWrittenAsOneSnapshotHoweverItsSizeDisagreesWithWhatItHolds() throws Exception {
-        assumeBound();
         try (HostFixture fixture = checking()) {
             BoundDefinition mirror = loaded(fixture).get(mirrorId());
             Map<String, Object> sample = new LinkedHashMap<>();
@@ -277,7 +252,6 @@ class DescribedLibrariesTest {
 
     @Test
     void aHandleAnsweredAfterTheUnloadIsReleasedWhenTheBinaryCloses() throws Exception {
-        assumeBound();
         LibraryPauses pauses = new LibraryPauses();
         try (HostFixture fixture = new HostFixture(pauses, DescribedFixture.standard().descriptionCheck())) {
             LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
@@ -294,10 +268,6 @@ class DescribedLibrariesTest {
             assertEquals(Collections.singletonList(declaration().importName()), pauses.closed());
             assertTrue(late.isReleased(), "the close releases a handle answered after the unload's");
         }
-    }
-
-    private static void assumeBound() {
-        assumeFalse(DescribedFixture.onJna(), "a described definition is not yet bound on JNA");
     }
 
     private static HostFixture checking() {

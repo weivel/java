@@ -144,8 +144,8 @@ ships no Java source:
   the native backend's own rules, and every member's offset and size and every struct's size must be what the
   description states, or the load is refused naming the member. So is a kind above the last this binding knows, an
   element a pointer or array cannot reach, a text answer naming a release, a parameter it cannot marshal, and a
-  refusal without `detail` and `fix` texts. The foreign function backend lays a struct out with `MemoryLayout`s; JNA
-  binds no description yet and refuses every one saying it is not yet bound on JNA.
+  refusal without `detail` and `fix` texts. The foreign function backend lays a struct out with `MemoryLayout`s, and JNA
+  with its `Structure`'s own field alignment rule, so both bind every description and refuse the same ones.
 - **A call follows plans built at the load.** Each operation's native function, its signature from its parameters,
   and the plan of every parameter and member are made once; the context and every function pointer are read once from
   the definition's struct. An operation past the `size` its definition answered, or NULL there, is not offered, and

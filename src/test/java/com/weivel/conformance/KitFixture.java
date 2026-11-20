@@ -58,11 +58,6 @@ final class KitFixture {
         return ((Answer.Ok<LayerDriver>) loaded).value();
     }
 
-    /** Whether the suite runs on JNA, which binds no description yet. */
-    static boolean onJna() {
-        return property("weivel.test.backend").equals("jna");
-    }
-
     private static String property(String name) {
         String value = System.getProperty(name);
         if (value == null) {

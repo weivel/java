@@ -37,7 +37,6 @@ final class DescribedLayouts {
     /**
      * @throws DescriptionRefused for a struct whose layout disagrees with the backend's, a kind this binding does not
      *     know, or an element it cannot reach
-     * @throws DescriptionsNotBound from a backend that lays out no described struct yet
      */
     DescribedLayouts(NativeAccess access, Description description) {
         this.access = access;

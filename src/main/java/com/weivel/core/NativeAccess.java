@@ -91,8 +91,6 @@ interface NativeAccess {
     /**
      * Lays a struct out by this backend's own rules for C structs, its embedded structs included, so the offsets a
      * description states can be held against them.
-     *
-     * @throws DescriptionsNotBound saying so, on a backend that does not bind descriptions yet
      */
     FfiStruct.Placement layOut(FfiStruct struct);
 }
