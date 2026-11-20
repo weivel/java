@@ -234,9 +234,9 @@ identical direct paths twice Linux's worst noise apart.
 `described-call` is the standard's described mirror's `reflect`, a sample holding a text and a counted array of three
 texts in and its reflection out, called on the `BoundOperation` a consumer's resolved `BoundDefinition` answers, over
 the same operation through the mirror's own function pointers called bare on the same backend, the fixture's structs
-declared by hand in the benchmark alone, for 64-bit platforms. Both write the same input every call and read the
-answered label and tags back, release the reflection, and release the refusal only once it is filled, as the binding
-does. The echo library's bytes call through the host is sampled in the same rounds, and its time printed beside the
+declared by hand in the benchmark alone, for 64-bit platforms. Both write the same input every call, copy every
+member the binding answers into Java values, release the reflection, and release the refusal only once it is filled,
+as the binding does; a test holds both to one reflection released a call, as the library counts its own releases. The echo library's bytes call through the host is sampled in the same rounds, and its time printed beside the
 pair's. It is sampled as `library-call` is. Until the pinned kit bounds it on some backend and platform its samples
 are printed unjudged; once it bounds it anywhere, a backend and platform with no line fails it. Paths are
 sampled side by side after a discarded warm-up, one batch of each a round with the first path moving on each round,

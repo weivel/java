@@ -38,8 +38,8 @@ import java.util.concurrent.TimeoutException;
  * The described call: the standard's described mirror's {@code reflect}, a sample holding a text and a counted array
  * of three texts in and its reflection out, called on the bound object a consumer resolved, as a plugin calls it,
  * over the same operation called through a binding of the fixture's structs written by hand on the same backend,
- * with the same input and its answer and refusal released the same way. The echo library's bytes call through the
- * host is sampled in the same rounds, for its time beside theirs.
+ * with the same input, every member of its answer copied out, and its answer and refusal released the same way. The
+ * echo library's bytes call through the host is sampled in the same rounds, for its time beside theirs.
  */
 public final class DescribedCallBenchmark {
     /** The library call's sampling, so the two ratio gates are measured alike. */
@@ -57,6 +57,9 @@ public final class DescribedCallBenchmark {
     private static final int ECHO_LENGTH = 16;
     private static final long ACTIVATION_SECONDS = 10;
 
+    /** The last answer of either path, so no copy of a member can be dropped as unread. */
+    private static Object kept;
+
     private DescribedCallBenchmark() {
     }
 
@@ -73,6 +76,42 @@ public final class DescribedCallBenchmark {
      */
     public static DescribedCallMeasurement measure(CoreBinary binary, Path standardLibrary, Path describedLibrary,
                                                    Path echoLibrary, Sampling sampling) {
+        return onThePaths(binary, standardLibrary, describedLibrary, echoLibrary,
+                (paths, mirror) -> DescribedCallMeasurement.of(Interleaved.sample(paths, sampling)));
+    }
+
+    /**
+     * What each path made the described library release over {@code calls} calls of it, counted by the library
+     * itself: reflections, then refusals, keyed by path.
+     */
+    static Map<String, long[]> releasesOver(CoreBinary binary, Path standardLibrary, Path describedLibrary,
+                                            Path echoLibrary, int calls) {
+        return onThePaths(binary, standardLibrary, describedLibrary, echoLibrary, (paths, mirror) -> {
+            Map<String, long[]> released = new LinkedHashMap<>();
+            for (Map.Entry<String, MeasuredPath> path : paths.entrySet()) {
+                long[] before = releases(mirror);
+                for (int call = 0; call < calls; call++) {
+                    path.getValue().call(call);
+                }
+                long[] after = releases(mirror);
+                released.put(path.getKey(), new long[] {after[0] - before[0], after[1] - before[1]});
+            }
+            return released;
+        });
+    }
+
+    private static long[] releases(BoundDefinition mirror) {
+        DescribedAnswer answer = mirror.call("count_releases", Collections.<String, Object>emptyMap());
+        Map<?, ?> counted = (Map<?, ?>) ((DescribedAnswer.Answered) answer).value();
+        return new long[] {(Long) counted.get("reflections"), (Long) counted.get("refusals")};
+    }
+
+    private interface PathsUse<T> {
+        T use(LinkedHashMap<String, MeasuredPath> paths, BoundDefinition mirror);
+    }
+
+    private static <T> T onThePaths(CoreBinary binary, Path standardLibrary, Path describedLibrary, Path echoLibrary,
+                                    PathsUse<T> use) {
         try (StandardBinary standard = CoreWorld.ok(StandardBinary.load(standardLibrary), "the standard's load")) {
             Host host = CoreWorld.ok(Host.create(binary, HostOptions.defaults().withLog(record -> { })
                     .withDescriptionCheck(Standard.of(standard).descriptionCheck())), "the host's creation");
@@ -80,23 +119,25 @@ public final class DescribedCallBenchmark {
                 PluginContext consumer = activatedConsumer(host, describedLibrary, echoLibrary);
                 LibraryService echo = (LibraryService) CoreWorld.ok(consumer.get(ECHO), "the consumer's get of "
                         + ECHO);
-                BoundOperation reflect = ((BoundDefinition) CoreWorld.ok(consumer.get(MIRROR),
-                        "the consumer's get of " + MIRROR)).operation(REFLECT);
+                BoundDefinition mirror = (BoundDefinition) CoreWorld.ok(consumer.get(MIRROR),
+                        "the consumer's get of " + MIRROR);
+                BoundOperation reflect = mirror.operation(REFLECT);
                 try (ForeignLibrary bareLibrary = CoreWorld.ok(ForeignLibrary.open(describedLibrary,
                         Collections.singletonList(MIRROR_SYMBOL)), "the bare open of " + describedLibrary);
                      ForeignMemory memory = ForeignMemory.open()) {
                     HandReflect hand = new HandReflect(memory, bareLibrary.function(MIRROR_SYMBOL,
                             NativeType.ADDRESS).call());
                     Map<String, Object> input = Collections.<String, Object>singletonMap("sample", sample());
-                    refuseUnlessReflected(boundReflected(reflect.call(input)), "bound");
-                    refuseUnlessReflected(hand.reflected(), "bare");
+                    refuseUnlessReflected(boundSample(reflect.call(input)), "bound");
+                    HandSample handed = hand.reflected();
+                    refuseUnlessReflected(Arrays.asList(handed.label, handed.tags), "bare");
                     byte[] echoInput = new byte[ECHO_LENGTH];
                     Arrays.fill(echoInput, (byte) 7);
                     LinkedHashMap<String, MeasuredPath> paths = new LinkedHashMap<>();
                     paths.put(PairMeasurement.BARE, hand::call);
                     paths.put(PairMeasurement.WEIVEL, call -> throughTheBinding(reflect, input));
                     paths.put(DescribedCallMeasurement.ECHO, call -> throughTheHost(echo, echoInput));
-                    return DescribedCallMeasurement.of(Interleaved.sample(paths, sampling));
+                    return use.use(paths, mirror);
                 }
             } finally {
                 destroyed(host);
@@ -146,6 +187,7 @@ public final class DescribedCallBenchmark {
         if (!(answer instanceof DescribedAnswer.Answered)) {
             throw new IllegalStateException("reflect through the bound object answered " + answer);
         }
+        kept = answer;
         return 1;
     }
 
@@ -158,7 +200,7 @@ public final class DescribedCallBenchmark {
         return ECHO_LENGTH;
     }
 
-    private static Reflected boundReflected(DescribedAnswer answer) {
+    private static List<Object> boundSample(DescribedAnswer answer) {
         if (!(answer instanceof DescribedAnswer.Answered)) {
             return null;
         }
@@ -167,14 +209,11 @@ public final class DescribedCallBenchmark {
         if (!(sample instanceof Map)) {
             return null;
         }
-        Object label = ((Map<?, ?>) sample).get("label");
-        Object tags = ((Map<?, ?>) sample).get("tags");
-        return new Reflected(label instanceof String ? (String) label : null,
-                tags instanceof List ? (List<?>) tags : null);
+        return Arrays.asList(((Map<?, ?>) sample).get("label"), ((Map<?, ?>) sample).get("tags"));
     }
 
-    private static void refuseUnlessReflected(Reflected reflected, String path) {
-        if (reflected == null || !LABEL.equals(reflected.label) || !TAGS.equals(reflected.tags)) {
+    private static void refuseUnlessReflected(List<Object> labelAndTags, String path) {
+        if (!Arrays.<Object>asList(LABEL, TAGS).equals(labelAndTags)) {
             throw new IllegalStateException("the " + path + " reflect did not answer the sample it was handed");
         }
     }
@@ -196,25 +235,49 @@ public final class DescribedCallBenchmark {
         }
     }
 
-    /** What {@code reflect} answered that both paths read back: the sample's text and counted array. */
-    private static final class Reflected {
+    /** The fixture's {@code described_point}, declared by hand. */
+    private static final class HandPoint {
         private final String label;
-        private final List<?> tags;
+        private final long x;
+        private final double y;
 
-        Reflected(String label, List<?> tags) {
+        HandPoint(String label, long x, double y) {
             this.label = label;
-            this.tags = tags;
+            this.x = x;
+            this.y = y;
         }
+    }
+
+    /** The fixture's {@code described_sample} as {@code reflect} answers it, every member the binding reads. */
+    private static final class HandSample {
+        private long shade;
+        private long tier;
+        private long flags;
+        private long big;
+        private long delta;
+        private double ratio;
+        private String label;
+        private List<String> tags;
+        private byte[] bytes;
+        private HandPoint origin;
+        private HandPoint best;
+        private List<HandPoint> points;
+        private List<Long> numbers;
+        private int heldKind;
+        private long extra;
+        private long values;
+        private long valueCount;
     }
 
     /**
      * {@code reflect} called through the mirror's own function pointers, its sample written by hand into blocks laid
-     * out once, its label and tags read back, its reflection released, and its refusal released only once filled, as
-     * the bound object releases both.
+     * out once, every member of its answer copied out, its reflection released, and its refusal released only once
+     * filled, as the bound object releases both.
      *
      * @implNote The fixture's types are declared by hand here alone, since the control is a binding written by hand,
      *     and only for a 64-bit platform, the only kind the kit's runners are. The sample, reflection and refusal are
      *     one block each, kept across calls as a binding written for one operation keeps them; the releases empty them.
+     *     The benchmark hands no value, so a value member answered holding one is refused rather than read.
      */
     private static final class HandReflect {
         private static final int WORD = 8;
@@ -223,12 +286,34 @@ public final class DescribedCallBenchmark {
         private static final int MIRROR_RELEASE_REFLECTION = 13;
         private static final int MIRROR_RELEASE_REFUSAL = 15;
         private static final int SAMPLE_SIZE = 224;
+        private static final int SAMPLE_SHADE = 4;
+        private static final int SAMPLE_TIER = 8;
+        private static final int SAMPLE_FLAGS = 12;
+        private static final int SAMPLE_BIG = 16;
+        private static final int SAMPLE_DELTA = 24;
+        private static final int SAMPLE_RATIO = 32;
         private static final int SAMPLE_LABEL = 40;
         private static final int SAMPLE_TAGS = 48;
         private static final int SAMPLE_TAG_COUNT = 56;
+        private static final int SAMPLE_BYTES = 64;
+        private static final int SAMPLE_LENGTH = 72;
+        private static final int SAMPLE_ORIGIN = 80;
+        private static final int SAMPLE_BEST = 104;
+        private static final int SAMPLE_POINTS = 112;
+        private static final int SAMPLE_POINT_COUNT = 120;
+        private static final int SAMPLE_NUMBERS = 128;
+        private static final int SAMPLE_NUMBER_COUNT = 136;
+        private static final int SAMPLE_HELD = 144;
+        private static final int SAMPLE_EXTRA = 200;
+        private static final int SAMPLE_VALUES = 208;
+        private static final int SAMPLE_VALUE_COUNT = 216;
+        private static final int POINT_SIZE = 24;
+        private static final int POINT_X = 8;
+        private static final int POINT_Y = 16;
         private static final int REFLECTION_SIZE = 240;
         private static final int REFLECTION_SAMPLE = 8;
         private static final int REFUSAL_SIZE = 32;
+        private static final int VALUE_NONE = 0;
 
         private final ForeignMemory memory;
         private final long context;
@@ -270,11 +355,12 @@ public final class DescribedCallBenchmark {
         }
 
         long call(int index) {
-            Reflected reflected = reflected();
-            return reflected.tags.size();
+            HandSample answered = reflected();
+            kept = answered;
+            return answered.tags.size();
         }
 
-        Reflected reflected() {
+        HandSample reflected() {
             written();
             int status = (int) reflect.call(context, sample, reflection, refusal);
             try {
@@ -285,22 +371,89 @@ public final class DescribedCallBenchmark {
                     throw new IllegalStateException("the bare reflect answered a sample of another size than the "
                             + SAMPLE_SIZE + " bytes declared by hand");
                 }
-                long answered = reflection + REFLECTION_SAMPLE;
-                long text = memory.getLong(answered, SAMPLE_LABEL);
-                long texts = memory.getLong(answered, SAMPLE_TAGS);
-                int count = (int) memory.getLong(answered, SAMPLE_TAG_COUNT);
-                List<String> read = new ArrayList<>(count);
-                for (int tag = 0; tag < count; tag++) {
-                    long element = memory.getLong(texts, (long) tag * WORD);
-                    read.add(element == 0 ? null : memory.readText(element));
-                }
-                return new Reflected(text == 0 ? null : memory.readText(text), read);
+                return read(reflection + REFLECTION_SAMPLE);
             } finally {
                 releaseReflection.call(context, reflection);
                 if (status == CoreConstants.STATUS_REFUSED) {
                     releaseRefusal.call(context, refusal);
                 }
             }
+        }
+
+        private HandSample read(long answered) {
+            HandSample read = new HandSample();
+            read.shade = unsigned(memory.getInt(answered, SAMPLE_SHADE));
+            read.tier = unsigned(memory.getInt(answered, SAMPLE_TIER));
+            read.flags = unsigned(memory.getInt(answered, SAMPLE_FLAGS));
+            read.big = memory.getLong(answered, SAMPLE_BIG);
+            read.delta = memory.getLong(answered, SAMPLE_DELTA);
+            read.ratio = Double.longBitsToDouble(memory.getLong(answered, SAMPLE_RATIO));
+            read.label = text(memory.getLong(answered, SAMPLE_LABEL));
+            read.tags = texts(memory.getLong(answered, SAMPLE_TAGS), memory.getLong(answered, SAMPLE_TAG_COUNT));
+            long bytes = memory.getLong(answered, SAMPLE_BYTES);
+            long length = memory.getLong(answered, SAMPLE_LENGTH);
+            read.bytes = bytes == 0 || length == 0 ? new byte[0] : memory.readBytes(bytes, 0, (int) length);
+            read.origin = point(answered + SAMPLE_ORIGIN);
+            long best = memory.getLong(answered, SAMPLE_BEST);
+            read.best = best == 0 ? null : point(best);
+            read.points = points(memory.getLong(answered, SAMPLE_POINTS),
+                    memory.getLong(answered, SAMPLE_POINT_COUNT));
+            read.numbers = numbers(memory.getLong(answered, SAMPLE_NUMBERS),
+                    memory.getLong(answered, SAMPLE_NUMBER_COUNT));
+            read.heldKind = memory.getInt(answered, SAMPLE_HELD);
+            read.extra = memory.getLong(answered, SAMPLE_EXTRA);
+            read.values = memory.getLong(answered, SAMPLE_VALUES);
+            read.valueCount = memory.getLong(answered, SAMPLE_VALUE_COUNT);
+            if (read.heldKind != VALUE_NONE || read.extra != 0 || read.values != 0 || read.valueCount != 0) {
+                throw new IllegalStateException("the bare reflect answered a value, which this benchmark never hands");
+            }
+            return read;
+        }
+
+        private HandPoint point(long at) {
+            return new HandPoint(text(memory.getLong(at, 0)), memory.getLong(at, POINT_X),
+                    Double.longBitsToDouble(memory.getLong(at, POINT_Y)));
+        }
+
+        private List<String> texts(long items, long count) {
+            if (items == 0 || count == 0) {
+                return Collections.emptyList();
+            }
+            List<String> read = new ArrayList<>((int) count);
+            for (int index = 0; index < count; index++) {
+                read.add(text(memory.getLong(items, (long) index * WORD)));
+            }
+            return read;
+        }
+
+        private List<HandPoint> points(long items, long count) {
+            if (items == 0 || count == 0) {
+                return Collections.emptyList();
+            }
+            List<HandPoint> read = new ArrayList<>((int) count);
+            for (int index = 0; index < count; index++) {
+                read.add(point(items + (long) index * POINT_SIZE));
+            }
+            return read;
+        }
+
+        private List<Long> numbers(long items, long count) {
+            if (items == 0 || count == 0) {
+                return Collections.emptyList();
+            }
+            List<Long> read = new ArrayList<>((int) count);
+            for (int index = 0; index < count; index++) {
+                read.add(unsigned(memory.getInt(items, (long) index * Integer.BYTES)));
+            }
+            return read;
+        }
+
+        private String text(long address) {
+            return address == 0 ? null : memory.readText(address);
+        }
+
+        private static long unsigned(int word) {
+            return word & 0xFFFF_FFFFL;
         }
 
         private void written() {
