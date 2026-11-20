@@ -118,7 +118,7 @@ final class DescribedSteps {
                 case DescribedKind.VALUE:
                     long root = block + ValueTrees.TREE_ROOT;
                     if (ValueTrees.kindAt(access, root) != ValueTrees.NONE) {
-                        answers.put(plan.name, ValueTrees.read(access, root, 0));
+                        answers.put(plan.name, ValueTrees.read(access, root));
                     }
                     return;
                 default:

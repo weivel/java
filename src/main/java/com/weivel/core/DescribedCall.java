@@ -1,7 +1,9 @@
 package com.weivel.core;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,10 @@ import java.util.Map;
  * call took: every input written straight into native memory as plain stores, and every answer copied out into Java
  * values. A member a caller leaves out stays at its zero. Structs nest no deeper than a value tree may, so a cycle of
  * pointers, in a caller's maps or a provider's answer, is refused rather than followed for ever.
+ *
+ * @implNote Both walks keep their own stack of structs still to write or read rather than recursing, so the depth
+ *     limit is reached on any thread's stack, however small: a recursive walk overflowed a Linux runner's default
+ *     stack before it reached the limit.
  */
 final class DescribedCall {
     private static final long WORD = Layout.ADDRESS.byteSize();
@@ -20,6 +26,8 @@ final class DescribedCall {
     private final DescribedHandles holdings;
     private final List<DescribedHandle> made = new ArrayList<>();
     private final List<DescribedHandle> used = new ArrayList<>();
+    private final Deque<StructWrite> writes = new ArrayDeque<>();
+    private final Deque<StructRead> reads = new ArrayDeque<>();
     /** How many elements the last {@link #reached} wrote, for the count beside them. */
     long counted;
 
@@ -33,12 +41,32 @@ final class DescribedCall {
         return arena.allocateAddress(size);
     }
 
-    /** Lets go of every handle this call handed its provider, once the native call has returned. */
+    /**
+     * Lets go of every handle this call handed its provider, once the native call has returned: each one's count is
+     * dropped even when freeing another throws, and the first such failure is thrown once all are dropped.
+     */
     void leaveUsedHandles() {
-        for (DescribedHandle handle : used) {
-            handle.leave();
+        RuntimeException firstFailure = null;
+        Error firstError = null;
+        try {
+            for (DescribedHandle handle : used) {
+                try {
+                    handle.leave();
+                } catch (RuntimeException failed) {
+                    firstFailure = firstFailure == null ? failed : firstFailure;
+                } catch (Error failed) {
+                    firstError = firstError == null ? failed : firstError;
+                }
+            }
+        } finally {
+            used.clear();
         }
-        used.clear();
+        if (firstError != null) {
+            throw firstError;
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
     }
 
     /** Releases every handle this call wrapped, for an answer that failed to be copied out whole. */
@@ -55,26 +83,52 @@ final class DescribedCall {
      *     write, a value its member's kind does not hold, or structs nested deeper than a value tree may be
      */
     void writeStruct(StructPlan plan, long base, Object value, String where) {
-        writeStruct(plan, base, value, where, 0);
+        writes.push(new StructWrite(plan, base, value, where, 0));
+        drainWrites();
     }
 
-    private void writeStruct(StructPlan plan, long base, Object value, String where, int depth) {
-        if (depth > ValueTrees.DEPTH_LIMIT) {
-            throw new IllegalArgumentException(where + " nests structs deeper than " + ValueTrees.DEPTH_LIMIT
+    /**
+     * The address of what a pointer-sized member or parameter reaches, written into the arena; NULL for a text,
+     * pointer or handle handed as null, and for an empty array, texts or bytes, whose count {@link #counted} then holds
+     * as 0. A handle handed in is in use until {@link #leaveUsedHandles}.
+     */
+    long reached(MemberPlan plan, Object value, String where) {
+        long address = reached(plan, value, where, 0);
+        long count = counted;
+        drainWrites();
+        counted = count;
+        return address;
+    }
+
+    private void drainWrites() {
+        try {
+            while (!writes.isEmpty()) {
+                writeOne(writes.pop());
+            }
+        } finally {
+            writes.clear();
+        }
+    }
+
+    private void writeOne(StructWrite next) {
+        if (next.depth > ValueTrees.DEPTH_LIMIT) {
+            throw new IllegalArgumentException(next.where + " nests structs deeper than " + ValueTrees.DEPTH_LIMIT
                     + " levels, which no call hands on");
         }
+        StructPlan plan = next.plan;
         if (plan.leadingSize) {
-            access.putInt(base, 0, (int) plan.size);
+            access.putInt(next.base, 0, (int) plan.size);
         }
-        if (!(value instanceof Map)) {
-            throw new IllegalArgumentException(where + " is a " + plan.name + ", written as a Map keyed by member "
-                    + "name, not " + Scalars.described(value));
+        if (!(next.value instanceof Map)) {
+            throw new IllegalArgumentException(next.where + " is a " + plan.name + ", written as a Map keyed by "
+                    + "member name, not " + Scalars.described(next.value));
         }
-        Map<?, ?> members = (Map<?, ?>) value;
-        refuseUnknownNames(members, plan, where);
+        Map<?, ?> members = (Map<?, ?>) next.value;
+        refuseUnknownNames(members, plan, next.where);
         for (MemberPlan member : plan.visible) {
             if (members.containsKey(member.name)) {
-                writeMember(member, base, members.get(member.name), where + "." + member.name, depth);
+                writeMember(member, next.base, members.get(member.name), next.where + "." + member.name,
+                        next.depth);
             }
         }
     }
@@ -96,24 +150,15 @@ final class DescribedCall {
         if (DescribedLayouts.isScalar(member.kind)) {
             Scalars.write(access, member.kind, at, Scalars.bits(member.kind, value, where));
         } else if (member.kind == DescribedKind.STRUCT) {
-            writeStruct(member.target, at, value, where, depth + 1);
+            writes.push(new StructWrite(member.target, at, value, where, depth + 1));
         } else if (member.kind == DescribedKind.VALUE) {
-            ValueTrees.write(access, arena, at, value, where, 0);
+            ValueTrees.write(access, arena, at, value, where);
         } else {
             access.putLong(at, 0, reached(member, value, where, depth + 1));
             if (member.isCounted()) {
                 access.putLong(base + member.countOffset, 0, counted);
             }
         }
-    }
-
-    /**
-     * The address of what a pointer-sized member or parameter reaches, written into the arena; NULL for a text,
-     * pointer or handle handed as null, and for an empty array, texts or bytes, whose count {@link #counted} then holds
-     * as 0. A handle handed in is in use until {@link #leaveUsedHandles}.
-     */
-    long reached(MemberPlan plan, Object value, String where) {
-        return reached(plan, value, where, 0);
     }
 
     private long reached(MemberPlan plan, Object value, String where, int depth) {
@@ -207,9 +252,9 @@ final class DescribedCall {
 
     private void writeElement(MemberPlan plan, long address, Object value, String where, int depth) {
         if (plan.element == DescribedKind.STRUCT) {
-            writeStruct(plan.target, address, value, where, depth);
+            writes.push(new StructWrite(plan.target, address, value, where, depth));
         } else if (plan.element == DescribedKind.VALUE) {
-            ValueTrees.write(access, arena, address, value, where, 0);
+            ValueTrees.write(access, arena, address, value, where);
         } else {
             Scalars.write(access, plan.element, address, Scalars.bits(plan.element, value, where));
         }
@@ -234,38 +279,9 @@ final class DescribedCall {
      * @throws IllegalStateException for structs nested deeper than a value tree may be, as a cycle of pointers is
      */
     Map<String, Object> readStruct(StructPlan plan, long base) {
-        return readStruct(plan, base, 0);
-    }
-
-    private Map<String, Object> readStruct(StructPlan plan, long base, int depth) {
-        if (depth > ValueTrees.DEPTH_LIMIT) {
-            throw new IllegalStateException("the provider answered structs nested deeper than "
-                    + ValueTrees.DEPTH_LIMIT + " levels");
-        }
-        Map<String, Object> members = new LinkedHashMap<>();
-        for (MemberPlan member : plan.visible) {
-            readMember(members, member, base, depth);
-        }
-        return Collections.unmodifiableMap(members);
-    }
-
-    private void readMember(Map<String, Object> members, MemberPlan member, long base, int depth) {
-        long at = base + member.offset;
-        if (DescribedLayouts.isScalar(member.kind)) {
-            members.put(member.name, Scalars.read(access, member.kind, at));
-        } else if (member.kind == DescribedKind.STRUCT) {
-            members.put(member.name, readStruct(member.target, at, depth + 1));
-        } else if (member.kind == DescribedKind.VALUE) {
-            if (ValueTrees.kindAt(access, at) != ValueTrees.NONE) {
-                members.put(member.name, ValueTrees.read(access, at, 0));
-            }
-        } else {
-            long count = member.isCounted() ? access.getLong(base + member.countOffset, 0) : 0;
-            Object read = readReached(member, access.getLong(at, 0), count, depth + 1);
-            if (read != null || member.kind == DescribedKind.TEXT) {
-                members.put(member.name, read);
-            }
-        }
+        Map<String, Object> struct = startStruct(plan, base, 0);
+        drainReads();
+        return struct;
     }
 
     /**
@@ -273,7 +289,52 @@ final class DescribedCall {
      * empty list or array for a NULL or empty counted one.
      */
     Object readReached(MemberPlan plan, long pointer, long count) {
-        return readReached(plan, pointer, count, 0);
+        Object read = readReached(plan, pointer, count, 0);
+        drainReads();
+        return read;
+    }
+
+    private void drainReads() {
+        try {
+            while (!reads.isEmpty()) {
+                StructRead next = reads.pop();
+                readMembers(next.plan, next.base, next.into, next.depth);
+            }
+        } finally {
+            reads.clear();
+        }
+    }
+
+    /** A struct's map, its members left to be read into it, which it shows as they arrive. */
+    private Map<String, Object> startStruct(StructPlan plan, long base, int depth) {
+        if (depth > ValueTrees.DEPTH_LIMIT) {
+            throw new IllegalStateException("the provider answered structs nested deeper than "
+                    + ValueTrees.DEPTH_LIMIT + " levels");
+        }
+        Map<String, Object> members = new LinkedHashMap<>();
+        reads.push(new StructRead(plan, base, members, depth));
+        return Collections.unmodifiableMap(members);
+    }
+
+    private void readMembers(StructPlan plan, long base, Map<String, Object> members, int depth) {
+        for (MemberPlan member : plan.visible) {
+            long at = base + member.offset;
+            if (DescribedLayouts.isScalar(member.kind)) {
+                members.put(member.name, Scalars.read(access, member.kind, at));
+            } else if (member.kind == DescribedKind.STRUCT) {
+                members.put(member.name, startStruct(member.target, at, depth + 1));
+            } else if (member.kind == DescribedKind.VALUE) {
+                if (ValueTrees.kindAt(access, at) != ValueTrees.NONE) {
+                    members.put(member.name, ValueTrees.read(access, at));
+                }
+            } else {
+                long count = member.isCounted() ? access.getLong(base + member.countOffset, 0) : 0;
+                Object read = readReached(member, access.getLong(at, 0), count, depth + 1);
+                if (read != null || member.kind == DescribedKind.TEXT) {
+                    members.put(member.name, read);
+                }
+            }
+        }
     }
 
     private Object readReached(MemberPlan plan, long pointer, long count, int depth) {
@@ -328,11 +389,43 @@ final class DescribedCall {
 
     private Object readElement(MemberPlan plan, long address, int depth) {
         if (plan.element == DescribedKind.STRUCT) {
-            return readStruct(plan.target, address, depth);
+            return startStruct(plan.target, address, depth);
         }
         if (plan.element == DescribedKind.VALUE) {
-            return ValueTrees.read(access, address, 0);
+            return ValueTrees.read(access, address);
         }
         return Scalars.read(access, plan.element, address);
+    }
+
+    /** A struct still to write, at its depth. */
+    private static final class StructWrite {
+        final StructPlan plan;
+        final long base;
+        final Object value;
+        final String where;
+        final int depth;
+
+        StructWrite(StructPlan plan, long base, Object value, String where, int depth) {
+            this.plan = plan;
+            this.base = base;
+            this.value = value;
+            this.where = where;
+            this.depth = depth;
+        }
+    }
+
+    /** A struct still to read, into the map already standing for it. */
+    private static final class StructRead {
+        final StructPlan plan;
+        final long base;
+        final Map<String, Object> into;
+        final int depth;
+
+        StructRead(StructPlan plan, long base, Map<String, Object> into, int depth) {
+            this.plan = plan;
+            this.base = base;
+            this.into = into;
+            this.depth = depth;
+        }
     }
 }
