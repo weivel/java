@@ -281,6 +281,8 @@ class DescribedBindingTest {
                 Arrays.asList(next, number))), Collections.<Description.Enumeration>emptyList(),
                 Collections.<Description.Operation>emptyList());
         StructPlan link = new DescribedLayouts(access, chain).plan(Optional.of("link"), "the test");
+        StructPlan branch = branchPlan(access);
+        Map<String, Object> deepest = deepestBranch();
         List<Throwable> refused = new ArrayList<>();
         Thread small = new Thread(null, () -> {
             try (NativeArena arena = new NativeArena(access)) {
@@ -301,19 +303,54 @@ class DescribedBindingTest {
                 refused.add(thrown(() -> ValueTrees.read(access, value)));
                 refused.add(thrown(() -> ValueTrees.write(access, arena, arena.allocateAddress(ValueTrees.NODE_SIZE),
                         nested, "the list")));
+                refused.add(thrown(() -> call.writeStruct(branch, arena.allocateAddress(branch.size), deepest,
+                        "the branch")));
             }
         }, "small stack", 256 * 1024);
         small.start();
         small.join(TimeUnit.SECONDS.toMillis(30));
 
-        assertEquals(4, refused.size(), String.valueOf(refused));
+        assertEquals(5, refused.size(), String.valueOf(refused));
         assertInstanceOf(IllegalStateException.class, refused.get(0));
         assertInstanceOf(IllegalArgumentException.class, refused.get(1));
         assertInstanceOf(IllegalStateException.class, refused.get(2));
         assertInstanceOf(IllegalArgumentException.class, refused.get(3));
+        assertInstanceOf(IllegalArgumentException.class, refused.get(4));
         for (Throwable each : refused) {
             assertTrue(each.getMessage().contains("deeper than " + ValueTrees.DEPTH_LIMIT), each.toString());
         }
+        assertTrue(refused.get(4).getMessage().startsWith("the branch.items[0].items[0]."), "the path is spelled");
+    }
+
+    /** A struct holding a counted array of itself and a value: {@code items}, {@code item_count}, {@code value}. */
+    private static StructPlan branchPlan(NativeAccess access) {
+        long valueSize = ValueTrees.NODE_SIZE;
+        Description.Member items = new Description.Member("items", 0, 8, DescribedKind.ARRAY, DescribedKind.STRUCT,
+                Optional.of("branch"), Optional.of("item_count"), Optional.<String>empty());
+        Description.Member count = new Description.Member("item_count", 8, 8, DescribedKind.SIZE, 0,
+                Optional.<String>empty(), Optional.<String>empty(), Optional.<String>empty());
+        Description.Member value = new Description.Member("value", 16, valueSize, DescribedKind.VALUE, 0,
+                Optional.<String>empty(), Optional.<String>empty(), Optional.<String>empty());
+        Description tree = new Description("branch", Collections.singletonList(new Description.Type("branch",
+                16 + valueSize, 16 + valueSize, Arrays.asList(items, count, value))),
+                Collections.<Description.Enumeration>emptyList(), Collections.<Description.Operation>emptyList());
+        return new DescribedLayouts(access, tree).plan(Optional.of("branch"), "the test");
+    }
+
+    /**
+     * A branch nested just inside the struct limit through array elements, two path segments a level, whose value
+     * then nests past the value limit through records holding lists: a refused place of about 3000 segments.
+     */
+    private static Map<String, Object> deepestBranch() {
+        Object value = null;
+        for (int level = 0; level <= ValueTrees.DEPTH_LIMIT; level++) {
+            value = level % 2 == 0 ? Collections.singletonList(value) : Collections.singletonMap("k", value);
+        }
+        Map<String, Object> branch = Collections.singletonMap("value", value);
+        for (int level = 0; level < ValueTrees.DEPTH_LIMIT - 1; level++) {
+            branch = Collections.<String, Object>singletonMap("items", Collections.singletonList(branch));
+        }
+        return branch;
     }
 
     /** value.h holds each key of a record once, so a provider's record repeating one is refused, naming it. */

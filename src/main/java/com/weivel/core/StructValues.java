@@ -1,8 +1,11 @@
 package com.weivel.core;
 
+import java.io.Serializable;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -10,15 +13,17 @@ import java.util.Set;
 /**
  * A struct an answer carries, as the unmodifiable {@code Map} a caller is handed: the member names its plan holds
  * once for every answer of the struct, and one array of this answer's values beside them, in the description's
- * order. A member the provider left out, a NULL pointer, a NULL handle or a value of kind NONE, is absent.
+ * order. A member the provider left out, a NULL pointer, a NULL handle or a value of kind NONE, is absent. It
+ * serializes as an unmodifiable {@code LinkedHashMap} of the same members.
  */
-final class StructValues extends AbstractMap<String, Object> {
+final class StructValues extends AbstractMap<String, Object> implements Serializable {
+    private static final long serialVersionUID = 1L;
     /** Stands for a member present with the value null, as a NULL text is, since an empty slot is an absent one. */
     private static final Object NULL = new Object();
 
-    private final StructPlan plan;
-    private final Object[] values;
-    private int size;
+    private final transient StructPlan plan;
+    private final transient Object[] values;
+    private transient int size;
 
     StructValues(StructPlan plan) {
         this.plan = plan;
@@ -63,6 +68,10 @@ final class StructValues extends AbstractMap<String, Object> {
                 return size;
             }
         };
+    }
+
+    private Object writeReplace() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(this));
     }
 
     private static Object unwrapped(Object stored) {
