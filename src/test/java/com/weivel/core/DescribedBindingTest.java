@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import com.weivel.host.LibraryDeclaration;
 import java.util.ArrayList;
@@ -26,7 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -35,11 +33,6 @@ import org.junit.jupiter.api.Test;
  * No type of the library is named: a changed member is found by its kind, a parameter by its operation.
  */
 class DescribedBindingTest {
-    @BeforeEach
-    void onlyWhereDescriptionsAreBound() {
-        assumeFalse(DescribedFixture.onJna(), "a described definition is not yet bound on JNA");
-    }
-
     @Test
     void theRealDescriptionBindsEveryOperation() {
         try (Opened mirror = Opened.service(0)) {
@@ -47,6 +40,25 @@ class DescribedBindingTest {
 
             assertTrue(bound.operationNames().contains("reflect"), bound.toString());
             assertEquals("the first letter", answered(bound.call("find", Collections.singletonMap("key", "alpha"))));
+        }
+    }
+
+    /**
+     * @implNote Every bind holds each described struct's layout against its description, so a description bound on
+     *     both backends is one both lay out alike; on Java 8 the two are the same backend.
+     */
+    @Test
+    void jnaBindsEveryDescriptionTheSelectedBackendBindsAndPassesADoubleByValue() {
+        int services = DescribedFixture.declaration("library.json").services().size();
+        for (int index = 0; index < services; index++) {
+            try (Opened selected = Opened.service(index); Opened jna = Opened.service(index, JnaAccess.INSTANCE)) {
+                BoundDefinition onJna = jna.bind(jna.description);
+
+                assertEquals(selected.bind(selected.description).operationNames(), onJna.operationNames());
+                if (onJna.operationNames().contains("halve")) {
+                    assertEquals(5e299, answered(onJna.call("halve", Collections.singletonMap("number", 1e300))));
+                }
+            }
         }
     }
 

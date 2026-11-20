@@ -44,15 +44,6 @@ public final class DescribedFixture {
     }
 
     /**
-     * Whether the suite runs on JNA, which binds no description yet.
-     *
-     * @return whether it does
-     */
-    public static boolean onJna() {
-        return "jna".equals(System.getProperty("weivel.test.backend"));
-    }
-
-    /**
      * The description with its structs listed in the reverse order, so a struct embedding another comes before it
      * whenever the library listed it after.
      *

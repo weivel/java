@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -179,6 +180,31 @@ class NativeAccessTest {
         assertFalse(region.isAlive());
         assertThrows(IllegalStateException.class, () -> region.getLong(8));
         assertThrows(IllegalStateException.class, arena::close);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("backends")
+    void aStructIsLaidOutAsTheCCompilerOfA64BitPlatformLaysItOut(NativeAccess access) {
+        FfiStruct embedded = new FfiStruct("embedded", Arrays.asList(FfiStruct.Field.of("word", FfiStruct.Shape.U32),
+                FfiStruct.Field.of("real", FfiStruct.Shape.F64)));
+        FfiStruct struct = new FfiStruct("outer", Arrays.asList(FfiStruct.Field.of("word", FfiStruct.Shape.U32),
+                FfiStruct.Field.of("pointer", FfiStruct.Shape.POINTER), FfiStruct.Field.embedding("inner", embedded),
+                FfiStruct.Field.of("flag", FfiStruct.Shape.U32), FfiStruct.Field.of("count", FfiStruct.Shape.SIZE),
+                FfiStruct.Field.of("tail", FfiStruct.Shape.U32)));
+
+        FfiStruct.Placement placement = access.layOut(struct);
+        FfiStruct.Placement words = access.layOut(new FfiStruct("words", Arrays.asList(
+                FfiStruct.Field.of("first", FfiStruct.Shape.U32), FfiStruct.Field.of("second", FfiStruct.Shape.U32),
+                FfiStruct.Field.of("third", FfiStruct.Shape.U32))));
+
+        long[][] expected = {{0, 4}, {8, 8}, {16, 16}, {32, 4}, {40, 8}, {48, 4}};
+        for (int field = 0; field < expected.length; field++) {
+            assertArrayEquals(expected[field], new long[] {placement.offset(field), placement.size(field)},
+                    struct.fields().get(field).name());
+        }
+        assertEquals(56, placement.size());
+        assertEquals(12, words.size());
+        assertEquals(8, words.offset(2));
     }
 
     /**

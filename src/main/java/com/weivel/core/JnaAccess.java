@@ -4,6 +4,7 @@ import com.sun.jna.Function;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
+import com.sun.jna.Structure;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -171,10 +172,103 @@ final class JnaAccess implements NativeAccess {
         return new JnaFunction(null, Function.getFunction(new Pointer(address)), signature);
     }
 
+    /**
+     * Lays the struct out as JNA's {@link Structure} lays out its fields: each field's alignment is the one
+     * {@link Structure}'s own field alignment rule answers for the platform (its size for a scalar, the pointer size
+     * for a pointer, clamped to the platform's most, with its AIX and PowerPC exceptions), an embedded struct aligns
+     * to its widest field, each field sits at the next offset its alignment allows, and the struct is padded to its
+     * widest alignment.
+     *
+     * @implNote A {@link Structure} lays out only the fields a Java class declares, and a described struct has no
+     *     class, so the offsets are walked here with JNA's own per-field rule and its own sizes; the walk is the one
+     *     {@code Structure.deriveLayout} makes.
+     */
     @Override
     public FfiStruct.Placement layOut(FfiStruct struct) {
-        throw new DescriptionsNotBound("a described definition is not yet bound on JNA: this backend lays out no "
-                + "described struct, so " + struct.name() + " cannot be checked against its description");
+        return StructRules.INSTANCE.placementOf(struct);
+    }
+
+    /**
+     * The alignment rule of a JNA {@link Structure} for this platform, reached through the one field a structure
+     * needs to exist.
+     *
+     * @implNote {@code getNativeAlignment} is protected, so only a subclass can ask it; the subclass's own memory is
+     *     allocated once, for the life of the process.
+     */
+    @Structure.FieldOrder("unused")
+    public static final class StructRules extends Structure {
+        static final StructRules INSTANCE = new StructRules();
+
+        public long unused;
+
+        FfiStruct.Placement placementOf(FfiStruct struct) {
+            List<FfiStruct.Field> fields = struct.fields();
+            long[] offsets = new long[fields.size()];
+            long[] sizes = new long[offsets.length];
+            long offset = 0;
+            for (int index = 0; index < offsets.length; index++) {
+                FfiStruct.Field field = fields.get(index);
+                long alignment = alignmentOf(field, index == 0);
+                offset = alignedUp(offset, alignment);
+                offsets[index] = offset;
+                sizes[index] = sizeOf(field);
+                offset += sizes[index];
+            }
+            return new FfiStruct.Placement(alignedUp(offset, structAlignmentOf(struct)), offsets, sizes);
+        }
+
+        private long structAlignmentOf(FfiStruct struct) {
+            long alignment = 1;
+            List<FfiStruct.Field> fields = struct.fields();
+            for (int index = 0; index < fields.size(); index++) {
+                alignment = Math.max(alignment, alignmentOf(fields.get(index), index == 0));
+            }
+            return alignment;
+        }
+
+        private long alignmentOf(FfiStruct.Field field, boolean first) {
+            switch (field.shape()) {
+                case U32:
+                    return getNativeAlignment(int.class, null, first);
+                case U64:
+                case I64:
+                    return getNativeAlignment(long.class, null, first);
+                case F64:
+                    return getNativeAlignment(double.class, null, first);
+                case SIZE:
+                    return getNativeAlignment(Native.SIZE_T_SIZE == 8 ? long.class : int.class, null, first);
+                case POINTER:
+                    return getNativeAlignment(Pointer.class, null, first);
+                case STRUCT:
+                    return structAlignmentOf(field.embedded());
+                default:
+                    throw new IllegalStateException("a field shape JNA does not lay out: " + field.shape());
+            }
+        }
+
+        private long sizeOf(FfiStruct.Field field) {
+            switch (field.shape()) {
+                case U32:
+                    return Native.getNativeSize(int.class);
+                case U64:
+                case I64:
+                    return Native.getNativeSize(long.class);
+                case F64:
+                    return Native.getNativeSize(double.class);
+                case SIZE:
+                    return Native.SIZE_T_SIZE;
+                case POINTER:
+                    return Native.POINTER_SIZE;
+                case STRUCT:
+                    return placementOf(field.embedded()).size();
+                default:
+                    throw new IllegalStateException("a field shape JNA does not lay out: " + field.shape());
+            }
+        }
+
+        private static long alignedUp(long offset, long alignment) {
+            return (offset + alignment - 1) / alignment * alignment;
+        }
     }
 
     /**

@@ -141,7 +141,7 @@ public final class LibraryBinary implements AutoCloseable {
             return new Answer.Ok<>(DescribedBinder.bind(access, new DescriptionReader(access).read(description),
                     definition, access.addressed(definition, sizeAt(definition)),
                     new BoundOperation.Bound(access, arenas, handles, gate)));
-        } catch (DescriptionRefused | DescriptionsNotBound refused) {
+        } catch (DescriptionRefused refused) {
             return new Answer.Mistake<>(refused.getMessage());
         }
     }
