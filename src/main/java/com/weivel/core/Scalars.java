@@ -21,7 +21,7 @@ final class Scalars {
      * @throws IllegalArgumentException for a value of another type, a U32 outside its range, or an integer handed for
      *     an F64 that a double does not hold exactly
      */
-    static long bits(int kind, Object value, String where) {
+    static long bits(int kind, Object value, CallPath where) {
         if (kind == DescribedKind.F64) {
             return Double.doubleToRawLongBits(real(value, where));
         }
@@ -33,7 +33,7 @@ final class Scalars {
         return integer;
     }
 
-    private static long integer(Object value, String where) {
+    private static long integer(Object value, CallPath where) {
         if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte) {
             return ((Number) value).longValue();
         }
@@ -41,7 +41,7 @@ final class Scalars {
                 + described(value));
     }
 
-    private static double real(Object value, String where) {
+    private static double real(Object value, CallPath where) {
         if (value instanceof Double || value instanceof Float) {
             return ((Number) value).doubleValue();
         }
@@ -81,7 +81,7 @@ final class Scalars {
      *
      * @throws IllegalArgumentException for a text holding a NUL, which no C text can carry
      */
-    static byte[] utf8(String text, String where) {
+    static byte[] utf8(String text, CallPath where) {
         if (text.indexOf('\0') >= 0) {
             throw new IllegalArgumentException(where + " holds a NUL character, which no C text can carry");
         }
