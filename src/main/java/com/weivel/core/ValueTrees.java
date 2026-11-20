@@ -83,31 +83,35 @@ final class ValueTrees {
         }
     }
 
+    /**
+     * @implNote A list or record is taken once as an array, so the block sized for its elements and the walk writing
+     *     them agree even while another thread changes it.
+     */
     private static void writeList(NativeAccess access, NativeArena arena, long node, List<?> list, String where,
                                   int depth) {
         access.putInt(node, KIND, LIST);
-        if (list.isEmpty()) {
+        Object[] snapshot = list.toArray();
+        if (snapshot.length == 0) {
             return;
         }
-        long items = arena.allocateAddress(list.size() * NODE_SIZE);
-        int index = 0;
-        for (Object item : list) {
-            write(access, arena, items + index * NODE_SIZE, item, where + "[" + index + "]", depth + 1);
-            index++;
+        long items = arena.allocateAddress(snapshot.length * NODE_SIZE);
+        for (int index = 0; index < snapshot.length; index++) {
+            write(access, arena, items + index * NODE_SIZE, snapshot[index], where + "[" + index + "]", depth + 1);
         }
         access.putLong(node, ITEMS, items);
-        access.putLong(node, COUNT, list.size());
+        access.putLong(node, COUNT, snapshot.length);
     }
 
     private static void writeRecord(NativeAccess access, NativeArena arena, long node, Map<?, ?> record,
                                     String where, int depth) {
         access.putInt(node, KIND, RECORD);
-        if (record.isEmpty()) {
+        Object[] snapshot = record.entrySet().toArray();
+        if (snapshot.length == 0) {
             return;
         }
-        long entries = arena.allocateAddress(record.size() * ENTRY_SIZE);
-        int index = 0;
-        for (Map.Entry<?, ?> member : record.entrySet()) {
+        long entries = arena.allocateAddress(snapshot.length * ENTRY_SIZE);
+        for (int index = 0; index < snapshot.length; index++) {
+            Map.Entry<?, ?> member = (Map.Entry<?, ?>) snapshot[index];
             if (!(member.getKey() instanceof String)) {
                 throw new IllegalArgumentException(where + " is a record, keyed by String, and holds the key "
                         + member.getKey());
@@ -118,10 +122,9 @@ final class ValueTrees {
             access.putLong(entry, KEY, placed(access, arena, encoded));
             access.putLong(entry, KEY_LENGTH, encoded.length);
             write(access, arena, entry + ENTRY_VALUE, member.getValue(), where + "." + key, depth + 1);
-            index++;
         }
         access.putLong(node, ENTRIES, entries);
-        access.putLong(node, COUNT, record.size());
+        access.putLong(node, COUNT, snapshot.length);
     }
 
     private static double number(Number number, String where) {

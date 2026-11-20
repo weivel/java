@@ -52,7 +52,12 @@ final class HostFixture implements AutoCloseable {
 
     /** A host given the standard's description check, as one that binds described libraries is made. */
     HostFixture(DescriptionCheck check) {
-        this(Opening.THROUGH_THE_CONTEXTS, Pauses.NONE, Optional.of(check));
+        this(Pauses.NONE, check);
+    }
+
+    /** A host given the standard's description check, its library pauses the test's own. */
+    HostFixture(Pauses pauses, DescriptionCheck check) {
+        this(Opening.THROUGH_THE_CONTEXTS, pauses, Optional.of(check));
     }
 
     private HostFixture(Opening opening, Pauses pauses, Optional<DescriptionCheck> check) {

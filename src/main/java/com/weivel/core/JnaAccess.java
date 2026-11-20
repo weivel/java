@@ -173,8 +173,8 @@ final class JnaAccess implements NativeAccess {
 
     @Override
     public FfiStruct.Placement layOut(FfiStruct struct) {
-        throw new UnsupportedOperationException("a described definition is not yet bound on JNA: this backend lays "
-                + "out no described struct, so " + struct.name() + " cannot be checked against its description");
+        throw new DescriptionsNotBound("a described definition is not yet bound on JNA: this backend lays out no "
+                + "described struct, so " + struct.name() + " cannot be checked against its description");
     }
 
     /**

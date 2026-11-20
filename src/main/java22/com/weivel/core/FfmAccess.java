@@ -14,6 +14,7 @@ import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.PaddingLayout;
 import java.lang.foreign.StructLayout;
 import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
@@ -218,19 +219,25 @@ final class FfmAccess implements NativeAccess {
      * alignment allows, the struct padded to its widest alignment, every scalar of the platform's own canonical
      * layout, and {@link MemoryLayout#structLayout} itself refusing any field the padding left misaligned.
      *
+     * Each field is found by its position among the struct's members other than padding, never by its name, which
+     * may repeat between a definition's members and its operations.
+     *
      * @implNote The API takes a struct's padding as given rather than inserting it, so this is the rule a C compiler
      *     and jextract follow, applied to the API's own layouts; a description is held against it field by field.
      */
     @Override
     public FfiStruct.Placement layOut(FfiStruct struct) {
         StructLayout layout = structLayoutOf(struct);
-        List<FfiStruct.Field> fields = struct.fields();
-        long[] offsets = new long[fields.size()];
-        long[] sizes = new long[fields.size()];
-        for (int index = 0; index < fields.size(); index++) {
-            MemoryLayout.PathElement field = MemoryLayout.PathElement.groupElement(fields.get(index).name());
-            offsets[index] = layout.byteOffset(field);
-            sizes[index] = layout.select(field).byteSize();
+        List<MemoryLayout> members = layout.memberLayouts();
+        long[] offsets = new long[struct.fields().size()];
+        long[] sizes = new long[offsets.length];
+        int field = 0;
+        for (int index = 0; index < members.size(); index++) {
+            if (!(members.get(index) instanceof PaddingLayout)) {
+                offsets[field] = layout.byteOffset(MemoryLayout.PathElement.groupElement(index));
+                sizes[field] = members.get(index).byteSize();
+                field++;
+            }
         }
         return new FfiStruct.Placement(layout.byteSize(), offsets, sizes);
     }

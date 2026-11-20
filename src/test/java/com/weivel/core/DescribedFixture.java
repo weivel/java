@@ -10,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The standard's described test library and its declarations, read by the standard's own reader from the files the
@@ -47,6 +50,19 @@ public final class DescribedFixture {
      */
     public static boolean onJna() {
         return "jna".equals(System.getProperty("weivel.test.backend"));
+    }
+
+    /**
+     * The description with its structs listed in the reverse order, so a struct embedding another comes before it
+     * whenever the library listed it after.
+     *
+     * @param description a description as read
+     * @return the same description, its types reversed
+     */
+    public static Description withTypesReversed(Description description) {
+        List<Description.Type> types = new ArrayList<>(description.types());
+        Collections.reverse(types);
+        return new Description(description.definition(), types, description.enums(), description.operations());
     }
 
     /**

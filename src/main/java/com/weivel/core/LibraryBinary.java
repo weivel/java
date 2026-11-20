@@ -141,14 +141,15 @@ public final class LibraryBinary implements AutoCloseable {
             return new Answer.Ok<>(DescribedBinder.bind(access, new DescriptionReader(access).read(description),
                     definition, access.addressed(definition, sizeAt(definition)),
                     new BoundOperation.Bound(access, arenas, handles, gate)));
-        } catch (DescriptionRefused | UnsupportedOperationException refused) {
+        } catch (DescriptionRefused | DescriptionsNotBound refused) {
             return new Answer.Mistake<>(refused.getMessage());
         }
     }
 
     /**
      * Releases every handle a described definition of this binary answered and nobody released yet, through the
-     * release each one's description names; the binary must still be open.
+     * release each one's description names, each one a call is still handing its provider once that call returns;
+     * the binary must still be open. Its close releases any answered after this.
      */
     public void releaseHandles() {
         handles.releaseAll();
@@ -183,6 +184,7 @@ public final class LibraryBinary implements AutoCloseable {
      */
     @Override
     public void close() {
+        handles.releaseAtTheClose();
         library.close();
         spare.close();
         arenas.close();

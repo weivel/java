@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.weivel.context.PluginEvent;
 import com.weivel.core.Answer;
 import com.weivel.core.BoundDefinition;
 import com.weivel.core.BoundOperation;
@@ -253,6 +254,48 @@ class DescribedLibrariesTest {
         }
     }
 
+    @Test
+    void aListOrRecordIsWrittenAsOneSnapshotHoweverItsSizeDisagreesWithWhatItHolds() throws Exception {
+        assumeBound();
+        try (HostFixture fixture = checking()) {
+            BoundDefinition mirror = loaded(fixture).get(mirrorId());
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("tags", new UnderCountedList<>(Arrays.asList("a", "b", "c")));
+            Map<String, Object> record = new UnderCountedMap<>();
+            record.put("x", 1L);
+            record.put("y", 2L);
+            record.put("z", 3L);
+
+            Map<?, ?> reflection = (Map<?, ?>) answered(mirror.call("reflect", inputs("sample", sample)));
+
+            assertEquals(Arrays.asList("a", "b", "c"), ((Map<?, ?>) reflection.get("sample")).get("tags"));
+            assertEquals(4L, answered(mirror.call("weigh", inputs("value",
+                    new UnderCountedList<>(Arrays.<Object>asList(1L, 2L, 3L))))));
+            assertEquals(4L, answered(mirror.call("weigh", inputs("value", record))));
+        }
+    }
+
+    @Test
+    void aHandleAnsweredAfterTheUnloadIsReleasedWhenTheBinaryCloses() throws Exception {
+        assumeBound();
+        LibraryPauses pauses = new LibraryPauses();
+        try (HostFixture fixture = new HostFixture(pauses, DescribedFixture.standard().descriptionCheck())) {
+            LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
+            TestEntry consumer = activated(fixture, walkerId());
+            List<PluginEvent.Revoked> revoked = DefinitionsTest.revocationsHeardBy(consumer);
+            BoundDefinition walker = (BoundDefinition) value(consumer.context.get(walkerId()));
+            value(fixture.host.unloadLibrary(library));
+
+            DescribedHandle late = (DescribedHandle) answered(walker.call("open", openWalk(2L)));
+            boolean heldUntilTheClose = !late.isReleased();
+            assertEquals(true, value(consumer.context.releaseHolding(DefinitionsTest.awaiting(revoked))));
+
+            assertTrue(heldUntilTheClose);
+            assertEquals(Collections.singletonList(declaration().importName()), pauses.closed());
+            assertTrue(late.isReleased(), "the close releases a handle answered after the unload's");
+        }
+    }
+
     private static void assumeBound() {
         assumeFalse(DescribedFixture.onJna(), "a described definition is not yet bound on JNA");
     }
@@ -338,5 +381,29 @@ class DescribedLibrariesTest {
     private static void assertRefused(Runnable call, String naming) {
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, call::run);
         assertTrue(refused.getMessage().contains(naming), refused.getMessage());
+    }
+
+    /** A list whose size says it holds one element fewer than it does, as one another thread grows does. */
+    private static final class UnderCountedList<T> extends ArrayList<T> {
+        private static final long serialVersionUID = 1L;
+
+        UnderCountedList(List<T> items) {
+            super(items);
+        }
+
+        @Override
+        public int size() {
+            return super.size() - 1;
+        }
+    }
+
+    /** A map whose size says it holds one entry fewer than it does. */
+    private static final class UnderCountedMap<K, V> extends LinkedHashMap<K, V> {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public int size() {
+            return super.size() - 1;
+        }
     }
 }

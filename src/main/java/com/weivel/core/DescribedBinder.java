@@ -51,7 +51,7 @@ final class DescribedBinder {
      *
      * @throws DescriptionRefused for a description this binding cannot bind on this platform, or a definition that
      *     ends before its first shape
-     * @throws UnsupportedOperationException from a backend that does not bind descriptions yet
+     * @throws DescriptionsNotBound from a backend that does not bind descriptions yet
      */
     static BoundDefinition bind(NativeAccess access, Description description, long definition, Object addressed,
                                 BoundOperation.Bound bound) {
