@@ -166,11 +166,11 @@ final class ValueTrees {
     /**
      * The Java value of the node at {@code node}.
      *
-     * @throws IllegalStateException for a node of a kind the standard does not publish, NONE below a root, or a tree
-     *     nested deeper than the standard's limit
+     * @throws IllegalStateException for a node of a kind the standard does not publish, NONE below a root, a record
+     *     holding a key twice, or a tree nested deeper than the standard's limit
      * @implNote Read with a stack of its own, as {@link #write} writes, so the limit is reached on any thread's stack:
-     *     a list or record is made at once, holding a place for each child, and the place is filled when its child is
-     *     read.
+     *     a list or record is made at once, holding a place for each child, and the places are filled in index
+     *     order, its children pushed last first.
      */
     static Object read(NativeAccess access, long node) {
         Deque<Place> pending = new ArrayDeque<>();
@@ -216,7 +216,7 @@ final class ValueTrees {
             return Collections.emptyList();
         }
         List<Object> list = new ArrayList<>(Collections.nCopies(count, null));
-        for (int index = 0; index < count; index++) {
+        for (int index = count - 1; index >= 0; index--) {
             pending.push(new Place(items + index * NODE_SIZE, depth + 1, list, index, null));
         }
         return Collections.unmodifiableList(list);
@@ -229,11 +229,19 @@ final class ValueTrees {
             return Collections.emptyMap();
         }
         Map<String, Object> record = new LinkedHashMap<>();
+        String[] keys = new String[count];
         for (int index = 0; index < count; index++) {
             long entry = entries + index * ENTRY_SIZE;
-            String key = text(access, access.getLong(entry, KEY), access.getLong(entry, KEY_LENGTH));
-            record.put(key, null);
-            pending.push(new Place(entry + ENTRY_VALUE, depth + 1, null, index, new Keyed(record, key)));
+            keys[index] = text(access, access.getLong(entry, KEY), access.getLong(entry, KEY_LENGTH));
+            if (record.containsKey(keys[index])) {
+                throw new IllegalStateException("the provider answered a record holding the key " + keys[index]
+                        + " twice, where value.h holds each key once");
+            }
+            record.put(keys[index], null);
+        }
+        for (int index = count - 1; index >= 0; index--) {
+            pending.push(new Place(entries + index * ENTRY_SIZE + ENTRY_VALUE, depth + 1, null, index,
+                    new Keyed(record, keys[index])));
         }
         return Collections.unmodifiableMap(record);
     }
