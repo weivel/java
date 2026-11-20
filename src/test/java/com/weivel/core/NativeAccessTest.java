@@ -196,6 +196,11 @@ class NativeAccessTest {
         FfiStruct.Placement words = access.layOut(new FfiStruct("words", Arrays.asList(
                 FfiStruct.Field.of("first", FfiStruct.Shape.U32), FfiStruct.Field.of("second", FfiStruct.Shape.U32),
                 FfiStruct.Field.of("third", FfiStruct.Shape.U32))));
+        FfiStruct.Placement widening = access.layOut(new FfiStruct("widening", Arrays.asList(
+                FfiStruct.Field.of("word", FfiStruct.Shape.U32), FfiStruct.Field.of("wide", FfiStruct.Shape.U64),
+                FfiStruct.Field.of("real", FfiStruct.Shape.F64))));
+        FfiStruct.Placement wideFirst = access.layOut(new FfiStruct("wide-first", Arrays.asList(
+                FfiStruct.Field.of("wide", FfiStruct.Shape.U64), FfiStruct.Field.of("word", FfiStruct.Shape.U32))));
 
         long[][] expected = {{0, 4}, {8, 8}, {16, 16}, {32, 4}, {40, 8}, {48, 4}};
         for (int field = 0; field < expected.length; field++) {
@@ -205,6 +210,12 @@ class NativeAccessTest {
         assertEquals(56, placement.size());
         assertEquals(12, words.size());
         assertEquals(8, words.offset(2));
+        assertArrayEquals(new long[] {0, 8, 16}, new long[] {widening.offset(0), widening.offset(1),
+                widening.offset(2)});
+        assertEquals(24, widening.size());
+        assertArrayEquals(new long[] {0, 8}, new long[] {wideFirst.offset(0), wideFirst.offset(1)});
+        assertEquals(8, wideFirst.size(0));
+        assertEquals(16, wideFirst.size());
     }
 
     /**

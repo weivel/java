@@ -94,6 +94,29 @@ class BenchmarksTest {
     }
 
     @Test
+    void timesTheDescribedCallWithinItsBound() {
+        Path standard = existing("weivel.test.standardBinary");
+        Path described = existing("weivel.test.describedBinary");
+        Path echo = existing("weivel.test.echoBinary");
+        for (int repetition = 1; repetition <= repetitions(); repetition++) {
+            DescribedCallMeasurement measured = DescribedCallBenchmark.measure(binary, standard, described, echo,
+                    DescribedCallBenchmark.DEFAULT_SAMPLING);
+            PairMeasurement pair = measured.pair();
+            String gate = RatioGate.DESCRIBED_CALL.kitNameFor(binary.backend());
+            report(gate, repetition, String.format(Locale.ROOT, "ratio=%.4f bare_median_ns=%.2f "
+                            + "weivel_median_ns=%.2f echo_median_ns=%.2f bare_p99_ns=%.2f weivel_p99_ns=%.2f",
+                    Summary.of(pair.roundRatios()).median(), pair.bare().median(), pair.weivel().median(),
+                    measured.echo().median(), pair.bare().percentile99(), pair.weivel().percentile99()));
+            if (isGating() && !budget().isBoundAnywhere(RatioGate.DESCRIBED_CALL)) {
+                report(gate, repetition, "unbounded: the pinned kit bounds described-call nowhere yet");
+            } else if (isGating()) {
+                assertPassed(Gates.ratio(budget(), RatioGate.DESCRIBED_CALL, binary.backend(), KitPlatform.current(),
+                        pair.roundRatios()));
+            }
+        }
+    }
+
+    @Test
     void timesTheDefinitionCallWithinItsNoise() {
         Path echo = existing("weivel.test.echoBinary");
         for (int repetition = 1; repetition <= repetitions(); repetition++) {

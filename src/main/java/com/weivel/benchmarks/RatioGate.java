@@ -5,7 +5,12 @@ public enum RatioGate {
     /** {@code weivel_get_service} through the wrapper over the same function of the core's table called bare. */
     CONTROL_CALL("control-call"),
     /** A C library's function through the host's service over the same function called bare. */
-    LIBRARY_CALL("library-call");
+    LIBRARY_CALL("library-call"),
+    /**
+     * An operation of the standard's described fixture through the bound object a consumer resolved over the same
+     * operation through a binding of the fixture's structs written by hand.
+     */
+    DESCRIBED_CALL("described-call");
 
     private final String kitName;
 

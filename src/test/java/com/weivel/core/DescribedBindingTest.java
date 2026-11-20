@@ -50,16 +50,19 @@ class DescribedBindingTest {
     @Test
     void jnaBindsEveryDescriptionTheSelectedBackendBindsAndPassesADoubleByValue() {
         int services = DescribedFixture.declaration("library.json").services().size();
+        int halving = 0;
         for (int index = 0; index < services; index++) {
             try (Opened selected = Opened.service(index); Opened jna = Opened.service(index, JnaAccess.INSTANCE)) {
                 BoundDefinition onJna = jna.bind(jna.description);
 
                 assertEquals(selected.bind(selected.description).operationNames(), onJna.operationNames());
                 if (onJna.operationNames().contains("halve")) {
+                    halving++;
                     assertEquals(5e299, answered(onJna.call("halve", Collections.singletonMap("number", 1e300))));
                 }
             }
         }
+        assertTrue(halving >= 1, "no service of the described library offers halve, so no double was passed");
     }
 
     @Test

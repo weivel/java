@@ -138,6 +138,24 @@ public final class LanguageBudget {
     }
 
     /**
+     * Whether the budget bounds a gate on any backend and platform. A gate it bounds nowhere is not yet measured; once
+     * it bounds it anywhere, a backend and platform it gives no line fails as {@link #ratioBound} says.
+     *
+     * @param gate the gate
+     * @return true when some line names the gate
+     */
+    public boolean isBoundAnywhere(RatioGate gate) {
+        for (String backend : BACKENDS) {
+            for (String platform : PLATFORMS) {
+                if (perPlatform.containsKey(gate.kitNameFor(backend) + " " + platform)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * The noise bounds on one platform.
      *
      * @param platform the kit's platform
