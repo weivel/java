@@ -6,6 +6,7 @@ import com.weivel.core.Answer;
 import com.weivel.core.CoreBinary;
 import com.weivel.core.CoreConstants;
 import com.weivel.core.CoreOptions;
+import com.weivel.core.DescriptionCheck;
 import com.weivel.core.EdgeSource;
 import com.weivel.core.Failure;
 import com.weivel.core.Manifest;
@@ -34,10 +35,14 @@ final class DriverWorld implements AutoCloseable {
     private final List<Failure> failures = Collections.synchronizedList(new ArrayList<Failure>());
     private final Map<String, Long> plugins = new LinkedHashMap<>();
     private final List<Object> timerMoves = new ArrayList<>();
+    private int failuresBeforeTheSteps;
+    private int logsBeforeTheSteps;
+    private Optional<String> loadMistake = Optional.empty();
 
-    DriverWorld(CoreBinary binary, CoreOptions core) {
+    DriverWorld(CoreBinary binary, CoreOptions core, DescriptionCheck descriptionCheck) {
         Answer<Host> created = Host.create(binary, HostOptions.defaults().withCore(core).withScheduler(time)
-                .withLog(logs::add).withErrorSink(failures::add).withTimerObserver(this::timerMoved));
+                .withLog(logs::add).withErrorSink(failures::add).withTimerObserver(this::timerMoved)
+                .withDescriptionCheck(descriptionCheck));
         if (!(created instanceof Answer.Ok)) {
             throw new IllegalStateException("the driver's host could not be created: " + created);
         }
@@ -142,6 +147,35 @@ final class DriverWorld implements AutoCloseable {
         synchronized (failures) {
             return new ArrayList<>(failures);
         }
+    }
+
+    /** Marks where a vector's steps start: what the setup of its plugins wrote is not reported. */
+    void startTheSteps() {
+        failuresBeforeTheSteps = failures().size();
+        logsBeforeTheSteps = logs().size();
+    }
+
+    /** What the error sink and the log received from the first step on, the sink's first. */
+    List<Object> reported() {
+        List<Object> written = new ArrayList<>();
+        List<?> sunk = failures();
+        List<?> logged = logs();
+        for (Object record : sunk.subList(failuresBeforeTheSteps, sunk.size())) {
+            written.add(String.valueOf(record));
+        }
+        for (Object record : logged.subList(logsBeforeTheSteps, logged.size())) {
+            written.add(String.valueOf(record));
+        }
+        return written;
+    }
+
+    /** Records why the host refused a vector's load as the caller's mistake. */
+    void loadRefused(String detail) {
+        loadMistake = Optional.of(detail);
+    }
+
+    Optional<String> loadMistake() {
+        return loadMistake;
     }
 
     /** How many records the log and the error sink hold now, counting only the log's errors when asked. */

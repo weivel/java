@@ -94,7 +94,8 @@ final class StandardLayouts {
             ADDRESS.withName("release"),
             ADDRESS.withName("services"),
             LONG.withName("service_count"),
-            ADDRESS.withName("storage")).withName("weivel_standard_library");
+            ADDRESS.withName("storage"),
+            ADDRESS.withName("descriptions")).withName("weivel_standard_library");
 
     static final Layout MIRROR_LIST = Layout.struct(
             INT.withName("size"),

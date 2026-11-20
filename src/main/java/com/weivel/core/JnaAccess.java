@@ -171,6 +171,12 @@ final class JnaAccess implements NativeAccess {
         return new JnaFunction(null, Function.getFunction(new Pointer(address)), signature);
     }
 
+    @Override
+    public FfiStruct.Placement layOut(FfiStruct struct) {
+        throw new UnsupportedOperationException("a described definition is not yet bound on JNA: this backend lays "
+                + "out no described struct, so " + struct.name() + " cannot be checked against its description");
+    }
+
     /**
      * A library JNA opened, which this object alone holds and closes.
      *
@@ -277,11 +283,19 @@ final class JnaAccess implements NativeAccess {
             }
             Object[] boxed = new Object[arguments.length];
             for (int index = 0; index < arguments.length; index++) {
-                boxed[index] = parameters.get(index) == NativeType.INT
-                        ? Integer.valueOf((int) arguments[index])
-                        : Long.valueOf(arguments[index]);
+                boxed[index] = boxed(parameters.get(index), arguments[index]);
             }
             return boxed;
+        }
+
+        private static Object boxed(NativeType type, long argument) {
+            if (type == NativeType.INT) {
+                return Integer.valueOf((int) argument);
+            }
+            if (type == NativeType.DOUBLE) {
+                return Double.valueOf(Double.longBitsToDouble(argument));
+            }
+            return Long.valueOf(argument);
         }
 
         private long answered(Object[] arguments) {
@@ -292,6 +306,8 @@ final class JnaAccess implements NativeAccess {
                     return function.invokeLong(arguments);
                 case ADDRESS:
                     return Pointer.nativeValue(function.invokePointer(arguments));
+                case DOUBLE:
+                    return Double.doubleToRawLongBits(function.invokeDouble(arguments));
                 case VOID:
                     function.invokeVoid(arguments);
                     return 0;

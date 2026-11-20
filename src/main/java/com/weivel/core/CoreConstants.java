@@ -5,6 +5,17 @@ public final class CoreConstants {
     /** The host itself: the reserved handle {@code WEIVEL_HOST}, which no plugin is ever issued. */
     public static final long HOST = -1L;
 
+    /** {@code WEIVEL_STATUS_OK}. */
+    public static final int STATUS_OK = 0;
+    /** {@code WEIVEL_STATUS_NONE}. */
+    public static final int STATUS_NONE = 1;
+    /** {@code WEIVEL_STATUS_MALFORMED}. */
+    public static final int STATUS_MALFORMED = 2;
+    /** {@code WEIVEL_STATUS_REFUSED}. */
+    public static final int STATUS_REFUSED = 3;
+    /** {@code WEIVEL_STATUS_OUT_OF_MEMORY}. */
+    public static final int STATUS_OUT_OF_MEMORY = 4;
+
     /** {@code WEIVEL_LOG_DEBUG}. */
     public static final int LOG_DEBUG = 1;
     /** {@code WEIVEL_LOG_INFO}. */

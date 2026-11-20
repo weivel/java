@@ -108,20 +108,46 @@ public final class LibraryDeclaration {
         return Collections.unmodifiableList(copy);
     }
 
-    /** One service a library declares: the id plugins request, and the functions its object offers. */
+    /**
+     * One service a library declares: the id plugins request, the functions its object offers and, for a definition's
+     * service, the symbol answering its description, when it declares one.
+     */
     public static final class Service {
         private final String id;
         private final List<Function> functions;
+        private final Optional<String> description;
+
+        /**
+         * A service that declares no description.
+         *
+         * @param id the service id plugins request
+         * @param functions its functions, in the declaration's order
+         */
+        public Service(String id, List<Function> functions) {
+            this(id, functions, Optional.<String>empty());
+        }
 
         /**
          * Checks that every part is present, and copies the list.
          *
          * @param id the service id plugins request
          * @param functions its functions, in the declaration's order
+         * @param description the symbol answering the definition's {@code weivel_standard_description}, so the host
+         *     binds the definition from it; empty for a service that declares none
          */
-        public Service(String id, List<Function> functions) {
+        public Service(String id, List<Function> functions, Optional<String> description) {
             this.id = Objects.requireNonNull(id, "id");
             this.functions = copied(functions, "functions");
+            this.description = Objects.requireNonNull(description, "description");
+        }
+
+        /**
+         * Answers {@code description}.
+         *
+         * @return the symbol answering the definition's description; empty when the service declares none
+         */
+        public Optional<String> description() {
+            return description;
         }
 
         /**
@@ -145,17 +171,18 @@ public final class LibraryDeclaration {
         @Override
         public boolean equals(Object other) {
             return other instanceof Service && id.equals(((Service) other).id)
-                    && functions.equals(((Service) other).functions);
+                    && functions.equals(((Service) other).functions)
+                    && description.equals(((Service) other).description);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, functions);
+            return Objects.hash(id, functions, description);
         }
 
         @Override
         public String toString() {
-            return "Service[id=" + id + ", functions=" + functions + "]";
+            return "Service[id=" + id + ", functions=" + functions + ", description=" + description + "]";
         }
     }
 

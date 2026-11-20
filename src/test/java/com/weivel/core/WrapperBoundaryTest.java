@@ -36,7 +36,9 @@ class WrapperBoundaryTest {
     private static final Set<String> SEAM_SOURCES = setOf("NativeAccess.java", "NativeBackends.java",
             "OpenLibrary.java", "NativeFunction.java", "NativeSignature.java", "NativeType.java", "NativeArena.java",
             "NativeRegion.java", "JnaAccess.java", "FfmAccess.java", "LibraryBinary.java", "LibraryFunction.java",
-            "ForeignLibrary.java", "ForeignFunction.java", "ForeignMemory.java", "SpareBlock.java");
+            "ForeignLibrary.java", "ForeignFunction.java", "ForeignMemory.java", "SpareBlock.java", "SpareArena.java",
+            "DescriptionReader.java", "DescribedLayouts.java", "DescribedBinder.java", "BoundOperation.java",
+            "DescribedSteps.java", "DescribedCall.java", "ReleasePlan.java", "Scalars.java", "ValueTrees.java");
     private static final Set<String> WRAPPER_ONLY = setOf("CoreFunction", "CoreFunctions", "functions", "crossing",
             "cross");
     private static final Set<String> FORBIDDEN = setOf("CoreFunction", "CoreFunctions", "MethodHandle",

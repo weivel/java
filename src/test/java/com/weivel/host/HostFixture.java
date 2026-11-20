@@ -7,6 +7,7 @@ import com.weivel.core.Answer;
 import com.weivel.core.Choice;
 import com.weivel.core.CoreOptions;
 import com.weivel.core.CoreProbes;
+import com.weivel.core.DescriptionCheck;
 import com.weivel.core.Failure;
 import com.weivel.core.FailureKind;
 import com.weivel.core.Manifest;
@@ -46,9 +47,19 @@ final class HostFixture implements AutoCloseable {
     }
 
     HostFixture(Opening opening, Pauses pauses) {
-        host = ok(Host.create(CoreProbes.binary(), HostOptions.defaults().withCore(INFO_AND_ABOVE)
-                .withScheduler(scheduler)
-                .withLog(logs::add).withErrorSink(failures::add), opening, pauses));
+        this(opening, pauses, Optional.<DescriptionCheck>empty());
+    }
+
+    /** A host given the standard's description check, as one that binds described libraries is made. */
+    HostFixture(DescriptionCheck check) {
+        this(Opening.THROUGH_THE_CONTEXTS, Pauses.NONE, Optional.of(check));
+    }
+
+    private HostFixture(Opening opening, Pauses pauses, Optional<DescriptionCheck> check) {
+        HostOptions options = HostOptions.defaults().withCore(INFO_AND_ABOVE).withScheduler(scheduler)
+                .withLog(logs::add).withErrorSink(failures::add);
+        host = ok(Host.create(CoreProbes.binary(), check.isPresent() ? options.withDescriptionCheck(check.get())
+                : options, opening, pauses));
     }
 
     TestEntry entry(String name) {

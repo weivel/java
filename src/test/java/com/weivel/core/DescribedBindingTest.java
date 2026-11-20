@@ -1,0 +1,308 @@
+package com.weivel.core;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+
+import com.weivel.host.LibraryDeclaration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The binder itself, handed the described library's real definition and its real description read from the binary,
+ * or a copy of either changed in one place, so each refusal at the bind and each rule of a call is proven on its own.
+ * No type of the library is named: a changed member is found by its kind, a parameter by its operation.
+ */
+class DescribedBindingTest {
+    @BeforeEach
+    void onlyWhereDescriptionsAreBound() {
+        assumeFalse(DescribedFixture.onJna(), "a described definition is not yet bound on JNA");
+    }
+
+    @Test
+    void theRealDescriptionBindsEveryOperation() {
+        try (Opened mirror = Opened.service(0)) {
+            BoundDefinition bound = mirror.bind(mirror.description);
+
+            assertTrue(bound.operationNames().contains("reflect"), bound.toString());
+            assertEquals("the first letter", answered(bound.call("find", Collections.singletonMap("key", "alpha"))));
+        }
+    }
+
+    @Test
+    void aMemberWhoseOffsetDisagreesWithThePlatformsLayoutIsRefusedNamingIt() {
+        try (Opened mirror = Opened.service(0)) {
+            Description moved = withMember(mirror.description, (type, member) -> member.kind() == DescribedKind.U64,
+                    member -> new Description.Member(member.name(), member.offset() + 8, member.size(), member.kind(),
+                            member.element(), member.type(), member.count(), member.release()));
+
+            DescriptionRefused refused = assertThrows(DescriptionRefused.class, () -> mirror.bind(moved));
+
+            assertTrue(refused.getMessage().contains("is described at offset"), refused.getMessage());
+        }
+    }
+
+    @Test
+    void aMemberOfAKindAboveTheLastIsRefusedWhole() {
+        try (Opened mirror = Opened.service(0)) {
+            Description unknown = withMember(mirror.description, (type, member) -> member.kind() == DescribedKind.F64,
+                    member -> new Description.Member(member.name(), member.offset(), member.size(),
+                            DescribedKind.LAST + 1, 0, member.type(), member.count(), member.release()));
+
+            assertRefusedWith(mirror, unknown, "which this binding does not know");
+        }
+    }
+
+    @Test
+    void anArrayMemberReachingAnUnknownKindIsRefusedAtTheBind() {
+        try (Opened mirror = Opened.service(0)) {
+            Description unknown = withMember(mirror.description,
+                    (type, member) -> member.kind() == DescribedKind.ARRAY, member -> new Description.Member(
+                            member.name(), member.offset(), member.size(), member.kind(), 99, member.type(),
+                            member.count(), member.release()));
+
+            assertRefusedWith(mirror, unknown, "reaches elements of kind 99");
+        }
+    }
+
+    @Test
+    void aPointerMemberNamingAStructTheDescriptionLacksIsRefusedAtTheBind() {
+        try (Opened mirror = Opened.service(0)) {
+            Description undescribed = withMember(mirror.description, (type, member) ->
+                    member.kind() == DescribedKind.POINTER && member.element() == DescribedKind.STRUCT,
+                    member -> new Description.Member(member.name(), member.offset(), member.size(), member.kind(),
+                            member.element(), Optional.of("undescribed"), member.count(), member.release()));
+
+            assertRefusedWith(mirror, undescribed, "describes none by that name");
+        }
+    }
+
+    @Test
+    void aPointerParameterReachingAnUnknownKindIsRefusedAtTheBind() {
+        try (Opened mirror = Opened.service(0)) {
+            Description unknown = withParameter(mirror.description, "reflect",
+                    parameter -> parameter.kind() == DescribedKind.POINTER && parameter.role() == Description.INPUT,
+                    parameter -> new Description.Parameter(parameter.name(), parameter.kind(), parameter.role(), 99,
+                            parameter.type(), parameter.count(), parameter.release()));
+
+            assertRefusedWith(mirror, unknown, "reaches elements of kind 99");
+        }
+    }
+
+    @Test
+    void aTextAnswerNamingAReleaseIsRefused() {
+        try (Opened mirror = Opened.service(0)) {
+            String release = firstRelease(mirror.description);
+            Description freed = withParameter(mirror.description, "find",
+                    parameter -> parameter.kind() == DescribedKind.TEXT && parameter.role() == Description.ANSWER,
+                    parameter -> new Description.Parameter(parameter.name(), parameter.kind(), parameter.role(),
+                            parameter.element(), parameter.type(), parameter.count(), Optional.of(release)));
+
+            assertRefusedWith(mirror, freed, "not yet ruled");
+        }
+    }
+
+    @Test
+    void anOperationPastTheSizeItsDefinitionAnsweredIsNotOffered() {
+        try (Opened mirror = Opened.service(0)) {
+            long growAt = mirror.description.operation("grow").get().offset();
+            long copy = mirror.copiedDefinition(growAt, Optional.<String>empty());
+            try {
+                BoundDefinition shortened = mirror.bindAt(withFirstShapeAtMost(mirror.description, growAt), copy);
+
+                assertEquals(-1.5, answered(shortened.call("halve", Collections.singletonMap("number", -3.0))));
+                assertFalse(shortened.operation("grow").isOffered());
+                UnsupportedOperationException refused = assertThrows(UnsupportedOperationException.class,
+                        () -> shortened.call("grow", Collections.singletonMap("amount", 1L)));
+                assertTrue(refused.getMessage().contains("does not offer grow"), refused.getMessage());
+                assertFalse(shortened.operation("count_releases").isOffered());
+            } finally {
+                mirror.access.free(copy);
+            }
+        }
+    }
+
+    @Test
+    void anOperationTheStructHoldsAsNullIsNotOffered() {
+        try (Opened mirror = Opened.service(0)) {
+            long copy = mirror.copiedDefinition(0, Optional.of("halve"));
+            try {
+                BoundDefinition holed = mirror.bindAt(mirror.description, copy);
+
+                assertFalse(holed.operation("halve").isOffered());
+                assertThrows(UnsupportedOperationException.class, () -> holed.call("halve",
+                        Collections.singletonMap("number", 1.0)));
+                assertEquals(2L, answered(holed.call("grow", Collections.singletonMap("amount", 1L))));
+            } finally {
+                mirror.access.free(copy);
+            }
+        }
+    }
+
+    /**
+     * Every layout and native function is made at the bind, and a call reuses its arena, so once the arena has grown to
+     * hold a call no call lays out, binds or allocates anything native again.
+     */
+    @Test
+    void aCallBuildsNothingAndAllocatesNoNativeMemoryOnceItsArenaHasGrown() {
+        CountingAccess counting = new CountingAccess();
+        try (Opened mirror = Opened.service(0, counting)) {
+            BoundDefinition bound = mirror.bind(mirror.description);
+            BoundOperation reflect = bound.operation("reflect");
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("label", "request");
+            sample.put("tags", Arrays.asList("accept", "host", "content-length"));
+            Map<String, Object> inputs = Collections.<String, Object>singletonMap("sample", sample);
+            answered(reflect.call(inputs));
+            answered(reflect.call(inputs));
+            long work = counting.boundWork();
+            long allocations = counting.allocations();
+
+            for (int call = 0; call < 50; call++) {
+                answered(reflect.call(inputs));
+            }
+
+            assertEquals(work, counting.boundWork());
+            assertEquals(allocations, counting.allocations());
+        }
+    }
+
+    private static void assertRefusedWith(Opened opened, Description description, String naming) {
+        DescriptionRefused refused = assertThrows(DescriptionRefused.class, () -> opened.bind(description));
+        assertTrue(refused.getMessage().contains(naming), refused.getMessage());
+    }
+
+    private static Object answered(DescribedAnswer answer) {
+        DescribedAnswer.Answered answered = assertInstanceOf(DescribedAnswer.Answered.class, answer);
+        return answered.value();
+    }
+
+    private static String firstRelease(Description description) {
+        for (Description.Operation operation : description.operations()) {
+            if (operation.returns() == Description.NOTHING) {
+                return operation.name();
+            }
+        }
+        throw new AssertionError("the description has no release");
+    }
+
+    /** The description with the first member {@code which} picks changed by {@code change}. */
+    private static Description withMember(Description description, BiPredicate<Description.Type, Description.Member>
+            which, UnaryOperator<Description.Member> change) {
+        List<Description.Type> types = new ArrayList<>();
+        boolean changed = false;
+        for (Description.Type type : description.types()) {
+            List<Description.Member> members = new ArrayList<>();
+            for (Description.Member member : type.members()) {
+                boolean picked = !changed && which.test(type, member);
+                members.add(picked ? change.apply(member) : member);
+                changed |= picked;
+            }
+            types.add(new Description.Type(type.name(), type.size(), type.firstShape(), members));
+        }
+        assertTrue(changed, "no member was picked");
+        return new Description(description.definition(), types, description.enums(), description.operations());
+    }
+
+    /** The description with the first parameter of {@code operation} that {@code which} picks changed. */
+    private static Description withParameter(Description description, String operation,
+                                             Predicate<Description.Parameter> which,
+                                             UnaryOperator<Description.Parameter> change) {
+        List<Description.Operation> operations = new ArrayList<>();
+        boolean changed = false;
+        for (Description.Operation described : description.operations()) {
+            List<Description.Parameter> parameters = new ArrayList<>();
+            for (Description.Parameter parameter : described.parameters()) {
+                boolean picked = !changed && described.name().equals(operation) && which.test(parameter);
+                parameters.add(picked ? change.apply(parameter) : parameter);
+                changed |= picked;
+            }
+            operations.add(new Description.Operation(described.name(), described.offset(), described.returns(),
+                    parameters));
+        }
+        assertTrue(changed, "no parameter was picked");
+        return new Description(description.definition(), description.types(), description.enums(), operations);
+    }
+
+    private static Description withFirstShapeAtMost(Description description, long size) {
+        List<Description.Type> types = new ArrayList<>();
+        for (Description.Type type : description.types()) {
+            types.add(type.name().equals(description.definition())
+                    ? new Description.Type(type.name(), type.size(), Math.min(type.firstShape(), size), type.members())
+                    : type);
+        }
+        return new Description(description.definition(), types, description.enums(), description.operations());
+    }
+
+    /** One service of the described library, its binary opened through the seam and its description read. */
+    private static final class Opened implements AutoCloseable {
+        final NativeAccess access;
+        final OpenLibrary library;
+        final long definition;
+        final Description description;
+
+        private Opened(NativeAccess access, OpenLibrary library, long definition, Description description) {
+            this.access = access;
+            this.library = library;
+            this.definition = definition;
+            this.description = description;
+        }
+
+        static Opened service(int index) {
+            return service(index, NativeBackends.current());
+        }
+
+        static Opened service(int index, NativeAccess access) {
+            LibraryDeclaration.Service service = DescribedFixture.declaration("library.json").services().get(index);
+            OpenLibrary library = access.open(DescribedFixture.binary());
+            NativeSignature answering = NativeSignature.of(NativeType.ADDRESS);
+            long definition = library.function(service.functions().get(0).symbol(), answering).call();
+            long description = library.function(service.description().get(), answering).call();
+            return new Opened(access, library, definition, new DescriptionReader(access).read(description));
+        }
+
+        BoundDefinition bind(Description chosen) {
+            return bindAt(chosen, definition);
+        }
+
+        BoundDefinition bindAt(Description chosen, long at) {
+            return DescribedBinder.bind(access, chosen, at, access.addressed(at, 8),
+                    new BoundOperation.Bound(access, new SpareArena(access), new DescribedHandles(), CallGate.OPEN));
+        }
+
+        /**
+         * A copy of the definition's struct, its size lowered to {@code size} unless 0, and the named operation's
+         * pointer set to NULL when one is named; freed by its caller.
+         */
+        long copiedDefinition(long size, Optional<String> nulled) {
+            int answered = access.getInt(definition, 0);
+            long copy = access.allocate(answered);
+            access.writeBytes(copy, 0, access.readBytes(definition, 0, answered));
+            if (size != 0) {
+                access.putInt(copy, 0, (int) size);
+            }
+            if (nulled.isPresent()) {
+                access.putLong(copy, description.operation(nulled.get()).get().offset(), 0);
+            }
+            return copy;
+        }
+
+        @Override
+        public void close() {
+            library.close();
+        }
+    }
+}

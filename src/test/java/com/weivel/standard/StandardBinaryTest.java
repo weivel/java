@@ -69,6 +69,7 @@ class StandardBinaryTest {
             }
         }
 
+        declared.addAll(LayoutComparison.descriptionStructNames());
         Set<String> undeclared = new TreeSet<>(printed.structs().keySet());
         undeclared.removeAll(declared);
         assertEquals(Collections.emptySet(), undeclared);

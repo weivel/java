@@ -19,11 +19,13 @@ public final class LoadedLibrary {
     private final List<LibraryService> services;
     private final Map<String, Object> definitions;
     private final LibraryLifetime lifetime;
+    private final Runnable releaseHandles;
     private final List<HostService> registrations = new ArrayList<>();
     private boolean unloaded;
     private boolean idsReleased;
 
-    LoadedLibrary(Host host, LibraryDeclaration declaration, Map<String, Object> objects, LibraryLifetime lifetime) {
+    LoadedLibrary(Host host, LibraryDeclaration declaration, Map<String, Object> objects, LibraryLifetime lifetime,
+                  Runnable releaseHandles) {
         this.host = host;
         this.declaration = declaration;
         this.objects = Collections.unmodifiableMap(new LinkedHashMap<>(objects));
@@ -39,6 +41,7 @@ public final class LoadedLibrary {
         this.services = Collections.unmodifiableList(bytesServices);
         this.definitions = Collections.unmodifiableMap(definitionObjects);
         this.lifetime = lifetime;
+        this.releaseHandles = releaseHandles;
     }
 
     /**
@@ -68,8 +71,9 @@ public final class LoadedLibrary {
      * calling resolves the service through its context, and so holds it.
      *
      * @return the object each declared definition service is registered with, by its id in the declaration's order:
-     *     a {@code MemorySegment} on the foreign function API and a JNA {@code Pointer} on JNA, carrying the very
-     *     address the definition's symbol answered
+     *     for a service that declares no description, a {@code MemorySegment} on the foreign function API and a JNA
+     *     {@code Pointer} on JNA, carrying the very address the definition's symbol answered; for one that declares a
+     *     description, the {@link com.weivel.core.BoundDefinition} bound from it, standing for that same address
      */
     public Map<String, Object> definitions() {
         return definitions;
@@ -86,6 +90,11 @@ public final class LoadedLibrary {
 
     LibraryLifetime lifetime() {
         return lifetime;
+    }
+
+    /** Releases every handle its described definitions answered and nobody released, while its binary is open. */
+    void releaseHandles() {
+        releaseHandles.run();
     }
 
     /**

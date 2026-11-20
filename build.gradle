@@ -128,8 +128,8 @@ def nativeSiblings = [
          configureDefinitions: []],
         [name                : 'standard',
          taskSuffix          : 'Standard',
-         targets             : ['weivel_standard_shared', 'layouts'],
-         libraries           : ['weivel_standard'],
+         targets             : ['weivel_standard_shared', 'weivel_standard_described', 'layouts'],
+         libraries           : ['weivel_standard', 'weivel_standard_described'],
          compiledSiblings    : ['standard', 'core'],
          configureDefinitions: ["-DWEIVEL_CORE_SOURCE_DIR=${new File(siblingsDirectory, 'core').absolutePath}"]],
 ]
@@ -198,13 +198,15 @@ def nativeBuildTasks = nativeSiblings.collect { Map nativeSibling ->
 def coreBinary = new File(nativeDirectory, sharedLibraryFileName('weivel_core'))
 def standardBinary = new File(nativeDirectory, sharedLibraryFileName('weivel_standard'))
 def echoBinary = new File(nativeDirectory, sharedLibraryFileName('echo'))
+def describedBinary = new File(nativeDirectory, sharedLibraryFileName('weivel_standard_described'))
 def coreLayouts = new File(nativeDirectory, executableFileName('core-layouts'))
 def standardLayouts = new File(nativeDirectory, executableFileName('standard-layouts'))
-def gatheredBinaries = [coreBinary, standardBinary, echoBinary, coreLayouts, standardLayouts]
+def gatheredBinaries = [coreBinary, standardBinary, echoBinary, describedBinary, coreLayouts, standardLayouts]
 
 def buildNative = tasks.register('buildNative', Sync) {
     group = 'build'
-    description = 'Builds the core, its echo library and the standard from siblings/ and gathers them in build/native.'
+    description = 'Builds the core, its echo library, the standard and its described library from siblings/ and ' +
+            'gathers them in build/native.'
     dependsOn nativeBuildTasks
     into nativeDirectory
     nativeSiblings.each { Map nativeSibling ->
@@ -233,6 +235,7 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
             'weivel.test.coreBinary'     : coreBinary,
             'weivel.test.standardBinary' : standardBinary,
             'weivel.test.echoBinary'     : echoBinary,
+            'weivel.test.describedBinary': describedBinary,
             'weivel.test.coreLayouts'    : coreLayouts,
             'weivel.test.standardLayouts': standardLayouts,
             'weivel.test.coreHeader'     : new File(siblingsDirectory, 'core/include/weivel/core.h'),
@@ -256,6 +259,9 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
     def layerVectors = new File(siblingsDirectory, 'conformance/vectors/layer')
     task.inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
     task.systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
+    def describedDirectory = new File(siblingsDirectory, 'standard/test/described')
+    task.inputs.dir(describedDirectory).withPropertyName('weivel.test.describedDirectory')
+    task.systemProperty 'weivel.test.describedDirectory', describedDirectory.absolutePath
 }
 
 def runsOnFfm = { Test task ->
