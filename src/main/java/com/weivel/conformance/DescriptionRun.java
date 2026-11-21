@@ -157,13 +157,16 @@ final class DescriptionRun {
         return held;
     }
 
-    /** The bound definition the holder resolved for the service {@code id}, or the one kept under the name. */
+    /**
+     * The bound definition the holder resolved for the service {@code id}, or else the one kept under the name, so a
+     * kept name never hides a service.
+     */
     private BoundDefinition bound(String holder, String id) {
+        Object object = resolvedBy(holder).get(id);
         KeptDefinition carried = keptDefinitions.get(id);
-        if (carried != null) {
+        if (object == null && carried != null) {
             return carried.definition;
         }
-        Object object = resolvedBy(holder).get(id);
         if (!(object instanceof BoundDefinition)) {
             throw new IllegalStateException(holder + " resolved no bound definition " + id + ", but " + object);
         }

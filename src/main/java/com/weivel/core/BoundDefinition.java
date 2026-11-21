@@ -48,7 +48,9 @@ public final class BoundDefinition {
      * Binds a definition its caller got some other way than from a library's service, as one a library serves is
      * bound: every struct its description names laid out by this platform's own rules and held against it, and every
      * operation bound once here. No library stands behind it, so nothing is released for its caller: every handle it
-     * answers, and every answer carrying a definition, lives until its own release.
+     * answers, and every answer carrying a definition, lives until its own release. The native memory its calls reuse
+     * for their inputs is its own, held as long as the bound definition is and never freed, since no binary's close
+     * stands behind it to free it: a caller binds a definition once and keeps it.
      *
      * @param definition the definition's struct, which must outlive the bound definition: a {@code MemorySegment} on
      *     the foreign function API, a JNA {@code Pointer} on JNA, carrying its address

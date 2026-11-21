@@ -98,6 +98,10 @@ public final class BoundOperation {
      *     kind does not hold, before anything is called; and for an operation of a definition an answer carried once
      *     that answer has ended, by its release or the library's unload
      * @throws UnsupportedOperationException when the provider does not offer it
+     * @implNote The scope is left before the gate: the end of an answer released while this call ran is run by the
+     *     last call to leave the scope, and only leaving the scope first keeps that end, and the releases it calls,
+     *     inside this call's own hold on the binary, so an unload can never have closed it under them. The gate is
+     *     left even when that end throws.
      */
     public DescribedAnswer call(Map<String, ?> inputs) {
         if (function == null) {
@@ -122,9 +126,12 @@ public final class BoundOperation {
                 bound.arenas.give(arena);
             }
         } finally {
-            bound.scope.leave();
-            if (entered) {
-                bound.gate.leave();
+            try {
+                bound.scope.leave();
+            } finally {
+                if (entered) {
+                    bound.gate.leave();
+                }
             }
         }
     }

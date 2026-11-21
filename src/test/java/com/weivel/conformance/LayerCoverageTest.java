@@ -31,6 +31,11 @@ class LayerCoverageTest {
         assertEquals(Collections.<String>emptyList(), unnamed(ids, displayNames()));
     }
 
+    /**
+     * A tripwire as much as a check: it goes red when the pinned kit drops Java's {@code host/} exemption, or any other,
+     * so the exemption is noticed and either restored or its vectors taken up, rather than every host vector reading
+     * as one no test names.
+     */
     @Test
     void everyDirectoryTheKitExemptsJavaFromHoldsAVector() {
         List<String> exemptions = KitFixture.exemptions();

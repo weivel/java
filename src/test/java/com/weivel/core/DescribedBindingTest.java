@@ -493,6 +493,52 @@ class DescribedBindingTest {
     }
 
     /**
+     * An answer released while a call runs in the definition it carried, and its library then unloaded, is freed by
+     * that call as it returns, through the binary's gate while the call still holds the binary open: never left for a
+     * binary the unload let close under it. The gate here holds the binary as a library's lifetime does after the
+     * unload, open only while something holds it.
+     */
+    @Test
+    void anAnswerEndedUnderACallInFlightIsFreedWhileThatCallStillHoldsTheBinary() throws Exception {
+        CountDownLatch parked = new CountDownLatch(1);
+        CountDownLatch resume = new CountDownLatch(1);
+        AtomicBoolean park = new AtomicBoolean();
+        Runnable inside = () -> {
+            if (park.getAndSet(false)) {
+                parked.countDown();
+                awaited(resume);
+            }
+        };
+        HeldGate gate = new HeldGate();
+        DescribedHandles holdings = new DescribedHandles();
+        holdings.gate(gate);
+        try (Opened walker = Opened.service(1)) {
+            BoundDefinition bound = walker.bindThrough(walker.description, holdings, gate, inside);
+            DescribedAnswer.Answered loan = lend(bound);
+            BoundDefinition counter = carried(loan);
+            park.set(true);
+            ExecutorService thread = Executors.newSingleThreadExecutor();
+            try {
+                Future<DescribedAnswer> adding = thread.submit(() -> counter.call("add", amount(5L)));
+                awaited(parked);
+
+                loan.release();
+                gate.unload();
+                resume.countDown();
+                Object added = answered(adding.get(10, TimeUnit.SECONDS));
+
+                assertEquals(1005L, added);
+                assertFalse(holdings.keepsAnyAnswer(), "the answer was left for the binary's close");
+                assertEquals(0, gate.refused.get(), "the answer's free found the binary closed");
+                assertEquals(0, gate.holders.get());
+            } finally {
+                resume.countDown();
+                thread.shutdownNow();
+            }
+        }
+    }
+
+    /**
      * Ending a kept answer releases what was got through each definition it carried before the answer itself, and
      * neither while a call still runs in any of them.
      */
@@ -664,6 +710,37 @@ class DescribedBindingTest {
         return (Long) counts.get(kind);
     }
 
+    /**
+     * A gate holding the binary as a library's lifetime does: the host holds it until {@link #unload}, every call
+     * entering holds it too, and once nothing holds it the binary is closed and every entry refused.
+     */
+    private static final class HeldGate implements CallGate {
+        final AtomicInteger holders = new AtomicInteger(1);
+        final AtomicInteger refused = new AtomicInteger();
+
+        @Override
+        public boolean enter() {
+            int current;
+            do {
+                current = holders.get();
+                if (current == 0) {
+                    refused.incrementAndGet();
+                    return false;
+                }
+            } while (!holders.compareAndSet(current, current + 1));
+            return true;
+        }
+
+        @Override
+        public void leave() {
+            holders.decrementAndGet();
+        }
+
+        void unload() {
+            holders.decrementAndGet();
+        }
+    }
+
     /** A release adding {@code what} to {@code order} for every handle it frees. */
     private static ReleasePlan recording(List<String> order, String what) {
         return new ReleasePlan("recording", arguments -> {
@@ -805,6 +882,12 @@ class DescribedBindingTest {
         BoundDefinition bindAt(Description chosen, long at) {
             return DescribedBinder.bind(access, chosen, at, access.addressed(at, 8),
                     new BoundOperation.Bound(access, new SpareArena(access), new DescribedHandles(), CallGate.OPEN));
+        }
+
+        BoundDefinition bindThrough(Description chosen, DescribedHandles holdings, CallGate gate,
+                                    Runnable insideTheCall) {
+            return DescribedBinder.bind(access, chosen, definition, access.addressed(definition, 8),
+                    new BoundOperation.Bound(access, new SpareArena(access), holdings, gate, insideTheCall));
         }
 
         BoundDefinition bindWith(Description chosen, DescribedHandles holdings, Runnable insideTheCall) {
