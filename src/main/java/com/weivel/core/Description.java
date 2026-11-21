@@ -8,8 +8,9 @@ import java.util.Optional;
 
 /**
  * A service's description as Java values, copied once at the load from the {@code weivel_standard_description} its
- * library answered, after the standard's check passed it: the definition's structs and enums, and each function
- * pointer of the definition with its parameters. Kinds are {@link DescribedKind}'s numbers.
+ * library answered, after the standard's check passed it: the definition's structs and enums, each function pointer
+ * of the definition with its parameters, the operations that may block, and the description of every definition a
+ * DEFINITION member or parameter names. Kinds are {@link DescribedKind}'s numbers.
  */
 public final class Description {
     /** {@code WEIVEL_STANDARD_DESCRIBED_INPUT}: a parameter read during the call only. */
@@ -27,6 +28,8 @@ public final class Description {
     private final List<Type> types;
     private final List<Enumeration> enums;
     private final List<Operation> operations;
+    private final List<String> blocking;
+    private final List<Description> definitions;
 
     /**
      * Makes the value.
@@ -35,12 +38,17 @@ public final class Description {
      * @param types every described struct
      * @param enums every described enum
      * @param operations every function pointer of the definition, in the struct's order
+     * @param blocking the names of the operations that may block, as the description lists them
+     * @param definitions the description of every definition a DEFINITION member or parameter names
      */
-    public Description(String definition, List<Type> types, List<Enumeration> enums, List<Operation> operations) {
+    public Description(String definition, List<Type> types, List<Enumeration> enums, List<Operation> operations,
+                       List<String> blocking, List<Description> definitions) {
         this.definition = Objects.requireNonNull(definition, "definition");
         this.types = copied(types);
         this.enums = copied(enums);
         this.operations = copied(operations);
+        this.blocking = copied(blocking);
+        this.definitions = copied(definitions);
     }
 
     /**
@@ -77,6 +85,41 @@ public final class Description {
      */
     public List<Operation> operations() {
         return operations;
+    }
+
+    /**
+     * Answers {@code blocking}.
+     *
+     * @return the names of the operations that may block, doing I/O or waiting, as the description lists them; empty
+     *     for a description that lists none, or was answered before its {@code blocking} was
+     */
+    public List<String> blocking() {
+        return blocking;
+    }
+
+    /**
+     * Answers {@code definitions}.
+     *
+     * @return the description of every definition a DEFINITION member or parameter names, each a whole description;
+     *     empty for one that nests none
+     */
+    public List<Description> definitions() {
+        return definitions;
+    }
+
+    /**
+     * The nested description of the definition of that name.
+     *
+     * @param definition the {@code definition} of one of {@link #definitions()}
+     * @return it; empty when the description nests none of that name
+     */
+    public Optional<Description> nested(String definition) {
+        for (Description nested : definitions) {
+            if (nested.definition().equals(definition)) {
+                return Optional.of(nested);
+            }
+        }
+        return Optional.empty();
     }
 
     /**

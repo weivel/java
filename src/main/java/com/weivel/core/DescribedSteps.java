@@ -93,7 +93,7 @@ final class DescribedSteps {
 
         @Override
         void prepare(DescribedCall call, Map<String, ?> given, long[] arguments, int index) {
-            long block = call.allocate(size);
+            long block = call.allocateAnswer(size);
             if (leadingSize) {
                 access.putInt(block, 0, (int) size);
             }
@@ -101,8 +101,19 @@ final class DescribedSteps {
         }
 
         @Override
+        boolean answers() {
+            return true;
+        }
+
+        @Override
         void answer(DescribedCall call, long block, Map<String, Object> answers) {
             switch (plan.kind) {
+                case DescribedKind.DEFINITION:
+                    long definition = access.getLong(block, 0);
+                    if (definition != 0) {
+                        answers.put(plan.name, call.carry(plan, definition));
+                    }
+                    return;
                 case DescribedKind.TEXT:
                     answers.put(plan.name, call.readReached(plan, access.getLong(block, 0), 0));
                     return;

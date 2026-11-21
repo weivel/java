@@ -5,9 +5,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Copies a {@code weivel_standard_description} into a {@link Description}, through the hand layout of its header.
- * It reads a description the standard's check has passed, so every array is as long as its count and every name it
- * requires is set.
+ * Copies a {@code weivel_standard_description} into a {@link Description}, through the hand layout of its header,
+ * its nested descriptions with it. It reads a description the standard's check has passed, so every array is as long
+ * as its count, every name it requires is set, and its nesting ends; an array appended past the {@code size} the
+ * description answered reads as empty.
  */
 final class DescriptionReader {
     private final NativeAccess access;
@@ -26,7 +27,24 @@ final class DescriptionReader {
         List<Description.Operation> operations = new ArrayList<>();
         each(description, layout, "operations", "operation_count", DescriptionLayouts.OPERATION, operation ->
                 operations.add(operation(operation)));
-        return new Description(text(description, layout, "definition"), types, enums, operations);
+        List<String> blocking = new ArrayList<>();
+        List<Description> definitions = new ArrayList<>();
+        long answered = Integer.toUnsignedLong(access.getInt(description, layout.offsetOf("size")));
+        if (reaches(answered, layout, "blocking_count")) {
+            each(description, layout, "blocking", "blocking_count", Layout.ADDRESS, name -> blocking.add(
+                    access.readText(access.getLong(name, 0))));
+        }
+        if (reaches(answered, layout, "definition_count")) {
+            each(description, layout, "definitions", "definition_count", Layout.ADDRESS, nested -> definitions.add(
+                    read(access.getLong(nested, 0))));
+        }
+        return new Description(text(description, layout, "definition"), types, enums, operations, blocking,
+                definitions);
+    }
+
+    /** Whether a description of {@code answered} bytes holds the whole of the count {@code member}. */
+    private static boolean reaches(long answered, Layout layout, String member) {
+        return layout.offsetOf(member) + Layout.LONG.byteSize() <= answered;
     }
 
     private Description.Type type(long type) {

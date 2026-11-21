@@ -15,6 +15,12 @@ import java.util.Set;
  * signature its parameters give, and the plan of every parameter built, so that a call follows plans and looks
  * nothing up. The description has passed the standard's check, which alone rules the shapes the convention takes:
  * the kinds each role takes, one context and first, at most one refusal and last, and a release of two parameters.
+ * Every description it nests is bound once too, against a definition struct holding no function, so one this
+ * platform or binding cannot bind is refused here rather than when an answer first carries it.
+ *
+ * @implNote A definition an answer carries is bound afresh from its nested description on every answer: its function
+ *     pointers, context and releases are read from the struct that answer pointed at and never kept by address, since
+ *     a provider may free a definition it lent and lend another at the same address.
  */
 final class DescribedBinder {
     private static final int MOST_PARAMETERS = 7;
@@ -26,6 +32,7 @@ final class DescribedBinder {
     private final long definition;
     private final long answeredSize;
     private final BoundOperation.Bound bound;
+    private final DescribedCall.Carrier carrier;
     private final Map<String, ReleasePlan> releases = new LinkedHashMap<>();
     private long context;
 
@@ -37,6 +44,8 @@ final class DescribedBinder {
         this.definition = definition;
         this.answeredSize = Integer.toUnsignedLong(access.getInt(definition, 0));
         this.bound = bound;
+        this.carrier = description.definitions().isEmpty() ? DescribedCall.Carrier.NONE
+                : (nested, pointer, carried) -> carry(access, description, nested, pointer, bound, carried);
     }
 
     /**
@@ -49,7 +58,64 @@ final class DescribedBinder {
                                 BoundOperation.Bound bound) {
         DescribedBinder binder = new DescribedBinder(access, new DescribedLayouts(access, description), definition,
                 bound);
-        return new BoundDefinition(description.definition(), addressed, definition, description, binder.operations());
+        Map<String, BoundOperation> operations = binder.operations();
+        for (Description nested : description.definitions()) {
+            refuseUnbindable(access, nested);
+        }
+        return new BoundDefinition(description.definition(), addressed, definition, description, operations);
+    }
+
+    /**
+     * Binds a definition with no library behind it, as {@link BoundDefinition#bindDefinition} does, on the backend this
+     * Java runs on.
+     *
+     * @throws DescriptionRefused for a description this binding cannot bind on this platform, or a definition that
+     *     ends before its first shape
+     */
+    static BoundDefinition bindDefinition(Object definition, Object description) {
+        NativeAccess access = NativeBackends.current();
+        return bind(access, new DescriptionReader(access).read(access.addressOf(description)),
+                access.addressOf(definition), definition, new BoundOperation.Bound(access, new SpareArena(access),
+                        new DescribedHandles(), CallGate.OPEN));
+    }
+
+    /** Binds a nested description against a zeroed struct of its definition, which offers no operation. */
+    private static void refuseUnbindable(NativeAccess access, Description nested) {
+        Description.Type type = nested.type(nested.definition()).orElseThrow(() -> new DescriptionRefused(
+                nested.definition(), "it describes no struct " + nested.definition() + " for its definition"));
+        long empty = access.allocate(Math.max(type.size(), Integer.BYTES));
+        try {
+            access.clear(empty, 0, Math.max(type.size(), Integer.BYTES));
+            access.putInt(empty, 0, (int) type.size());
+            bind(access, nested, empty, access.addressed(empty, type.size()), new BoundOperation.Bound(access,
+                    new SpareArena(access), new DescribedHandles(), CallGate.OPEN));
+        } finally {
+            access.free(empty);
+        }
+    }
+
+    /**
+     * Binds the definition at {@code pointer}, which an answer got through {@code bound} carried, in a scope of its
+     * own whose holdings are a child of {@code bound}'s, and adds that scope to {@code carried}.
+     */
+    private static BoundDefinition carry(NativeAccess access, Description description, String definition,
+                                         long pointer, BoundOperation.Bound bound,
+                                         List<KeptAnswer.Carried> carried) {
+        Description nested = description.nested(definition).orElseThrow(() -> new IllegalStateException(
+                "an answer of " + description.definition() + " carried the definition " + definition + ", which its "
+                        + "description does not nest"));
+        CarriedScope scope = CarriedScope.carried();
+        DescribedHandles holdings = bound.holdings.child();
+        BoundDefinition answered;
+        try {
+            answered = bind(access, nested, pointer, access.addressed(pointer, Integer.toUnsignedLong(
+                    access.getInt(pointer, 0))), bound.carried(holdings, scope));
+        } catch (DescriptionRefused refused) {
+            throw new IllegalStateException("the provider answered a definition this binding cannot bind: "
+                    + refused.getMessage(), refused);
+        }
+        carried.add(new KeptAnswer.Carried(scope, holdings));
+        return answered;
     }
 
     private Map<String, BoundOperation> operations() {
@@ -116,6 +182,7 @@ final class DescribedBinder {
         NativeType[] types = new NativeType[parameters.size()];
         List<String> inputNames = new ArrayList<>();
         List<String> answerNames = new ArrayList<>();
+        boolean keepsAnswers = false;
         for (int index = 0; index < parameters.size(); index++) {
             Description.Parameter parameter = parameters.get(index);
             types[index] = NativeType.ADDRESS;
@@ -127,7 +194,9 @@ final class DescribedBinder {
                     inputNames.add(parameter.name());
                 }
             } else if (parameter.role() == Description.ANSWER) {
-                steps[index] = answer(operation, parameter);
+                MemberPlan plan = reach(operation, parameter);
+                steps[index] = answer(parameter, plan);
+                keepsAnswers |= DescribedLayouts.carriesDefinition(plan);
                 answerNames.add(parameter.name());
             } else {
                 steps[index] = refusal(operation, parameter);
@@ -135,7 +204,8 @@ final class DescribedBinder {
         }
         return new BoundOperation(description.definition(), name,
                 functionAt(operation.offset(), NativeSignature.of(NativeType.INT, types)), steps, inputNames,
-                new LinkedHashSet<>(inputNames), answerNames.size() == 1 ? answerNames.get(0) : null, bound);
+                new LinkedHashSet<>(inputNames), answerNames.size() == 1 ? answerNames.get(0) : null, bound, carrier,
+                keepsAnswers);
     }
 
     private BoundOperation.Step input(Description.Operation operation, Description.Parameter parameter,
@@ -158,10 +228,9 @@ final class DescribedBinder {
         return new DescribedSteps.Reached(operation.name(), plan, countIndex);
     }
 
-    private BoundOperation.Step answer(Description.Operation operation, Description.Parameter parameter) {
+    private BoundOperation.Step answer(Description.Parameter parameter, MemberPlan plan) {
         int kind = parameter.kind();
         Optional<ReleasePlan> release = namedRelease(parameter);
-        MemberPlan plan = reach(operation, parameter);
         if (kind == DescribedKind.HANDLE) {
             plan.release = release.orElse(null);
             return new DescribedSteps.Answering(access, plan, CELL, false, null);

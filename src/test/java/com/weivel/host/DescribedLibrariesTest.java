@@ -109,7 +109,7 @@ class DescribedLibrariesTest {
             assertRefused(() -> mirror.call("weigh", inputs("value", Double.NaN)), "finite");
             assertRefused(() -> mirror.call("reflect", inputs("sample", inputs("size", 8L))),
                     "has no size a caller writes");
-            assertEquals(Arrays.asList(0L, 0L, 0L, 0L), releaseCounts(mirror, before),
+            assertEquals(Arrays.asList(0L, 0L, 0L, 0L, 0L), releaseCounts(mirror, before),
                     "a refused input reached no provider, so nothing it answers was released");
         }
     }
@@ -194,7 +194,7 @@ class DescribedLibrariesTest {
             cursor.release();
 
             assertTrue(cursor.isReleased());
-            assertEquals(Arrays.asList(0L, 0L, 0L, 1L), releaseCounts(bound.get(mirrorId()), before));
+            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L), releaseCounts(bound.get(mirrorId()), before));
             assertRefused(() -> walker.call("use", inputs("cursor", cursor)), "released already");
             assertRefused(() -> walker.call("use", inputs("cursor", "a cursor")), "a handle of");
         }
@@ -216,8 +216,46 @@ class DescribedLibrariesTest {
             cursor.release();
 
             assertTrue(releasedByTheUnload);
-            assertEquals(Arrays.asList(0L, 0L, 0L, 1L), afterTheUnload);
+            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L), afterTheUnload);
             assertEquals(afterTheUnload, releaseCounts(mirror, before));
+        }
+    }
+
+    @Test
+    void theOperationsADescriptionMarksBlockingAreReportedAndCalledOnTheCallingThread() throws Exception {
+        try (HostFixture fixture = checking()) {
+            Map<String, BoundDefinition> bound = loaded(fixture);
+            BoundDefinition walker = bound.get(walkerId());
+
+            Object waited = answered(walker.call("wait", inputs("ticks", 7L)));
+
+            assertEquals(Collections.singletonList("wait"), walker.blockingOperations());
+            assertEquals(Collections.<String>emptyList(), bound.get(mirrorId()).blockingOperations());
+            assertEquals(7L, waited);
+        }
+    }
+
+    /**
+     * The unload ends every answer carrying a definition that its holder has not released: a call through the
+     * definition is the caller's mistake at once, though the walker it was got through is still held and callable.
+     */
+    @Test
+    void aDefinitionAnAnswerCarriedIsRefusedOnceItsLibraryIsUnloaded() throws Exception {
+        try (HostFixture fixture = checking()) {
+            LoadedLibrary library = value(fixture.host.loadLibrary(DescribedFixture.binary(), declaration()));
+            TestEntry consumer = activated(fixture, mirrorId(), walkerId());
+            BoundDefinition walker = (BoundDefinition) value(consumer.context.get(walkerId()));
+            DescribedAnswer.Answered loan = assertInstanceOf(DescribedAnswer.Answered.class, walker.call("lend",
+                    Collections.<String, Object>emptyMap()));
+            BoundDefinition counter = (BoundDefinition) ((Map<?, ?>) loan.value()).get("counter");
+            Object beforeTheUnload = answered(counter.call("add", inputs("amount", 5L)));
+
+            value(fixture.host.unloadLibrary(library));
+
+            assertEquals(1005L, beforeTheUnload);
+            assertRefused(() -> counter.call("add", inputs("amount", 5L)), "carried by an answer that has ended");
+            assertEquals(7L, answered(walker.call("wait", inputs("ticks", 7L))));
+            loan.release();
         }
     }
 

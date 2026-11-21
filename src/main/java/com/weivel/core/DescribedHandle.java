@@ -114,6 +114,10 @@ public final class DescribedHandle {
         return true;
     }
 
+    DescribedHandles holdings() {
+        return holdings;
+    }
+
     ReleasePlan releasePlan() {
         return release;
     }

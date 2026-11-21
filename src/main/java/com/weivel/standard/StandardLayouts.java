@@ -171,10 +171,93 @@ final class StandardLayouts {
             ADDRESS.withName("config"),
             ADDRESS.withName("plugin")).withName("weivel_standard_paths");
 
+    static final Layout LOG = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("context"),
+            ADDRESS.withName("write"),
+            ADDRESS.withName("release_refusal")).withName("weivel_standard_log");
+
+    static final Layout SCOPE = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("config"),
+            ADDRESS.withName("secrets"),
+            ADDRESS.withName("paths"),
+            ADDRESS.withName("log"),
+            ADDRESS.withName("storage")).withName("weivel_standard_scope");
+
+    static final Layout SCOPES = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("context"),
+            ADDRESS.withName("open"),
+            ADDRESS.withName("release_scope"),
+            ADDRESS.withName("release_refusal")).withName("weivel_standard_scopes");
+
+    static final Layout HOST_LIBRARY = Layout.struct(
+            ADDRESS.withName("binary"),
+            ADDRESS.withName("declaration")).withName("weivel_standard_host_library");
+
+    static final Layout HOST_PLUGIN = Layout.struct(
+            ADDRESS.withName("directory"),
+            ADDRESS.withName("manifest"),
+            ADDRESS.withName("entry")).withName("weivel_standard_host_plugin");
+
+    static final Layout HOST_PLAN = Layout.struct(
+            INT.withName("size"),
+            INT.withName("mode"),
+            ADDRESS.withName("libraries"),
+            LONG.withName("library_count"),
+            ADDRESS.withName("plugins"),
+            LONG.withName("plugin_count"),
+            ADDRESS.withName("action_plugin"),
+            ADDRESS.withName("action_name"),
+            value().withName("action_arguments"),
+            ADDRESS.withName("storage")).withName("weivel_standard_host_plan");
+
+    static final Layout HOST_OUTCOME = Layout.struct(
+            ADDRESS.withName("manifest"),
+            INT.withName("state"),
+            Layout.padding(4),
+            ADDRESS.withName("detail")).withName("weivel_standard_host_outcome");
+
+    static final Layout HOST_NEXT = Layout.struct(
+            INT.withName("size"),
+            INT.withName("has_next"),
+            LONG.withName("next"),
+            ADDRESS.withName("storage")).withName("weivel_standard_host_next");
+
+    static final Layout HOST = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("context"),
+            ADDRESS.withName("start"),
+            ADDRESS.withName("started"),
+            ADDRESS.withName("tick"),
+            ADDRESS.withName("finished"),
+            ADDRESS.withName("stop"),
+            ADDRESS.withName("release_plan"),
+            ADDRESS.withName("release_next"),
+            ADDRESS.withName("release_refusal")).withName("weivel_standard_host");
+
     /** The core's {@code weivel_strings}, laid out where the standard embeds or points at one. */
     static final Layout STRINGS_OF_THE_CORE = strings();
 
     private StandardLayouts() {
+    }
+
+    /** {@code weivel/value.h}'s node, laid out where the standard embeds one. */
+    private static Layout value() {
+        return Layout.struct(
+                INT.withName("kind"),
+                INT.withName("boolean"),
+                DOUBLE.withName("number"),
+                ADDRESS.withName("text"),
+                LONG.withName("length"),
+                ADDRESS.withName("items"),
+                ADDRESS.withName("entries"),
+                LONG.withName("count")).withName("weivel_standard_value");
     }
 
     private static Layout strings() {

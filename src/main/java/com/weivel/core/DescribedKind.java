@@ -41,8 +41,13 @@ public final class DescribedKind {
     public static final int CONTEXT = 14;
     /** {@code void *}: what an answer's storage holds, never written or read by a binding. */
     public static final int STORAGE = 15;
+    /**
+     * {@code const T *} to a definition the description's {@code definitions} describe, as the
+     * {@link BoundDefinition} bound for it, which lives as long as the answer that carried it.
+     */
+    public static final int DEFINITION = 16;
     /** The highest kind this binding knows; a description holding a higher one is refused whole. */
-    public static final int LAST = STORAGE;
+    public static final int LAST = DEFINITION;
 
     private DescribedKind() {
     }

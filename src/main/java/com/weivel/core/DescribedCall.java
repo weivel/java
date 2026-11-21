@@ -11,7 +11,8 @@ import java.util.Map;
  * Writes and reads the structs of one described call, by the plans its definition was bound with, in the arena the
  * call took: every input written straight into native memory as plain stores, and every answer copied out into Java
  * values. A member a caller leaves out stays at its zero. Structs nest no deeper than a value tree may, so a cycle of
- * pointers, in a caller's maps or a provider's answer, is refused rather than followed for ever.
+ * pointers, in a caller's maps or a provider's answer, is refused rather than followed for ever. A definition an answer
+ * carries is bound as it is read, and the call collects each one's scope for the answer that will keep it.
  *
  * @implNote Both walks keep their own stack of structs still to write or read rather than recursing, so the depth
  *     limit is reached on any thread's stack, however small: a recursive walk overflowed a Linux runner's default
@@ -23,21 +24,71 @@ final class DescribedCall {
     private final NativeAccess access;
     private final NativeArena arena;
     private final DescribedHandles holdings;
+    private final Carrier carrier;
+    private final boolean answersApart;
     private final List<DescribedHandle> made = new ArrayList<>();
+    private final List<KeptAnswer.Carried> carried = new ArrayList<>();
+    private NativeArena answers;
     private final List<DescribedHandle> used = new ArrayList<>();
     private final Deque<StructWrite> writes = new ArrayDeque<>();
     private final Deque<StructRead> reads = new ArrayDeque<>();
     /** How many elements the last {@link #reached} wrote, for the count beside them. */
     long counted;
 
-    DescribedCall(NativeAccess access, NativeArena arena, DescribedHandles holdings) {
+    /**
+     * @param carrier binds a definition one of the call's answers carries
+     * @param answersApart whether the call's answers are written in memory of their own, apart from {@code arena},
+     *     since an answer carrying a definition outlives the call and so the arena's reuse
+     */
+    DescribedCall(NativeAccess access, NativeArena arena, DescribedHandles holdings, Carrier carrier,
+                  boolean answersApart) {
         this.access = access;
         this.arena = arena;
         this.holdings = holdings;
+        this.carrier = carrier;
+        this.answersApart = answersApart;
     }
 
     long allocate(long size) {
         return arena.allocateAddress(size);
+    }
+
+    /** Zeroed memory for an empty answer the provider fills: in the arena, or apart from it for answers kept. */
+    long allocateAnswer(long size) {
+        if (!answersApart) {
+            return arena.allocateAddress(size);
+        }
+        if (answers == null) {
+            answers = new NativeArena(access);
+        }
+        return answers.allocateAddress(size);
+    }
+
+    /** Hands the memory the answers were written in apart to the answer that keeps them; null when there is none. */
+    NativeArena takeAnswers() {
+        NativeArena taken = answers;
+        answers = null;
+        return taken;
+    }
+
+    /** Frees the memory the answers were written in apart, for answers released before the call answers. */
+    void closeAnswers() {
+        NativeArena taken = takeAnswers();
+        if (taken != null) {
+            taken.close();
+        }
+    }
+
+    /** The scope of every definition the call's answers carried, in the order they were read. */
+    List<KeptAnswer.Carried> carried() {
+        return carried;
+    }
+
+    /** Ends every definition the call's answers carried, for an answer that failed to be copied out whole. */
+    void endCarried() {
+        for (KeptAnswer.Carried definition : carried) {
+            definition.scope.close(definition.holdings::releaseAll);
+        }
     }
 
     /**
@@ -357,9 +408,16 @@ final class DescribedCall {
                 return readArray(plan, pointer, count, depth);
             case DescribedKind.HANDLE:
                 return pointer == 0 ? null : hold(plan, pointer);
+            case DescribedKind.DEFINITION:
+                return pointer == 0 ? null : carry(plan, pointer);
             default:
                 return null;
         }
+    }
+
+    /** Binds the definition at {@code pointer}, which one of the call's answers carries. */
+    BoundDefinition carry(MemberPlan plan, long pointer) {
+        return carrier.carry(plan.definition, pointer, carried);
     }
 
     DescribedHandle hold(MemberPlan plan, long pointer) {
@@ -401,6 +459,25 @@ final class DescribedCall {
             return ValueTrees.read(access, address);
         }
         return Scalars.read(access, plan.element, address);
+    }
+
+    /** Binds a definition an answer carries, by the nested description its member or parameter names. */
+    interface Carrier {
+        /** A carrier for a definition whose description nests none, which no answer of it can carry. */
+        Carrier NONE = (definition, pointer, carried) -> {
+            throw new IllegalStateException("an answer carried the definition " + definition
+                    + ", which its description does not nest");
+        };
+
+        /**
+         * Binds the definition at {@code pointer}, its function pointers, context and releases read from it now.
+         *
+         * @param definition the {@code definition} of the nested description describing it
+         * @param carried where its scope is added, for the answer that will keep it
+         * @throws IllegalStateException for a definition its description nests none of, or whose struct this binding
+         *     cannot bind
+         */
+        BoundDefinition carry(String definition, long pointer, List<KeptAnswer.Carried> carried);
     }
 
     /** A struct still to write, at its depth. */
