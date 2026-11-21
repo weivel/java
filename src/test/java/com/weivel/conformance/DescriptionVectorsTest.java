@@ -47,6 +47,15 @@ class DescriptionVectorsTest {
     }
 
     @Test
+    @DisplayName("description/a-definition-described-without-its-nested-description-fails-the-load")
+    void aDefinitionDescribedWithoutItsNestedDescriptionFailsTheLoad() {
+        LayerWitness witness = assertWitnessed(
+                "description/a-definition-described-without-its-nested-description-fails-the-load");
+
+        assertTrue(witness.loadMistake().get().contains("check refuses"), witness.loadMistake().toString());
+    }
+
+    @Test
     @DisplayName("description/a-definition-declared-without-its-description-loads-as-before")
     void aDefinitionDeclaredWithoutItsDescriptionLoadsAsBefore() {
         assertWitnessed("description/a-definition-declared-without-its-description-loads-as-before");
@@ -62,6 +71,24 @@ class DescriptionVectorsTest {
         assertTrue(moved.find(), witness.loadMistake().toString());
         assertEquals(4, Long.parseLong(moved.group(1)) - Long.parseLong(moved.group(3)));
         assertEquals(moved.group(2), moved.group(4));
+    }
+
+    @Test
+    @DisplayName("description/binding/a-blocking-operation-answers-as-any-does-and-is-reported-blocking")
+    void aBlockingOperationAnswersAsAnyDoesAndIsReportedBlocking() {
+        assertWitnessed("description/binding/a-blocking-operation-answers-as-any-does-and-is-reported-blocking");
+    }
+
+    @Test
+    @DisplayName("description/binding/a-nested-definitions-answers-are-released-exactly-once")
+    void aNestedDefinitionsAnswersAreReleasedExactlyOnce() {
+        assertWitnessed("description/binding/a-nested-definitions-answers-are-released-exactly-once");
+    }
+
+    @Test
+    @DisplayName("description/binding/an-answer-carrying-a-definition-is-callable-until-released")
+    void anAnswerCarryingADefinitionIsCallableUntilReleased() {
+        assertWitnessed("description/binding/an-answer-carrying-a-definition-is-callable-until-released");
     }
 
     @Test

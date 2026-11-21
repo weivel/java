@@ -27,8 +27,8 @@ import java.util.function.Function;
 /**
  * Drives a {@code description} vector: the standard's described library loaded through the host, each holder a plugin
  * opened with its activate left in flight, and every call made through the {@link BoundDefinition} the holder
- * resolved. A vector's JSON is translated into Java values by the kinds its description gives, and every answer back,
- * as {@code vectors/layer/LAYER.md} writes them.
+ * resolved, or through one an answer carried and the step kept. A vector's JSON is translated into Java values by the
+ * kinds its description gives, and every answer back, as {@code vectors/layer/LAYER.md} writes them.
  *
  * @implNote The mirror whose releases a {@code readReleases} step counts is found as the holder's resolved object that
  *     has a {@code count_releases} operation, since a vector does not name the service.
@@ -36,6 +36,7 @@ import java.util.function.Function;
 final class DescriptionRun {
     private static final String COUNT_RELEASES = "count_releases";
     private static final String HANDLE = "handle";
+    private static final String DEFINITION = "definition";
 
     private final DriverWorld world;
     private final Path describedBinary;
@@ -43,6 +44,8 @@ final class DescriptionRun {
     private final Map<String, Map<String, Object>> resolved = new HashMap<>();
     private final Map<String, Long> answeredAddresses = new HashMap<>();
     private final Map<String, DescribedHandle> kept = new HashMap<>();
+    private final Map<String, KeptDefinition> keptDefinitions = new HashMap<>();
+    private final List<Object> blocking = new ArrayList<>();
     private final List<Object> got = new ArrayList<>();
     private final List<Object> calls = new ArrayList<>();
     private final List<Map<String, Object>> releaseReads = new ArrayList<>();
@@ -84,7 +87,8 @@ final class DescriptionRun {
     }
 
     private void step(String where, Map<String, Object> step) {
-        String named = Shapes.theOneNamed(where, step, "load", "get", "call", "release", "readReleases", "unload");
+        String named = Shapes.theOneNamed(where, step, "load", "get", "call", "release", "readReleases", "unload",
+                "blocking");
         if (named.equals("load")) {
             Shapes.refuseUnknownKeys(where, step, "load");
             Shapes.requireTrue(where, step, "load");
@@ -105,7 +109,11 @@ final class DescriptionRun {
         } else if (named.equals("release")) {
             Shapes.refuseUnknownKeys(where, step, "holder", "release");
             Shapes.text(where, step, "holder");
-            handle(where, Shapes.text(where, step, "release")).release();
+            release(where, Shapes.text(where, step, "release"));
+        } else if (named.equals("blocking")) {
+            Shapes.refuseUnknownKeys(where, step, "holder", "blocking");
+            blocking.add(new ArrayList<Object>(bound(Shapes.text(where, step, "holder"),
+                    Shapes.text(where, step, "blocking")).blockingOperations()));
         } else {
             Shapes.refuseUnknownKeys(where, step, "holder", "readReleases");
             Shapes.requireTrue(where, step, "readReleases");
@@ -149,12 +157,27 @@ final class DescriptionRun {
         return held;
     }
 
+    /** The bound definition the holder resolved for the service {@code id}, or the one kept under the name. */
     private BoundDefinition bound(String holder, String id) {
+        KeptDefinition carried = keptDefinitions.get(id);
+        if (carried != null) {
+            return carried.definition;
+        }
         Object object = resolvedBy(holder).get(id);
         if (!(object instanceof BoundDefinition)) {
             throw new IllegalStateException(holder + " resolved no bound definition " + id + ", but " + object);
         }
         return (BoundDefinition) object;
+    }
+
+    /** Releases the handle kept under the name, or ends the answer that carried the definition kept under it. */
+    private void release(String where, String name) {
+        KeptDefinition carried = keptDefinitions.get(name);
+        if (carried != null) {
+            carried.carrier.release();
+            return;
+        }
+        handle(where, name).release();
     }
 
     private DescribedHandle handle(String where, String name) {
@@ -207,6 +230,9 @@ final class DescriptionRun {
             answer = definition.operation(operation).call(inputs);
         } catch (IllegalArgumentException | UnsupportedOperationException callersMistake) {
             return Collections.<String, Object>singletonMap("callersMistake", true);
+        }
+        if (answer instanceof DescribedAnswer.Answered) {
+            values.carrier = (DescribedAnswer.Answered) answer;
         }
         return outcome(answer, answers, values);
     }
@@ -270,6 +296,21 @@ final class DescriptionRun {
         return true;
     }
 
+    /** A member's C name as LAYER.md names its count, {@code nested_refusals} as {@code nestedRefusals}. */
+    private static String camelCase(String name) {
+        StringBuilder camel = new StringBuilder(name.length());
+        boolean upper = false;
+        for (char character : name.toCharArray()) {
+            if (character == '_') {
+                upper = true;
+            } else {
+                camel.append(upper ? Character.toUpperCase(character) : character);
+                upper = false;
+            }
+        }
+        return camel.toString();
+    }
+
     /** Each read of the counts after the first, minus the first, per kind, as decimal strings. */
     private List<Object> released() {
         List<Object> differences = new ArrayList<>();
@@ -277,7 +318,7 @@ final class DescriptionRun {
             Map<String, Object> difference = new LinkedHashMap<>();
             for (Map.Entry<String, Object> count : releaseReads.get(0).entrySet()) {
                 long later = (Long) releaseReads.get(index).get(count.getKey());
-                difference.put(count.getKey(), Long.toUnsignedString(later - (Long) count.getValue()));
+                difference.put(camelCase(count.getKey()), Long.toUnsignedString(later - (Long) count.getValue()));
             }
             differences.add(difference);
         }
@@ -293,18 +334,32 @@ final class DescriptionRun {
         observers.put("calls", expectation -> new ArrayList<>(calls));
         observers.put("released", expectation -> released());
         observers.put("reported", expectation -> world.reported());
+        observers.put("blocking", expectation -> new ArrayList<>(blocking));
         return observers;
+    }
+
+    /** A definition an answer carried, kept under a step's name, with the answer that carried it. */
+    private static final class KeptDefinition {
+        final BoundDefinition definition;
+        final DescribedAnswer.Answered carrier;
+
+        KeptDefinition(BoundDefinition definition, DescribedAnswer.Answered carrier) {
+            this.definition = definition;
+            this.carrier = carrier;
+        }
     }
 
     /**
      * Translates one call's values between a vector's JSON and the Java values a {@link BoundDefinition} takes and
      * answers, by the kinds the description gives each: a 64-bit integer as a decimal string, bytes as an array of
-     * numbers, a handle as {@code {handle: name}}, and a number the standard's JSON reader holds as a {@link Long}
-     * whenever it is integral.
+     * numbers, a handle as {@code {handle: name}}, a definition an answer carried as {@code {definition: name}}, and a
+     * number the standard's JSON reader holds as a {@link Long} whenever it is integral.
      */
     private final class Values {
         private final Description description;
         private final Optional<String> keep;
+        /** The answer being translated back, which a definition it carries is kept with. */
+        DescribedAnswer.Answered carrier;
 
         Values(Description description, Optional<String> keep) {
             this.description = description;
@@ -407,9 +462,28 @@ final class DescriptionRun {
                     return valueJson(java);
                 case DescribedKind.HANDLE:
                     return kept((DescribedHandle) java);
+                case DescribedKind.DEFINITION:
+                    return keptDefinition((BoundDefinition) java);
                 default:
                     return java;
             }
+        }
+
+        private Map<String, Object> keptDefinition(BoundDefinition definition) {
+            String name = keptName("a definition");
+            KeptDefinition already = keptDefinitions.get(name);
+            if (already != null && already.definition != definition) {
+                throw new IllegalStateException("a call answered a second definition to keep as " + name);
+            }
+            keptDefinitions.put(name, new KeptDefinition(definition, carrier));
+            return Collections.<String, Object>singletonMap(DEFINITION, name);
+        }
+
+        private String keptName(String what) {
+            if (!keep.isPresent()) {
+                throw new IllegalArgumentException("a call answered " + what + " and its step names no keep");
+            }
+            return keep.get();
         }
 
         private Map<String, Object> structJson(Optional<String> type, Object java) {
@@ -443,14 +517,12 @@ final class DescriptionRun {
         }
 
         private Map<String, Object> kept(DescribedHandle handle) {
-            if (!keep.isPresent()) {
-                throw new IllegalArgumentException("a call answered a handle and its step names no keep");
+            String name = keptName("a handle");
+            if (kept.containsKey(name) && kept.get(name) != handle) {
+                throw new IllegalStateException("a call answered a second handle to keep as " + name);
             }
-            if (kept.containsKey(keep.get()) && kept.get(keep.get()) != handle) {
-                throw new IllegalStateException("a call answered a second handle to keep as " + keep.get());
-            }
-            kept.put(keep.get(), handle);
-            return Collections.<String, Object>singletonMap(HANDLE, keep.get());
+            kept.put(name, handle);
+            return Collections.<String, Object>singletonMap(HANDLE, name);
         }
     }
 
