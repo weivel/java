@@ -214,7 +214,9 @@ final class StandardLayouts {
             ADDRESS.withName("action_plugin"),
             ADDRESS.withName("action_name"),
             value().withName("action_arguments"),
-            ADDRESS.withName("storage")).withName("weivel_standard_host_plan");
+            ADDRESS.withName("storage"),
+            ADDRESS.withName("action_service"),
+            ADDRESS.withName("action_method")).withName("weivel_standard_host_plan");
 
     static final Layout HOST_OUTCOME = Layout.struct(
             ADDRESS.withName("manifest"),
