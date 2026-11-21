@@ -176,6 +176,12 @@ class DescriptionVectorsTest {
     }
 
     @Test
+    @DisplayName("description/binding/outline-copies-nodes-holding-nodes-both-ways")
+    void outlineCopiesNodesHoldingNodesBothWays() {
+        assertWitnessed("description/binding/outline-copies-nodes-holding-nodes-both-ways");
+    }
+
+    @Test
     @DisplayName("description/binding/reflect-answers-every-member-kind")
     void reflectAnswersEveryMemberKind() {
         assertWitnessed("description/binding/reflect-answers-every-member-kind");

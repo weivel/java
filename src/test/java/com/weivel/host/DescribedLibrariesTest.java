@@ -52,7 +52,7 @@ class DescribedLibrariesTest {
             assertSame(library.definitions().get(mirrorId()), mirror);
             assertEquals(mirror.address(), ForeignMemory.addressOf(mirror.definition()));
             assertEquals(Arrays.asList("reflect", "tree", "find", "measure", "negate", "halve", "invert",
-                    "swap_shade", "grow", "weigh", "count_releases"), mirror.operationNames());
+                    "swap_shade", "grow", "weigh", "count_releases", "outline"), mirror.operationNames());
             assertEquals(Collections.singletonList("bytes"), mirror.operation("measure").inputNames());
             assertEquals("the first letter", answered(mirror.call("find", inputs("key", "alpha"))));
         }
@@ -109,7 +109,7 @@ class DescribedLibrariesTest {
             assertRefused(() -> mirror.call("weigh", inputs("value", Double.NaN)), "finite");
             assertRefused(() -> mirror.call("reflect", inputs("sample", inputs("size", 8L))),
                     "has no size a caller writes");
-            assertEquals(Arrays.asList(0L, 0L, 0L, 0L, 0L), releaseCounts(mirror, before),
+            assertEquals(Arrays.asList(0L, 0L, 0L, 0L, 0L, 0L), releaseCounts(mirror, before),
                     "a refused input reached no provider, so nothing it answers was released");
         }
     }
@@ -194,7 +194,7 @@ class DescribedLibrariesTest {
             cursor.release();
 
             assertTrue(cursor.isReleased());
-            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L), releaseCounts(bound.get(mirrorId()), before));
+            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L, 0L), releaseCounts(bound.get(mirrorId()), before));
             assertRefused(() -> walker.call("use", inputs("cursor", cursor)), "released already");
             assertRefused(() -> walker.call("use", inputs("cursor", "a cursor")), "a handle of");
         }
@@ -216,7 +216,7 @@ class DescribedLibrariesTest {
             cursor.release();
 
             assertTrue(releasedByTheUnload);
-            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L), afterTheUnload);
+            assertEquals(Arrays.asList(0L, 0L, 0L, 1L, 0L, 0L), afterTheUnload);
             assertEquals(afterTheUnload, releaseCounts(mirror, before));
         }
     }
