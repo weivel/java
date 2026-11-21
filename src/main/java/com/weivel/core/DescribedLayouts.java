@@ -163,7 +163,33 @@ final class DescribedLayouts {
         if (kind == DescribedKind.STRUCT || (reaches && element == DescribedKind.STRUCT)) {
             plan.target = plan(type, where);
         }
+        if (kind == DescribedKind.DEFINITION) {
+            plan.definition = type.orElse(null);
+        }
         return plan;
+    }
+
+    /**
+     * Whether what {@code plan} reaches holds a definition anywhere: it is one, or a struct it embeds or points at
+     * holds one, however deep, so an answer reaching it is kept for as long as that definition lives.
+     */
+    static boolean carriesDefinition(MemberPlan plan) {
+        return carriesDefinition(plan, new HashSet<StructPlan>());
+    }
+
+    private static boolean carriesDefinition(MemberPlan plan, Set<StructPlan> seen) {
+        if (plan.kind == DescribedKind.DEFINITION) {
+            return true;
+        }
+        if (plan.target == null || !seen.add(plan.target)) {
+            return false;
+        }
+        for (MemberPlan member : plan.target.visible) {
+            if (carriesDefinition(member, seen)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private MemberPlan[] visiblePlans(Description.Type type) {

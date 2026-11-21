@@ -12,11 +12,13 @@ import java.util.Objects;
  * operation the definition answers a status from, called by name with a {@code Map} of inputs, its answers arriving as
  * Java values. A struct arrives as an unmodifiable {@code Map} keyed by member name in the description's order, since
  * no library ships Java source for its structs and so no accessor exists to generate for one; releases are not
- * operations, since every answer is released before its call returns and a handle through its own
- * {@link DescribedHandle#release()}.
+ * operations, since every answer is released before its call returns but one carrying a definition, which its own
+ * {@link DescribedAnswer.Answered#release()} ends, and a handle through its own {@link DescribedHandle#release()}.
  *
  * <p>It stands for the very struct its definition's symbol answered: {@link #definition()} is the object an undescribed
- * definition is registered as, carrying the same address.
+ * definition is registered as, carrying the same address. A definition an answer carried, as a DEFINITION member or
+ * answer, is a bound definition too, which lives, with every answer kept and every handle got through it, exactly as
+ * long as that answer: once the answer has ended, a call through it is the caller's mistake.
  */
 public final class BoundDefinition {
     private final String name;
@@ -24,6 +26,7 @@ public final class BoundDefinition {
     private final long address;
     private final Description description;
     private final Map<String, BoundOperation> operations;
+    private final List<String> blocking;
 
     BoundDefinition(String name, Object definition, long address, Description description,
                     Map<String, BoundOperation> operations) {
@@ -32,6 +35,39 @@ public final class BoundDefinition {
         this.address = address;
         this.description = description;
         this.operations = Collections.unmodifiableMap(new LinkedHashMap<>(operations));
+        List<String> marked = new ArrayList<>();
+        for (String operation : operations.keySet()) {
+            if (description.blocking().contains(operation)) {
+                marked.add(operation);
+            }
+        }
+        this.blocking = Collections.unmodifiableList(marked);
+    }
+
+    /**
+     * Binds a definition its caller got some other way than from a library's service, as one a library serves is
+     * bound: every struct its description names laid out by this platform's own rules and held against it, and every
+     * operation bound once here. No library stands behind it, so nothing is released for its caller: every handle it
+     * answers, and every answer carrying a definition, lives until its own release. The native memory its calls reuse
+     * for their inputs is its own, held as long as the bound definition is and never freed, since no binary's close
+     * stands behind it to free it: a caller binds a definition once and keeps it.
+     *
+     * @param definition the definition's struct, which must outlive the bound definition: a {@code MemorySegment} on
+     *     the foreign function API, a JNA {@code Pointer} on JNA, carrying its address
+     * @param description its {@code const weivel_standard_description *}, in the same form, which the standard's
+     *     {@code weivel_standard_description_check} has passed; it is read once here and never checked again
+     * @return the bound definition
+     * @throws IllegalArgumentException for a description this platform's layout disagrees with or this binding cannot
+     *     bind, or a definition whose struct ends before its first shape
+     */
+    public static BoundDefinition bindDefinition(Object definition, Object description) {
+        Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(description, "description");
+        try {
+            return DescribedBinder.bindDefinition(definition, description);
+        } catch (DescriptionRefused refused) {
+            throw new IllegalArgumentException(refused.getMessage(), refused);
+        }
     }
 
     /**
@@ -78,6 +114,16 @@ public final class BoundDefinition {
      */
     public List<String> operationNames() {
         return Collections.unmodifiableList(new ArrayList<>(operations.keySet()));
+    }
+
+    /**
+     * The operations its description marks blocking, which may do I/O or wait; this binding calls them on the calling
+     * thread as it calls every other.
+     *
+     * @return their names, in the struct's order; empty when its description marks none
+     */
+    public List<String> blockingOperations() {
+        return blocking;
     }
 
     /**

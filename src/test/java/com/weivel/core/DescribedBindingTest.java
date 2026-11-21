@@ -3,6 +3,7 @@ package com.weivel.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -266,14 +267,16 @@ class DescribedBindingTest {
                 Optional.<String>empty(), Optional.<String>empty(), Optional.<String>empty());
         Description chain = new Description("link", Collections.singletonList(new Description.Type("link", 16, 16,
                 Arrays.asList(next, number))), Collections.<Description.Enumeration>emptyList(),
-                Collections.<Description.Operation>emptyList());
+                Collections.<Description.Operation>emptyList(), Collections.<String>emptyList(),
+                Collections.<Description>emptyList());
         StructPlan link = new DescribedLayouts(access, chain).plan(Optional.of("link"), "the test");
         StructPlan branch = branchPlan(access);
         Map<String, Object> deepest = deepestBranch();
         List<Throwable> refused = new ArrayList<>();
         Thread small = new Thread(null, () -> {
             try (NativeArena arena = new NativeArena(access)) {
-                DescribedCall call = new DescribedCall(access, arena, new DescribedHandles());
+                DescribedCall call = new DescribedCall(access, arena, new DescribedHandles(),
+                        DescribedCall.Carrier.NONE, false);
                 long node = arena.allocateAddress(16);
                 access.putLong(node, 0, node);
                 Map<String, Object> cycle = new HashMap<>();
@@ -320,7 +323,8 @@ class DescribedBindingTest {
                 Optional.<String>empty(), Optional.<String>empty(), Optional.<String>empty());
         Description tree = new Description("branch", Collections.singletonList(new Description.Type("branch",
                 16 + valueSize, 16 + valueSize, Arrays.asList(items, count, value))),
-                Collections.<Description.Enumeration>emptyList(), Collections.<Description.Operation>emptyList());
+                Collections.<Description.Enumeration>emptyList(), Collections.<Description.Operation>emptyList(),
+                Collections.<String>emptyList(), Collections.<Description>emptyList());
         return new DescribedLayouts(access, tree).plan(Optional.of("branch"), "the test");
     }
 
@@ -369,6 +373,269 @@ class DescribedBindingTest {
         }
     }
 
+    @Test
+    void anAnswerCarryingADefinitionHandsItBoundAndCallableUntilTheAnswerIsReleased() {
+        try (Opened walker = Opened.service(1)) {
+            BoundDefinition bound = walker.bind(walker.description);
+            DescribedAnswer.Answered loan = lend(bound);
+            BoundDefinition counter = carried(loan);
+
+            Object added = answered(counter.call("add", amount(5L)));
+            loan.release();
+            IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () ->
+                    counter.call("add", amount(5L)));
+            loan.release();
+
+            assertEquals(1005L, added);
+            assertTrue(refused.getMessage().contains("carried by an answer that has ended"), refused.getMessage());
+            assertEquals(Collections.<String>emptyList(), counter.blockingOperations());
+            assertEquals(Collections.singletonList("wait"), bound.blockingOperations());
+        }
+    }
+
+    /**
+     * A description answered before its {@code blocking} and {@code definitions} were appended, its {@code size} at the
+     * first shape, reads as listing none, however its memory goes on.
+     */
+    @Test
+    void aDescriptionAnsweredAtItsFirstShapeReadsAsBlockingNothingAndNestingNothing() {
+        try (Opened walker = Opened.service(1)) {
+            long whole = DescriptionLayouts.DESCRIPTION.byteSize();
+            long firstShape = DescriptionLayouts.DESCRIPTION.offsetOf("blocking");
+            long older = walker.access.allocate(whole);
+            try {
+                walker.access.writeBytes(older, 0, walker.access.readBytes(walker.describedAt, 0, (int) whole));
+                walker.access.putInt(older, 0, (int) firstShape);
+
+                Description read = new DescriptionReader(walker.access).read(older);
+
+                assertEquals(Collections.singletonList("wait"), walker.description.blocking());
+                assertEquals(1, walker.description.definitions().size());
+                assertEquals(Collections.<String>emptyList(), read.blocking());
+                assertEquals(Collections.<Description>emptyList(), read.definitions());
+                assertEquals(walker.description.operations().size(), read.operations().size());
+            } finally {
+                walker.access.free(older);
+            }
+        }
+    }
+
+    /**
+     * A definition is bound afresh from the struct each answer points at, so a second answer carrying a definition at
+     * the very address of one already released is callable, where a binding keeping definitions by address would hand
+     * back the released one.
+     */
+    @Test
+    void everyAnswerCarriesADefinitionBoundAfreshFromTheStructItPointsAt() {
+        try (Opened walker = Opened.service(1)) {
+            BoundDefinition bound = walker.bind(walker.description);
+            DescribedAnswer.Answered first = lend(bound);
+            BoundDefinition lentFirst = carried(first);
+            first.release();
+
+            DescribedAnswer.Answered second = lend(bound);
+            BoundDefinition lentSecond = carried(second);
+
+            assertEquals(lentFirst.address(), lentSecond.address(), "the walker lends one static counter");
+            assertEquals(1005L, answered(lentSecond.call("add", amount(5L))));
+            second.release();
+        }
+    }
+
+    /**
+     * Two threads call through a carried definition, parked inside the call, while a third releases the answer that
+     * carried it: a new call is refused at once, both calls in flight answer whole, the refused one's refusal freed by
+     * the counter's own release, and the answer is freed only once the last of them has returned.
+     */
+    @Test
+    void releasingTheAnswerRefusesNewCallsAtOnceAndEndsItOnlyOnceTheCallsInFlightReturn() throws Exception {
+        CountDownLatch parked = new CountDownLatch(2);
+        CountDownLatch resume = new CountDownLatch(1);
+        AtomicInteger parking = new AtomicInteger();
+        Runnable inside = () -> {
+            if (parking.getAndDecrement() > 0) {
+                parked.countDown();
+                awaited(resume);
+            }
+        };
+        DescribedHandles holdings = new DescribedHandles();
+        try (Opened walker = Opened.service(1); Opened mirror = Opened.service(0)) {
+            BoundDefinition bound = walker.bindWith(walker.description, holdings, inside);
+            BoundDefinition counting = mirror.bind(mirror.description);
+            DescribedAnswer.Answered loan = lend(bound);
+            BoundDefinition counter = carried(loan);
+            long before = releaseCount(counting, "nested_refusals");
+            parking.set(2);
+            ExecutorService threads = Executors.newFixedThreadPool(2);
+            try {
+                Future<DescribedAnswer> adding = threads.submit(() -> counter.call("add", amount(5L)));
+                Future<DescribedAnswer> refusing = threads.submit(() -> counter.call("add", amount(13L)));
+                awaited(parked);
+
+                loan.release();
+                boolean keptWhileTheCallsRun = holdings.keepsAnyAnswer();
+                Throwable refusedAtOnce = thrown(() -> counter.call("add", amount(5L)));
+                resume.countDown();
+                DescribedAnswer added = adding.get(10, TimeUnit.SECONDS);
+                DescribedAnswer refused = refusing.get(10, TimeUnit.SECONDS);
+
+                assertTrue(keptWhileTheCallsRun, "the answer was freed under the calls running in its definition");
+                assertInstanceOf(IllegalArgumentException.class, refusedAtOnce);
+                assertEquals(1005L, answered(added));
+                assertInstanceOf(DescribedAnswer.Refused.class, refused);
+                assertEquals(before + 1, releaseCount(counting, "nested_refusals"));
+                assertFalse(holdings.keepsAnyAnswer(), "the last call to return did not free the answer");
+            } finally {
+                resume.countDown();
+                threads.shutdownNow();
+            }
+        }
+    }
+
+    /**
+     * An answer released while a call runs in the definition it carried, and its library then unloaded, is freed by
+     * that call as it returns, through the binary's gate while the call still holds the binary open: never left for a
+     * binary the unload let close under it. The gate here holds the binary as a library's lifetime does after the
+     * unload, open only while something holds it.
+     */
+    @Test
+    void anAnswerEndedUnderACallInFlightIsFreedWhileThatCallStillHoldsTheBinary() throws Exception {
+        CountDownLatch parked = new CountDownLatch(1);
+        CountDownLatch resume = new CountDownLatch(1);
+        AtomicBoolean park = new AtomicBoolean();
+        Runnable inside = () -> {
+            if (park.getAndSet(false)) {
+                parked.countDown();
+                awaited(resume);
+            }
+        };
+        HeldGate gate = new HeldGate();
+        DescribedHandles holdings = new DescribedHandles();
+        holdings.gate(gate);
+        try (Opened walker = Opened.service(1)) {
+            BoundDefinition bound = walker.bindThrough(walker.description, holdings, gate, inside);
+            DescribedAnswer.Answered loan = lend(bound);
+            BoundDefinition counter = carried(loan);
+            park.set(true);
+            ExecutorService thread = Executors.newSingleThreadExecutor();
+            try {
+                Future<DescribedAnswer> adding = thread.submit(() -> counter.call("add", amount(5L)));
+                awaited(parked);
+
+                loan.release();
+                gate.unload();
+                resume.countDown();
+                Object added = answered(adding.get(10, TimeUnit.SECONDS));
+
+                assertEquals(1005L, added);
+                assertFalse(holdings.keepsAnyAnswer(), "the answer was left for the binary's close");
+                assertEquals(0, gate.refused.get(), "the answer's free found the binary closed");
+                assertEquals(0, gate.holders.get());
+            } finally {
+                resume.countDown();
+                thread.shutdownNow();
+            }
+        }
+    }
+
+    /**
+     * Ending a kept answer releases what was got through each definition it carried before the answer itself, and
+     * neither while a call still runs in any of them.
+     */
+    @Test
+    void aKeptAnswerReleasesWhatWasGotThroughItsDefinitionsFirstAndOnlyOnceTheirCallsReturn() {
+        List<String> order = new ArrayList<>();
+        DescribedHandles library = new DescribedHandles();
+        CarriedScope first = CarriedScope.carried();
+        CarriedScope second = CarriedScope.carried();
+        DescribedHandles gotThroughSecond = library.child();
+        gotThroughSecond.hold(1, "opaque", recording(order, "the handle"));
+        KeptAnswer answer = new KeptAnswer(library, Arrays.asList(new KeptAnswer.Carried(first, library.child()),
+                new KeptAnswer.Carried(second, gotThroughSecond)), () -> order.add("the answer"));
+        library.keep(answer);
+        assertTrue(first.enter());
+        assertTrue(second.enter());
+
+        answer.release();
+        boolean firstRefused = !first.enter();
+        boolean secondRefused = !second.enter();
+        List<String> whileBothRun = new ArrayList<>(order);
+        first.leave();
+        List<String> whileOneRuns = new ArrayList<>(order);
+        second.leave();
+        answer.release();
+
+        assertTrue(firstRefused && secondRefused, "a new call was let into a definition whose answer ended");
+        assertEquals(Collections.<String>emptyList(), whileBothRun);
+        assertEquals(Collections.<String>emptyList(), whileOneRuns);
+        assertEquals(Arrays.asList("the handle", "the answer"), order);
+        assertFalse(library.keepsAnyAnswer());
+    }
+
+    /**
+     * A handle got through a definition an answer carried is taken by every definition of the library that answered
+     * it, and released only by the end of that answer.
+     */
+    @Test
+    void aHandleGotThroughACarriedDefinitionIsTakenAnywhereInItsLibraryAndReleasedByItsAnswer() {
+        List<String> order = new ArrayList<>();
+        DescribedHandles library = new DescribedHandles();
+        DescribedHandles carried = library.child();
+        DescribedHandles sibling = library.child();
+        DescribedHandle handle = carried.hold(1, "opaque", recording(order, "the handle"));
+
+        DescribedHandle takenBySibling = sibling.use(handle, "opaque", CallPath.of("the sibling"));
+        takenBySibling.leave();
+        DescribedHandle takenByTheLibrary = library.use(handle, "opaque", CallPath.of("the library"));
+        takenByTheLibrary.leave();
+        sibling.releaseAll();
+        boolean releasedBySibling = handle.isReleased();
+        library.releaseAll();
+        boolean releasedByTheLibrary = handle.isReleased();
+        carried.releaseAll();
+
+        assertSame(handle, takenBySibling);
+        assertSame(handle, takenByTheLibrary);
+        assertFalse(releasedBySibling);
+        assertFalse(releasedByTheLibrary);
+        assertTrue(handle.isReleased());
+        assertEquals(Collections.singletonList("the handle"), order);
+    }
+
+    @Test
+    void bindDefinitionBindsADefinitionGotSomeOtherWayWithItsCarriedDefinitions() {
+        try (Opened walker = Opened.service(1)) {
+            BoundDefinition bound = BoundDefinition.bindDefinition(walker.access.addressed(walker.definition, 8),
+                    walker.access.addressed(walker.describedAt, 8));
+            DescribedAnswer.Answered loan = lend(bound);
+            BoundDefinition counter = carried(loan);
+
+            Object added = answered(counter.call("add", amount(5L)));
+            loan.release();
+
+            assertEquals(walker.bind(walker.description).operationNames(), bound.operationNames());
+            assertEquals(walker.definition, bound.address());
+            assertEquals(1005L, added);
+            assertThrows(IllegalArgumentException.class, () -> counter.call("add", amount(5L)));
+        }
+    }
+
+    @Test
+    void bindDefinitionRefusesADescriptionThisPlatformCannotBindAsTheCallersMistake() {
+        try (Opened walker = Opened.service(1)) {
+            long tooSmall = walker.copiedDefinition(8, Optional.<String>empty());
+            try {
+                IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () ->
+                        BoundDefinition.bindDefinition(walker.access.addressed(tooSmall, 8),
+                                walker.access.addressed(walker.describedAt, 8)));
+
+                assertTrue(refused.getMessage().contains("first shape"), refused.getMessage());
+            } finally {
+                walker.access.free(tooSmall);
+            }
+        }
+    }
+
     /**
      * A release made while the binary's gate is shut, as one racing the last holder at the unload is, frees nothing
      * then; the close frees it, once.
@@ -409,7 +676,7 @@ class DescribedBindingTest {
                 "opaque", null);
         NativeAccess access = NativeBackends.current();
         try (NativeArena arena = new NativeArena(access)) {
-            DescribedCall call = new DescribedCall(access, arena, holdings);
+            DescribedCall call = new DescribedCall(access, arena, holdings, DescribedCall.Carrier.NONE, false);
             call.reached(handlePlan, failing, "the first");
             call.reached(handlePlan, other, "the second");
             failing.release();
@@ -420,6 +687,66 @@ class DescribedBindingTest {
             assertEquals("the release failed", thrown.getMessage());
             assertEquals(2, freed.get(), "both releases ran, the failing one first");
         }
+    }
+
+    private static DescribedAnswer.Answered lend(BoundDefinition walker) {
+        return assertInstanceOf(DescribedAnswer.Answered.class, walker.call("lend",
+                Collections.<String, Object>emptyMap()));
+    }
+
+    /** The one definition the loan answered carries. */
+    private static BoundDefinition carried(DescribedAnswer.Answered loan) {
+        Map<?, ?> struct = assertInstanceOf(Map.class, loan.value());
+        assertEquals(1, struct.size(), struct.toString());
+        return assertInstanceOf(BoundDefinition.class, struct.values().iterator().next());
+    }
+
+    private static Map<String, Object> amount(long amount) {
+        return Collections.<String, Object>singletonMap("amount", amount);
+    }
+
+    private static long releaseCount(BoundDefinition mirror, String kind) {
+        Map<?, ?> counts = (Map<?, ?>) answered(mirror.call("count_releases", Collections.<String, Object>emptyMap()));
+        return (Long) counts.get(kind);
+    }
+
+    /**
+     * A gate holding the binary as a library's lifetime does: the host holds it until {@link #unload}, every call
+     * entering holds it too, and once nothing holds it the binary is closed and every entry refused.
+     */
+    private static final class HeldGate implements CallGate {
+        final AtomicInteger holders = new AtomicInteger(1);
+        final AtomicInteger refused = new AtomicInteger();
+
+        @Override
+        public boolean enter() {
+            int current;
+            do {
+                current = holders.get();
+                if (current == 0) {
+                    refused.incrementAndGet();
+                    return false;
+                }
+            } while (!holders.compareAndSet(current, current + 1));
+            return true;
+        }
+
+        @Override
+        public void leave() {
+            holders.decrementAndGet();
+        }
+
+        void unload() {
+            holders.decrementAndGet();
+        }
+    }
+
+    /** A release adding {@code what} to {@code order} for every handle it frees. */
+    private static ReleasePlan recording(List<String> order, String what) {
+        return new ReleasePlan("recording", arguments -> {
+            order.add(what);
+            return 0;
+        }, 0);
     }
 
     /** A release counting every handle it frees, failing when asked to after counting. */
@@ -444,11 +771,7 @@ class DescribedBindingTest {
 
     private static long cursors(BoundDefinition mirror) {
         Map<?, ?> counts = (Map<?, ?>) answered(mirror.call("count_releases", Collections.<String, Object>emptyMap()));
-        Object last = null;
-        for (Object count : counts.values()) {
-            last = count;
-        }
-        return (Long) last;
+        return (Long) counts.get("cursors");
     }
 
     private static void awaited(CountDownLatch latch) {
@@ -487,7 +810,8 @@ class DescribedBindingTest {
             types.add(new Description.Type(type.name(), type.size(), type.firstShape(), members));
         }
         assertTrue(changed, "no member was picked");
-        return new Description(description.definition(), types, description.enums(), description.operations());
+        return new Description(description.definition(), types, description.enums(), description.operations(),
+                description.blocking(), description.definitions());
     }
 
     /** The description with the first parameter of {@code operation} that {@code which} picks changed. */
@@ -507,7 +831,8 @@ class DescribedBindingTest {
                     parameters));
         }
         assertTrue(changed, "no parameter was picked");
-        return new Description(description.definition(), description.types(), description.enums(), operations);
+        return new Description(description.definition(), description.types(), description.enums(), operations,
+                description.blocking(), description.definitions());
     }
 
     private static Description withFirstShapeAtMost(Description description, long size) {
@@ -517,7 +842,8 @@ class DescribedBindingTest {
                     ? new Description.Type(type.name(), type.size(), Math.min(type.firstShape(), size), type.members())
                     : type);
         }
-        return new Description(description.definition(), types, description.enums(), description.operations());
+        return new Description(description.definition(), types, description.enums(), description.operations(),
+                description.blocking(), description.definitions());
     }
 
     /** One service of the described library, its binary opened through the seam and its description read. */
@@ -525,13 +851,15 @@ class DescribedBindingTest {
         final NativeAccess access;
         final OpenLibrary library;
         final long definition;
+        final long describedAt;
         final Description description;
 
-        private Opened(NativeAccess access, OpenLibrary library, long definition, Description description) {
+        private Opened(NativeAccess access, OpenLibrary library, long definition, long describedAt) {
             this.access = access;
             this.library = library;
             this.definition = definition;
-            this.description = description;
+            this.describedAt = describedAt;
+            this.description = new DescriptionReader(access).read(describedAt);
         }
 
         static Opened service(int index) {
@@ -544,7 +872,7 @@ class DescribedBindingTest {
             NativeSignature answering = NativeSignature.of(NativeType.ADDRESS);
             long definition = library.function(service.functions().get(0).symbol(), answering).call();
             long description = library.function(service.description().get(), answering).call();
-            return new Opened(access, library, definition, new DescriptionReader(access).read(description));
+            return new Opened(access, library, definition, description);
         }
 
         BoundDefinition bind(Description chosen) {
@@ -554,6 +882,12 @@ class DescribedBindingTest {
         BoundDefinition bindAt(Description chosen, long at) {
             return DescribedBinder.bind(access, chosen, at, access.addressed(at, 8),
                     new BoundOperation.Bound(access, new SpareArena(access), new DescribedHandles(), CallGate.OPEN));
+        }
+
+        BoundDefinition bindThrough(Description chosen, DescribedHandles holdings, CallGate gate,
+                                    Runnable insideTheCall) {
+            return DescribedBinder.bind(access, chosen, definition, access.addressed(definition, 8),
+                    new BoundOperation.Bound(access, new SpareArena(access), holdings, gate, insideTheCall));
         }
 
         BoundDefinition bindWith(Description chosen, DescribedHandles holdings, Runnable insideTheCall) {

@@ -3,9 +3,13 @@ package com.weivel.conformance;
 import com.weivel.core.Answer;
 import com.weivel.core.CoreBinary;
 import com.weivel.core.CoreLoad;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 /** The pinned kit's layer vectors and a driver over the real core and standard, each named by its Gradle property. */
@@ -26,6 +30,26 @@ final class KitFixture {
 
     static List<LayerVector> vectors() {
         return DRIVER.read(layerVectorDirectory());
+    }
+
+    /**
+     * The layer directories the pinned kit's {@code checks/languages.txt} exempts Java from, each a path below
+     * {@code vectors/layer/} whose vectors no Java test sits.
+     */
+    static List<String> exemptions() {
+        Path languages = Paths.get(property("weivel.test.kitLanguages"));
+        List<String> exempt = new ArrayList<>();
+        try {
+            for (String line : Files.readAllLines(languages, StandardCharsets.UTF_8)) {
+                String[] words = line.trim().split("\\s+");
+                if (words.length == 3 && words[0].equals("java") && words[1].equals("layer-exempt")) {
+                    exempt.add(words[2]);
+                }
+            }
+        } catch (IOException unreadable) {
+            throw new UncheckedIOException(unreadable);
+        }
+        return exempt;
     }
 
     static LayerVector vector(String id) {

@@ -8,7 +8,8 @@ import java.util.Optional;
 /**
  * What one call of a described operation answered: its answers on OK, NONE, a refusal with the provider's own texts,
  * any other status, or that the library's binary was closed before the call, so nothing was called. Each case is a
- * final nested class. Every answer was copied into Java values and released before the call answered.
+ * final nested class. Every answer was copied into Java values and released before the call answered, but one carrying
+ * a definition, which lives until {@link Answered#release()}.
  */
 public abstract class DescribedAnswer {
     private DescribedAnswer() {
@@ -18,10 +19,30 @@ public abstract class DescribedAnswer {
     public static final class Answered extends DescribedAnswer {
         private final Map<String, Object> answers;
         private final String only;
+        private final KeptAnswer kept;
 
-        Answered(Map<String, Object> answers, String only) {
+        Answered(Map<String, Object> answers, String only, KeptAnswer kept) {
             this.answers = Collections.unmodifiableMap(new LinkedHashMap<>(answers));
             this.only = only;
+            this.kept = kept;
+        }
+
+        /**
+         * Ends an answer that carries a definition: every call through each definition it carried is refused from now
+         * on, and once the calls still running in them have returned, on whichever thread they run, whatever was got
+         * through them is released by their own releases and then the answer by the release its description names.
+         * The library's unload ends it too. A later call, and a call on any other answer, which was released before
+         * its call answered, does nothing.
+         */
+        public void release() {
+            if (kept != null) {
+                kept.release();
+            }
+        }
+
+        /** Whether the answer carries a definition, and so lives until it is released. */
+        boolean isKept() {
+            return kept != null;
         }
 
         /**

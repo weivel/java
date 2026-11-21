@@ -72,9 +72,9 @@ final class DescribedSteps {
     }
 
     /**
-     * An answer the provider fills on OK: a scalar, a text or a handle in a cell of its own, a struct, or a value
-     * tree, each copied out on OK and, when the description names its release, freed whatever the status once it holds
-     * anything.
+     * An answer the provider fills on OK: a scalar, a text, a handle or a definition in a cell of its own, a struct, or
+     * a value tree, each copied out on OK and, when the description names its release, freed whatever the status once
+     * it holds anything; kept past its call instead when it carries a definition.
      */
     static final class Answering extends BoundOperation.Step {
         private final NativeAccess access;
@@ -93,7 +93,7 @@ final class DescribedSteps {
 
         @Override
         void prepare(DescribedCall call, Map<String, ?> given, long[] arguments, int index) {
-            long block = call.allocate(size);
+            long block = call.allocateAnswer(size);
             if (leadingSize) {
                 access.putInt(block, 0, (int) size);
             }
@@ -101,8 +101,19 @@ final class DescribedSteps {
         }
 
         @Override
+        boolean answers() {
+            return true;
+        }
+
+        @Override
         void answer(DescribedCall call, long block, Map<String, Object> answers) {
             switch (plan.kind) {
+                case DescribedKind.DEFINITION:
+                    long definition = access.getLong(block, 0);
+                    if (definition != 0) {
+                        answers.put(plan.name, call.carry(plan, definition));
+                    }
+                    return;
                 case DescribedKind.TEXT:
                     answers.put(plan.name, call.readReached(plan, access.getLong(block, 0), 0));
                     return;

@@ -259,6 +259,9 @@ def runsTheSuiteAgainstTheJar = { Test task, String backend ->
     def layerVectors = new File(siblingsDirectory, 'conformance/vectors/layer')
     task.inputs.dir(layerVectors).withPropertyName('weivel.test.layerVectors')
     task.systemProperty 'weivel.test.layerVectors', layerVectors.absolutePath
+    def kitLanguages = new File(siblingsDirectory, 'conformance/checks/languages.txt')
+    task.inputs.file(kitLanguages).withPropertyName('weivel.test.kitLanguages')
+    task.systemProperty 'weivel.test.kitLanguages', kitLanguages.absolutePath
     def describedDirectory = new File(siblingsDirectory, 'standard/test/described')
     task.inputs.dir(describedDirectory).withPropertyName('weivel.test.describedDirectory')
     task.systemProperty 'weivel.test.describedDirectory', describedDirectory.absolutePath

@@ -19,7 +19,8 @@ import org.junit.platform.launcher.core.LauncherFactory;
 
 /**
  * The strong check behind the kit's {@code layers} drift check: every layer vector of the pinned kit is the display
- * name of a test of this package, as the JUnit Platform discovers them.
+ * name of a test of this package, as the JUnit Platform discovers them, but those below a directory the kit's
+ * {@code checks/languages.txt} exempts Java from, each of which must still hold a vector.
  */
 class LayerCoverageTest {
     @Test
@@ -28,6 +29,25 @@ class LayerCoverageTest {
 
         assertFalse(ids.isEmpty(), "the pinned kit carries no layer vector, so nothing was checked");
         assertEquals(Collections.<String>emptyList(), unnamed(ids, displayNames()));
+    }
+
+    /**
+     * A tripwire as much as a check: it goes red when the pinned kit drops Java's {@code host/} exemption, or any other,
+     * so the exemption is noticed and either restored or its vectors taken up, rather than every host vector reading
+     * as one no test names.
+     */
+    @Test
+    void everyDirectoryTheKitExemptsJavaFromHoldsAVector() {
+        List<String> exemptions = KitFixture.exemptions();
+        List<String> empty = new ArrayList<>();
+        for (String exemption : exemptions) {
+            if (exempted(KitFixture.vectors(), exemption).isEmpty()) {
+                empty.add(exemption);
+            }
+        }
+
+        assertFalse(exemptions.isEmpty(), "the pinned kit exempts Java from no directory, so nothing was checked");
+        assertEquals(Collections.<String>emptyList(), empty);
     }
 
     @Test
@@ -39,9 +59,26 @@ class LayerCoverageTest {
     }
 
     private static List<String> vectorIds() {
+        List<LayerVector> vectors = KitFixture.vectors();
+        List<String> exempt = new ArrayList<>();
+        for (String exemption : KitFixture.exemptions()) {
+            exempt.addAll(exempted(vectors, exemption));
+        }
         List<String> ids = new ArrayList<>();
-        for (LayerVector vector : KitFixture.vectors()) {
-            ids.add(vector.id());
+        for (LayerVector vector : vectors) {
+            if (!exempt.contains(vector.id())) {
+                ids.add(vector.id());
+            }
+        }
+        return ids;
+    }
+
+    private static List<String> exempted(List<LayerVector> vectors, String directory) {
+        List<String> ids = new ArrayList<>();
+        for (LayerVector vector : vectors) {
+            if (vector.id().startsWith(directory + "/")) {
+                ids.add(vector.id());
+            }
         }
         return ids;
     }

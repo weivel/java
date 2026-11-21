@@ -53,7 +53,8 @@ public final class DescribedFixture {
     public static Description withTypesReversed(Description description) {
         List<Description.Type> types = new ArrayList<>(description.types());
         Collections.reverse(types);
-        return new Description(description.definition(), types, description.enums(), description.operations());
+        return new Description(description.definition(), types, description.enums(), description.operations(),
+                description.blocking(), description.definitions());
     }
 
     /**
