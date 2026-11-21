@@ -394,6 +394,33 @@ class DescribedBindingTest {
     }
 
     /**
+     * A description answered before its {@code blocking} and {@code definitions} were appended, its {@code size} at the
+     * first shape, reads as listing none, however its memory goes on.
+     */
+    @Test
+    void aDescriptionAnsweredAtItsFirstShapeReadsAsBlockingNothingAndNestingNothing() {
+        try (Opened walker = Opened.service(1)) {
+            long whole = DescriptionLayouts.DESCRIPTION.byteSize();
+            long firstShape = DescriptionLayouts.DESCRIPTION.offsetOf("blocking");
+            long older = walker.access.allocate(whole);
+            try {
+                walker.access.writeBytes(older, 0, walker.access.readBytes(walker.describedAt, 0, (int) whole));
+                walker.access.putInt(older, 0, (int) firstShape);
+
+                Description read = new DescriptionReader(walker.access).read(older);
+
+                assertEquals(Collections.singletonList("wait"), walker.description.blocking());
+                assertEquals(1, walker.description.definitions().size());
+                assertEquals(Collections.<String>emptyList(), read.blocking());
+                assertEquals(Collections.<Description>emptyList(), read.definitions());
+                assertEquals(walker.description.operations().size(), read.operations().size());
+            } finally {
+                walker.access.free(older);
+            }
+        }
+    }
+
+    /**
      * A definition is bound afresh from the struct each answer points at, so a second answer carrying a definition at
      * the very address of one already released is callable, where a binding keeping definitions by address would hand
      * back the released one.
@@ -475,10 +502,10 @@ class DescribedBindingTest {
         DescribedHandles library = new DescribedHandles();
         CarriedScope first = CarriedScope.carried();
         CarriedScope second = CarriedScope.carried();
-        DescribedHandles gotThroughFirst = library.child();
-        gotThroughFirst.hold(1, "opaque", recording(order, "the handle"));
-        KeptAnswer answer = new KeptAnswer(library, Arrays.asList(new KeptAnswer.Carried(first, gotThroughFirst),
-                new KeptAnswer.Carried(second, library.child())), () -> order.add("the answer"));
+        DescribedHandles gotThroughSecond = library.child();
+        gotThroughSecond.hold(1, "opaque", recording(order, "the handle"));
+        KeptAnswer answer = new KeptAnswer(library, Arrays.asList(new KeptAnswer.Carried(first, library.child()),
+                new KeptAnswer.Carried(second, gotThroughSecond)), () -> order.add("the answer"));
         library.keep(answer);
         assertTrue(first.enter());
         assertTrue(second.enter());
@@ -494,7 +521,7 @@ class DescribedBindingTest {
 
         assertTrue(firstRefused && secondRefused, "a new call was let into a definition whose answer ended");
         assertEquals(Collections.<String>emptyList(), whileBothRun);
-        assertEquals(Collections.singletonList("the handle"), whileOneRuns);
+        assertEquals(Collections.<String>emptyList(), whileOneRuns);
         assertEquals(Arrays.asList("the handle", "the answer"), order);
         assertFalse(library.keepsAnyAnswer());
     }
