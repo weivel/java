@@ -72,9 +72,9 @@ final class DescribedSteps {
     }
 
     /**
-     * An answer the provider fills on OK: a scalar, a text or a handle in a cell of its own, a struct, or a value
-     * tree, each copied out on OK and, when the description names its release, freed whatever the status once it holds
-     * anything.
+     * An answer the provider fills on OK: a scalar, a text, a handle or a definition in a cell of its own, a struct, or
+     * a value tree, each copied out on OK and, when the description names its release, freed whatever the status once
+     * it holds anything; kept past its call instead when it carries a definition.
      */
     static final class Answering extends BoundOperation.Step {
         private final NativeAccess access;

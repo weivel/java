@@ -27,7 +27,7 @@ final class DescribedCall {
     private final Carrier carrier;
     private final boolean answersApart;
     private final List<DescribedHandle> made = new ArrayList<>();
-    private final List<KeptAnswer.Carried> carried = new ArrayList<>();
+    private List<KeptAnswer.Carried> carried = Collections.emptyList();
     private NativeArena answers;
     private final List<DescribedHandle> used = new ArrayList<>();
     private final Deque<StructWrite> writes = new ArrayDeque<>();
@@ -417,6 +417,9 @@ final class DescribedCall {
 
     /** Binds the definition at {@code pointer}, which one of the call's answers carries. */
     BoundDefinition carry(MemberPlan plan, long pointer) {
+        if (carried.isEmpty()) {
+            carried = new ArrayList<>();
+        }
         return carrier.carry(plan.definition, pointer, carried);
     }
 
