@@ -86,6 +86,10 @@ final class StandardLayouts {
             ADDRESS.withName("functions"),
             LONG.withName("function_count")).withName("weivel_standard_library_service");
 
+    static final Layout LIBRARY_CONTRACT = Layout.struct(
+            ADDRESS.withName("capability"),
+            ADDRESS.withName("description")).withName("weivel_standard_library_contract");
+
     static final Layout LIBRARY = Layout.struct(
             INT.withName("size"),
             Layout.padding(4),
@@ -95,7 +99,9 @@ final class StandardLayouts {
             ADDRESS.withName("services"),
             LONG.withName("service_count"),
             ADDRESS.withName("storage"),
-            ADDRESS.withName("descriptions")).withName("weivel_standard_library");
+            ADDRESS.withName("descriptions"),
+            ADDRESS.withName("contracts"),
+            LONG.withName("contract_count")).withName("weivel_standard_library");
 
     static final Layout MIRROR_LIST = Layout.struct(
             INT.withName("size"),
@@ -135,6 +141,12 @@ final class StandardLayouts {
             SETTING_VALUE.withName("value"),
             ADDRESS.withName("storage")).withName("weivel_standard_setting_answer");
 
+    static final Layout SETTINGS_FILE = Layout.struct(
+            INT.withName("size"),
+            Layout.padding(4),
+            ADDRESS.withName("path"),
+            ADDRESS.withName("storage")).withName("weivel_standard_settings_file");
+
     static final Layout CONFIG = Layout.struct(
             INT.withName("size"),
             Layout.padding(4),
@@ -144,7 +156,11 @@ final class StandardLayouts {
             ADDRESS.withName("set"),
             ADDRESS.withName("release_settings"),
             ADDRESS.withName("release_answer"),
-            ADDRESS.withName("release_refusal")).withName("weivel_standard_config");
+            ADDRESS.withName("release_refusal"),
+            ADDRESS.withName("get_tree"),
+            ADDRESS.withName("release_tree"),
+            ADDRESS.withName("settings_file"),
+            ADDRESS.withName("release_settings_file")).withName("weivel_standard_config");
 
     static final Layout SECRET = Layout.struct(
             INT.withName("size"),

@@ -19,4 +19,7 @@ layer may assume, so its caller registers `manifest()` with an entry it makes it
 `Host.loadEntry` with a class name the caller gives, or any other way.
 `ForeignMemory.manifest` reads a manifest another library laid out up to the size it declares, as the core does.
 `Config`, `Secrets` and `Paths` are the standard's service definitions as Java interfaces, a refusal thrown as a
-`ServiceRefusal`.
+`ServiceRefusal`. An operation the header appends after a definition's first shape, as `Config`'s `getTree` and
+`settingsFile`, is a default method that refuses, so a provider that does not implement it declines it as a C provider
+leaves it unoffered. A declaration's `contracts` are laid out but not read into a `LibraryDeclaration`: this host checks
+no provided capability against a contract yet.

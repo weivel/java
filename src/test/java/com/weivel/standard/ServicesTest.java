@@ -8,6 +8,9 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -25,6 +28,30 @@ class ServicesTest {
         assertEquals(headerOperations(header, "weivel_standard_config"), operationsOf(Config.class));
         assertEquals(headerOperations(header, "weivel_standard_secrets"), operationsOf(Secrets.class));
         assertEquals(headerOperations(header, "weivel_standard_paths"), operationsOf(Paths.class));
+    }
+
+    @Test
+    void anOperationAppendedAfterTheFirstShapeIsRefusedByAProviderThatDoesNotImplementIt() {
+        Config firstShape = new Config() {
+            @Override
+            public Map<String, SettingValue> all() {
+                return Collections.emptyMap();
+            }
+
+            @Override
+            public Optional<SettingValue> get(String key) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void set(String key, SettingValue value) {
+            }
+        };
+
+        assertEquals("the config provider does not offer get_tree",
+                assertThrows(ServiceRefusal.class, () -> firstShape.getTree("theme")).detail());
+        assertEquals("the config provider does not offer settings_file",
+                assertThrows(ServiceRefusal.class, firstShape::settingsFile).detail());
     }
 
     @Test
@@ -62,10 +89,25 @@ class ServicesTest {
         Matcher operation = OPERATION.matcher(body.group(1));
         while (operation.find()) {
             if (!operation.group(1).startsWith("release_")) {
-                operations.add(operation.group(1));
+                operations.add(javaName(operation.group(1)));
             }
         }
         return operations;
+    }
+
+    /** A header's {@code get_tree} as Java names it, {@code getTree}. */
+    private static String javaName(String headerName) {
+        StringBuilder name = new StringBuilder();
+        boolean upper = false;
+        for (char character : headerName.toCharArray()) {
+            if (character == '_') {
+                upper = true;
+            } else {
+                name.append(upper ? Character.toUpperCase(character) : character);
+                upper = false;
+            }
+        }
+        return name.toString();
     }
 
     private static Set<String> operationsOf(Class<?> definition) {

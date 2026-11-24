@@ -12,6 +12,7 @@ import com.weivel.core.RefusalStatus;
 import com.weivel.host.LibraryDeclaration;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -230,39 +231,68 @@ public final class Standard {
      */
     public StandardAnswer<Void> checkDescription(Object description) {
         long address = ForeignMemory.addressOf(Objects.requireNonNull(description, "description"));
+        return refusable(StandardFunction.DESCRIPTION_CHECK, address);
+    }
+
+    /**
+     * Checks that a description a service declares describes the definition its definition symbol answered, as
+     * {@code weivel_standard_description_answers} does, calling the description's {@code answered_by} once. Run it
+     * after {@link #checkDescription} passed.
+     *
+     * @param description the description a library answered, carried as {@link #checkDescription} takes it
+     * @param definition the definition the service's definition symbol answered, carried the same way
+     * @return OK; MALFORMED at path {@code answered_by}, MISSING_FIELD when it is NULL and INVALID_VALUE when it
+     *     answers another definition; MALFORMED_CALL at path "" for a description below its first shape
+     */
+    public StandardAnswer<Void> checkAnswers(Object description, Object definition) {
+        long describing = ForeignMemory.addressOf(Objects.requireNonNull(description, "description"));
+        long described = ForeignMemory.addressOf(Objects.requireNonNull(definition, "definition"));
+        return refusable(StandardFunction.DESCRIPTION_ANSWERS, describing, described);
+    }
+
+    /**
+     * The check a host runs on every description a service declares, as {@code HostOptions.withDescriptionCheck} takes
+     * it, so a host binds descriptions without ever loading the standard itself.
+     *
+     * @return {@link #checkDescription}, then {@link #checkAnswers} once it passed, as a {@link DescriptionCheck}: OK
+     *     as {@link Answer.Ok}, OUT_OF_MEMORY as {@link Answer.Refused} of {@link RefusalStatus#OUT_OF_MEMORY}, and any
+     *     other status as {@link Answer.Mistake} carrying the status, the fault's path and its detail
+     */
+    public DescriptionCheck descriptionCheck() {
+        return (description, definition) -> {
+            StandardAnswer<Void> checked = checkDescription(description);
+            if (checked.status() == StandardStatus.OK) {
+                checked = checkAnswers(description, definition);
+            }
+            return asCheckAnswer(checked);
+        };
+    }
+
+    private static Answer<Void> asCheckAnswer(StandardAnswer<Void> checked) {
+        if (checked.status() == StandardStatus.OK) {
+            return new Answer.Ok<>(null);
+        }
+        if (checked.status() == StandardStatus.OUT_OF_MEMORY) {
+            return new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty());
+        }
+        return new Answer.Mistake<>("status " + checked.status() + checked.refusal()
+                .map(refusal -> " at " + (refusal.path().isEmpty() ? "the description" : refusal.path()) + ": "
+                        + refusal.detail())
+                .orElse(""));
+    }
+
+    private StandardAnswer<Void> refusable(StandardFunction function, long... arguments) {
         try (ForeignMemory memory = binary.memory()) {
             long refusal = sized(memory, StandardLayouts.REFUSAL);
+            long[] withRefusal = Arrays.copyOf(arguments, arguments.length + 1);
+            withRefusal[arguments.length] = refusal;
             try {
-                StandardStatus status = status(StandardFunction.DESCRIPTION_CHECK, address, refusal);
+                StandardStatus status = status(function, withRefusal);
                 return StandardAnswer.of(status, Optional.<Void>empty(), StandardReads.refusal(memory, refusal));
             } finally {
                 binary.release(StandardFunction.REFUSAL_RELEASE, refusal);
             }
         }
-    }
-
-    /**
-     * The check a host runs on every description, as {@code HostOptions.withDescriptionCheck} takes it, so a host binds
-     * descriptions without ever loading the standard itself.
-     *
-     * @return {@link #checkDescription} as a {@link DescriptionCheck}: OK as {@link Answer.Ok}, OUT_OF_MEMORY as
-     *     {@link Answer.Refused} of {@link RefusalStatus#OUT_OF_MEMORY}, and any other status as {@link Answer.Mistake}
-     *     carrying the status, the fault's path and its detail
-     */
-    public DescriptionCheck descriptionCheck() {
-        return description -> {
-            StandardAnswer<Void> checked = checkDescription(description);
-            if (checked.status() == StandardStatus.OK) {
-                return new Answer.Ok<>(null);
-            }
-            if (checked.status() == StandardStatus.OUT_OF_MEMORY) {
-                return new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty());
-            }
-            return new Answer.Mistake<>("status " + checked.status() + checked.refusal()
-                    .map(refusal -> " at " + (refusal.path().isEmpty() ? "the description" : refusal.path()) + ": "
-                            + refusal.detail())
-                    .orElse(""));
-        };
     }
 
     /**

@@ -56,6 +56,15 @@ class DescriptionVectorsTest {
     }
 
     @Test
+    @DisplayName("description/a-description-answering-another-definition-fails-the-load")
+    void aDescriptionAnsweringAnotherDefinitionFailsTheLoad() {
+        LayerWitness witness = assertWitnessed(
+                "description/a-description-answering-another-definition-fails-the-load");
+
+        assertTrue(witness.loadMistake().get().contains("at answered_by"), witness.loadMistake().toString());
+    }
+
+    @Test
     @DisplayName("description/a-definition-declared-without-its-description-loads-as-before")
     void aDefinitionDeclaredWithoutItsDescriptionLoadsAsBefore() {
         assertWitnessed("description/a-definition-declared-without-its-description-loads-as-before");

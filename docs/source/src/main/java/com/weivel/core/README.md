@@ -41,7 +41,7 @@
 - [DescribedLayouts.java](../../../../../../../../src/main/java/com/weivel/core/DescribedLayouts.java) - every struct a description names, laid out by the backend's own rules and held against the description
 - [DescribedSteps.java](../../../../../../../../src/main/java/com/weivel/core/DescribedSteps.java) - the steps a bound operation takes for each parameter, one kind per role
 - [Description.java](../../../../../../../../src/main/java/com/weivel/core/Description.java) - a service's description as Java values, copied once at the load after the standard's check passed it
-- [DescriptionCheck.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionCheck.java) - the standard's description check, handed in by the caller so the layer never loads the standard
+- [DescriptionCheck.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionCheck.java) - the standard's description checks, handed in by the caller so the layer never loads the standard
 - [DescriptionLayouts.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionLayouts.java) - the hand layouts of the standard's description and value headers, the only described structs laid out by hand
 - [DescriptionReader.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionReader.java) - copies a `weivel_standard_description` into a `Description`, nested descriptions with it
 - [DescriptionRefused.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionRefused.java) - a description that does not hold for this platform's layout or that this binding cannot bind

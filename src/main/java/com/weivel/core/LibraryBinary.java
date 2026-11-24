@@ -103,16 +103,18 @@ public final class LibraryBinary implements AutoCloseable {
 
     /**
      * Binds a definition from the description its library answers for it, as {@link #definition} answers the
-     * definition itself: the description is checked by {@code check} before anything else of it is read, every struct
-     * it names is laid out by this platform's own rules and held against it, and every operation is bound once here.
+     * definition itself: the description is checked by {@code check}, against the definition the definition symbol
+     * answered, before anything else of it is read, every struct it names is laid out by this platform's own rules and
+     * held against it, and every operation is bound once here.
      *
      * @param definitionSymbol the definition's symbol
      * @param descriptionSymbol the symbol answering its {@code weivel_standard_description}
      * @param check the standard's description check, which its caller hands the layer
      * @param gate who decides whether a call may still enter the binary, for every call the bound definition makes
      * @return the bound definition; {@link Answer.Mistake} for anything {@link #definition} refuses, a description
-     *     symbol the library does not export or that answers NULL, a description the check refuses, one whose layout
-     *     disagrees with this platform's or that this binding cannot bind, and a backend that binds no description yet;
+     *     symbol the library does not export or that answers NULL, a description the check refuses, among them one
+     *     describing another definition than the one the definition symbol answered, one whose layout disagrees with
+     *     this platform's or that this binding cannot bind, and a backend that binds no description yet;
      *     {@link Answer.Refused} of {@link RefusalStatus#OUT_OF_MEMORY} when the check ran out of memory
      */
     public Answer<BoundDefinition> described(String definitionSymbol, String descriptionSymbol,
@@ -132,10 +134,11 @@ public final class LibraryBinary implements AutoCloseable {
         if (description == 0) {
             return new Answer.Mistake<>("the description " + descriptionSymbol + " answered NULL");
         }
-        Answer<Void> checked = check.check(access.addressed(description, sizeAt(description)));
+        Answer<Void> checked = check.check(access.addressed(description, sizeAt(description)),
+                access.addressed(definition, sizeAt(definition)));
         if (checked instanceof Answer.Mistake) {
-            return new Answer.Mistake<>("the standard's check refuses the description " + descriptionSymbol + ": "
-                    + ((Answer.Mistake<Void>) checked).detail());
+            return new Answer.Mistake<>("the standard's check refuses the description " + descriptionSymbol
+                    + " of the definition " + definitionSymbol + ": " + ((Answer.Mistake<Void>) checked).detail());
         }
         if (!(checked instanceof Answer.Ok)) {
             return Answer.retyped(checked);

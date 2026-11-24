@@ -47,4 +47,16 @@ public final class ServiceRefusal extends Exception {
     public String fix() {
         return fix;
     }
+
+    /**
+     * The refusal of an operation appended after a definition's first shape that its provider does not implement.
+     *
+     * @param definition the definition, as its service is named
+     * @param operation the operation, as {@code services.h} names it
+     * @return the refusal
+     */
+    static ServiceRefusal notOffered(String definition, String operation) {
+        return new ServiceRefusal("the " + definition + " provider does not offer " + operation,
+                "implement " + operation + " in the provider");
+    }
 }
