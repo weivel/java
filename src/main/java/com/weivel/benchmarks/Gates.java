@@ -5,8 +5,9 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 
 /**
- * The timing gates, judged on per-round medians as the kit's {@code RUNNER.md} defines them. A run with nothing
- * measured fails, and so does a run on a backend or platform the budget gives no line: no bound is never a pass.
+ * The timing gates, judged on per-round medians as the kit's {@code docs/benchmarks.md} defines them. A run with
+ * nothing measured fails, and so does a run on a backend or platform the budget gives no line: no bound is never a
+ * pass.
  */
 public final class Gates {
     private Gates() {

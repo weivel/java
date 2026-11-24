@@ -1,0 +1,10 @@
+What each module of this implementation does. `src/main/java/com/weivel/` holds the modules every language implementation of weivel holds, as the core's `MODULES` list names them, one package each: `com.weivel.core`, `com.weivel.handles`, `com.weivel.timer`, `com.weivel.context`, `com.weivel.host`, `com.weivel.standard`, `com.weivel.conformance` and `com.weivel.benchmarks`; the foreign function backend of `com.weivel.core` alone lies apart, in `src/main/java22/com/weivel/core/`, which the jar carries for Java 22 and later. Each package's tests are in `src/test/java/com/weivel/<module>/`. What every module must do is the core's `docs/contract/`, one file per module, so a doc here says how Java does it and links to the classes that do; the kit's `parity` drift check, run by this repository's drift job, refuses a missing module or a package that is none.
+
+- [benchmarks.md](benchmarks.md) - `com.weivel.benchmarks`: the timing gates, what each pair of paths times, and how paths are sampled and judged
+- [conformance.md](conformance.md) - `com.weivel.conformance`: the driver that runs the kit's layer vectors through the host on the real core
+- [context.md](context.md) - `com.weivel.context`: what a plugin sees of the core, and how a host makes, opens, ends and frees a plugin's context
+- [core.md](core.md) - `com.weivel.core`: loading the core's binary, the one wrapper every call goes through, its answers, dispatch and the types public only for the layer
+- [handles.md](handles.md) - `com.weivel.handles`: the table from the core's handles to Java objects, and the holdings
+- [host/](host/) - `com.weivel.host`: registering, activating, verifying, releasing and destroying Java plugins, and C libraries as host services
+- [standard.md](standard.md) - `com.weivel.standard`, optional: the standard's manifests, discovery, library declarations and service definitions in Java
+- [timer.md](timer.md) - `com.weivel.timer`: arming the core's next deadline on the caller's scheduler, and the scheduler the layer offers

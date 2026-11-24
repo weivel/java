@@ -1,0 +1,94 @@
+`com.weivel.core`: loading the core's binary, the one wrapper every call goes through, the values a call answers and an event carries, the native seam with its JNA backend, and the binding of a C library's definitions, described or not. What the package does is [the core module](../../../../../../../modules/core.md), and the binding of a description [described definitions](../../../../../../../modules/host/descriptions.md); the foreign function backend's two classes, for Java 22 and later, are in [the Java 22 tree](../../../../java22/com/weivel/core/README.md). A few classes are public only for the layer's own packages, for the reason the core module gives.
+
+<!-- generated: source-children -->
+- [ActivationPlan.java](../../../../../../../../src/main/java/com/weivel/core/ActivationPlan.java) - the core's activation plan, copied out before its release
+- [Answer.java](../../../../../../../../src/main/java/com/weivel/core/Answer.java) - what a call that reaches the core answers: its result, an absence, the refusal, or why it was never made
+- [AnswerCopy.java](../../../../../../../../src/main/java/com/weivel/core/AnswerCopy.java) - copies an answer the core filled into the caller's struct out into Java values
+- [BareServiceGet.java](../../../../../../../../src/main/java/com/weivel/core/BareServiceGet.java) - `weivel_get_service` past the wrapper, for the benchmarks' control ratio alone
+- [BoundDefinition.java](../../../../../../../../src/main/java/com/weivel/core/BoundDefinition.java) - a C library's definition bound from its description: one operation per function pointer, called by name
+- [BoundOperation.java](../../../../../../../../src/main/java/com/weivel/core/BoundOperation.java) - one operation of a bound definition, with every plan built at the load, so a call looks nothing up
+- [CallGate.java](../../../../../../../../src/main/java/com/weivel/core/CallGate.java) - who decides whether a call may still enter a library's binary, so it never closes under a call
+- [CallNotes.java](../../../../../../../../src/main/java/com/weivel/core/CallNotes.java) - the failures the calls of one hold of the layer lock met, told to the error sink after the lock is let go
+- [CallPath.java](../../../../../../../../src/main/java/com/weivel/core/CallPath.java) - where in a call's input a value stands, spelled out only when a refusal names it
+- [CallSteps.java](../../../../../../../../src/main/java/com/weivel/core/CallSteps.java) - the guard and the step the layer's own packages run around one call under the layer lock
+- [CallerTexts.java](../../../../../../../../src/main/java/com/weivel/core/CallerTexts.java) - finds a caller's text holding a NUL character, which C would read cut short
+- [CapabilityImplementation.java](../../../../../../../../src/main/java/com/weivel/core/CapabilityImplementation.java) - one implementation of a capability, as `weivel_all_capabilities` answers it
+- [CapacityAnswer.java](../../../../../../../../src/main/java/com/weivel/core/CapacityAnswer.java) - a provider's answer to one capacity question, mirroring `weivel_capacity`
+- [CarriedScope.java](../../../../../../../../src/main/java/com/weivel/core/CarriedScope.java) - what one definition an answer carried lives in: its running calls, its close and what that close leaves to do
+- [Choice.java](../../../../../../../../src/main/java/com/weivel/core/Choice.java) - a yes-or-no field a caller may leave out, so its documented default applies
+- [Core.java](../../../../../../../../src/main/java/com/weivel/core/Core.java) - one core, behind the one wrapper every call into it goes through
+- [CoreBinary.java](../../../../../../../../src/main/java/com/weivel/core/CoreBinary.java) - the core's shared binary, loaded from its caller's path, and the table of its functions
+- [CoreCall.java](../../../../../../../../src/main/java/com/weivel/core/CoreCall.java) - one call into the core, as `CoreCalls` builds it and `Core.call` makes it
+- [CoreCalls.java](../../../../../../../../src/main/java/com/weivel/core/CoreCalls.java) - one typed factory per function of the core's header, and how each answer reads
+- [CoreConstants.java](../../../../../../../../src/main/java/com/weivel/core/CoreConstants.java) - the values of the core's header a Java caller reads in events, refusals and answers
+- [CoreEvent.java](../../../../../../../../src/main/java/com/weivel/core/CoreEvent.java) - one record per kind of the core's events, copied into Java values as it was drained
+- [CoreFunction.java](../../../../../../../../src/main/java/com/weivel/core/CoreFunction.java) - every function the core's header declares, in its order, with its symbol and signature
+- [CoreFunctions.java](../../../../../../../../src/main/java/com/weivel/core/CoreFunctions.java) - the one table of native functions through which the layer reaches one loaded core
+- [CoreInternals.java](../../../../../../../../src/main/java/com/weivel/core/CoreInternals.java) - the wrapper's operations the layer's own packages use: steps under the lock, deferred steps, deadline hooks, the sink
+- [CoreLayouts.java](../../../../../../../../src/main/java/com/weivel/core/CoreLayouts.java) - the core's structs this package hands in or reads back, named as the header names them
+- [CoreListener.java](../../../../../../../../src/main/java/com/weivel/core/CoreListener.java) - hears every event of a core, outside the layer lock, by the one thread dispatching
+- [CoreLoad.java](../../../../../../../../src/main/java/com/weivel/core/CoreLoad.java) - what loading the core's binary answered: the binary, or why there is none
+- [CoreOptions.java](../../../../../../../../src/main/java/com/weivel/core/CoreOptions.java) - what a core is created with, mirroring `weivel_core_options`, handed over unchanged
+- [CoreSymbols.java](../../../../../../../../src/main/java/com/weivel/core/CoreSymbols.java) - the core's symbols by name, so a seam can tell them apart from another library's
+- [DeadlineHooks.java](../../../../../../../../src/main/java/com/weivel/core/DeadlineHooks.java) - how a timer follows the core's deadline through the wrapper
+- [DeferredStep.java](../../../../../../../../src/main/java/com/weivel/core/DeferredStep.java) - a step that runs once every event drained so far has been dispatched
+- [DescribedAnswer.java](../../../../../../../../src/main/java/com/weivel/core/DescribedAnswer.java) - what one call of a described operation answered: its answers, NONE, a refusal, another status, or unloaded
+- [DescribedBinder.java](../../../../../../../../src/main/java/com/weivel/core/DescribedBinder.java) - binds a definition from its description once, at the load, so every call follows plans
+- [DescribedCall.java](../../../../../../../../src/main/java/com/weivel/core/DescribedCall.java) - writes and reads the structs of one described call in the arena it took, by its definition's plans
+- [DescribedHandle.java](../../../../../../../../src/main/java/com/weivel/core/DescribedHandle.java) - an opaque handle a described operation answered, freed exactly once
+- [DescribedHandles.java](../../../../../../../../src/main/java/com/weivel/core/DescribedHandles.java) - every handle and kept answer of one library's described definitions not freed yet
+- [DescribedKind.java](../../../../../../../../src/main/java/com/weivel/core/DescribedKind.java) - the kinds a described member or parameter holds, numbered as the standard's header numbers them
+- [DescribedLayouts.java](../../../../../../../../src/main/java/com/weivel/core/DescribedLayouts.java) - every struct a description names, laid out by the backend's own rules and held against the description
+- [DescribedSteps.java](../../../../../../../../src/main/java/com/weivel/core/DescribedSteps.java) - the steps a bound operation takes for each parameter, one kind per role
+- [Description.java](../../../../../../../../src/main/java/com/weivel/core/Description.java) - a service's description as Java values, copied once at the load after the standard's check passed it
+- [DescriptionCheck.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionCheck.java) - the standard's description check, handed in by the caller so the layer never loads the standard
+- [DescriptionLayouts.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionLayouts.java) - the hand layouts of the standard's description and value headers, the only described structs laid out by hand
+- [DescriptionReader.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionReader.java) - copies a `weivel_standard_description` into a `Description`, nested descriptions with it
+- [DescriptionRefused.java](../../../../../../../../src/main/java/com/weivel/core/DescriptionRefused.java) - a description that does not hold for this platform's layout or that this binding cannot bind
+- [EdgeSource.java](../../../../../../../../src/main/java/com/weivel/core/EdgeSource.java) - which declarations draw the edges an activation plan orders by
+- [ErrorSink.java](../../../../../../../../src/main/java/com/weivel/core/ErrorSink.java) - where failures in code the layer calls, and defects of the layer, go: never to a caller
+- [EventCopy.java](../../../../../../../../src/main/java/com/weivel/core/EventCopy.java) - the layer's own copy of a drained `weivel_event` into a `CoreEvent`
+- [EventCopying.java](../../../../../../../../src/main/java/com/weivel/core/EventCopying.java) - how the wrapper copies a drained event out, the seam a test fails a copy through
+- [Failure.java](../../../../../../../../src/main/java/com/weivel/core/Failure.java) - one failure, as the error sink is told it
+- [FailureKind.java](../../../../../../../../src/main/java/com/weivel/core/FailureKind.java) - what a failure told to the error sink is about
+- [FfiStruct.java](../../../../../../../../src/main/java/com/weivel/core/FfiStruct.java) - a C struct a native backend lays out by its own rules, so its answer can be held against a description
+- [ForeignFunction.java](../../../../../../../../src/main/java/com/weivel/core/ForeignFunction.java) - one function of a `ForeignLibrary`, called as its signature says
+- [ForeignLibrary.java](../../../../../../../../src/main/java/com/weivel/core/ForeignLibrary.java) - a C library other than the core, opened through the one native seam, for the layer's own packages
+- [ForeignMemory.java](../../../../../../../../src/main/java/com/weivel/core/ForeignMemory.java) - native memory a `ForeignLibrary`'s caller holds, and reads of the memory such a library answers with
+- [JnaAccess.java](../../../../../../../../src/main/java/com/weivel/core/JnaAccess.java) - the native seam through JNA, for Java 8 to 21
+- [KeptAnswer.java](../../../../../../../../src/main/java/com/weivel/core/KeptAnswer.java) - an answer kept past its call because it carried a definition, which lives exactly as long as it
+- [Layout.java](../../../../../../../../src/main/java/com/weivel/core/Layout.java) - the layout of a C value declared by hand, which both backends read every struct through
+- [LedgerRow.java](../../../../../../../../src/main/java/com/weivel/core/LedgerRow.java) - one plugin's row of the core's ledger
+- [LibraryBinary.java](../../../../../../../../src/main/java/com/weivel/core/LibraryBinary.java) - a C library's shared binary, loaded from its caller's path, with its release symbol
+- [LibraryCopies.java](../../../../../../../../src/main/java/com/weivel/core/LibraryCopies.java) - the points where a test watches the copies a bytes call makes, or fails one
+- [LibraryFunction.java](../../../../../../../../src/main/java/com/weivel/core/LibraryFunction.java) - one bytes function of a library: the caller's bytes in, the body out, copied once and released
+- [LibraryOutput.java](../../../../../../../../src/main/java/com/weivel/core/LibraryOutput.java) - what one bytes call answered: its status and its body, the library's copy already freed
+- [Manifest.java](../../../../../../../../src/main/java/com/weivel/core/Manifest.java) - a plugin's manifest as a value, mirroring the core's `weivel_manifest`
+- [ManifestCopy.java](../../../../../../../../src/main/java/com/weivel/core/ManifestCopy.java) - copies a manifest another C library laid out, up to the size each struct declares
+- [Marshal.java](../../../../../../../../src/main/java/com/weivel/core/Marshal.java) - lays Java values out as the core's structs, in a call's own arena
+- [MemberPlan.java](../../../../../../../../src/main/java/com/weivel/core/MemberPlan.java) - how one described member or parameter is written and read, worked out at the bind
+- [NamedNumber.java](../../../../../../../../src/main/java/com/weivel/core/NamedNumber.java) - one named number: an attribute a service advertises, or a constraint on it
+- [NativeAccess.java](../../../../../../../../src/main/java/com/weivel/core/NativeAccess.java) - the one seam through which the layer reaches native code
+- [NativeArena.java](../../../../../../../../src/main/java/com/weivel/core/NativeArena.java) - native memory held for one owner and freed all at once, reusable for a call's arguments
+- [NativeBackends.java](../../../../../../../../src/main/java/com/weivel/core/NativeBackends.java) - selects JNA as the native backend, replaced for Java 22 and later in the multi-release jar
+- [NativeFunction.java](../../../../../../../../src/main/java/com/weivel/core/NativeFunction.java) - one native function looked up in an open library, with every argument and answer a `long`
+- [NativeRegion.java](../../../../../../../../src/main/java/com/weivel/core/NativeRegion.java) - a span of native memory read and written by offset
+- [NativeSignature.java](../../../../../../../../src/main/java/com/weivel/core/NativeSignature.java) - what a native function answers and takes, in order
+- [NativeType.java](../../../../../../../../src/main/java/com/weivel/core/NativeType.java) - a C type a native function takes or answers, as the seam carries it
+- [OpenLibrary.java](../../../../../../../../src/main/java/com/weivel/core/OpenLibrary.java) - a shared library the native seam opened, held open until it is closed
+- [QuarantineReason.java](../../../../../../../../src/main/java/com/weivel/core/QuarantineReason.java) - why a plugin is quarantined, mirroring `weivel_quarantine_reason`
+- [QueueEntry.java](../../../../../../../../src/main/java/com/weivel/core/QueueEntry.java) - one entry of the dispatch queue: a drained event, or a deferred step
+- [Refusal.java](../../../../../../../../src/main/java/com/weivel/core/Refusal.java) - a refusal of the core's, copied out of the event that carried it
+- [RefusalStatus.java](../../../../../../../../src/main/java/com/weivel/core/RefusalStatus.java) - how the core declined a call: its statuses that are neither a success nor an absence
+- [ReleasePlan.java](../../../../../../../../src/main/java/com/weivel/core/ReleasePlan.java) - one release of a described definition, bound once at the load
+- [Scalars.java](../../../../../../../../src/main/java/com/weivel/core/Scalars.java) - the described scalars and texts as Java hands and takes them, each checked before it is written
+- [SpareArena.java](../../../../../../../../src/main/java/com/weivel/core/SpareArena.java) - the one reusable arena the described calls into one library take and give back
+- [SpareBlock.java](../../../../../../../../src/main/java/com/weivel/core/SpareBlock.java) - the one spare block of native memory the bytes calls into one library take and give back
+- [StructPlan.java](../../../../../../../../src/main/java/com/weivel/core/StructPlan.java) - one described struct as a call writes and reads it
+- [StructValues.java](../../../../../../../../src/main/java/com/weivel/core/StructValues.java) - a struct an answer carries, as the unmodifiable map a caller is handed
+- [ValueTrees.java](../../../../../../../../src/main/java/com/weivel/core/ValueTrees.java) - the standard's value tree as the natural Java value
+- [Verification.java](../../../../../../../../src/main/java/com/weivel/core/Verification.java) - what verifying an activation answers: it passed, or the core refused it and quarantined the plugin
+- [WantOptions.java](../../../../../../../../src/main/java/com/weivel/core/WantOptions.java) - how long a want may wait, mirroring `weivel_want_options`
+- [Wrapper.java](../../../../../../../../src/main/java/com/weivel/core/Wrapper.java) - the one wrapper every call into one core goes through: deadline, call, drain, answer and dispatch
+- [package-info.java](../../../../../../../../src/main/java/com/weivel/core/package-info.java) - the package's summary in its Javadoc
+<!-- end generated -->

@@ -14,8 +14,9 @@ import java.util.OptionalDouble;
 
 /**
  * The bounds the kit sets for this language, read from {@code benchmarks/java.txt} of the kit commit it pins, as the
- * kit's {@code RUNNER.md} lays the file out: each ratio gate's highest measured ratio per backend and platform, the
- * margin over it, each platform's quiet and worst noise, and the margin a same-language pair is judged by.
+ * kit's {@code docs/benchmarks.md} lays the file out: each ratio gate's highest measured ratio per backend and
+ * platform, the margin over it, each platform's quiet and worst noise, and the margin a same-language pair is judged
+ * by.
  */
 public final class LanguageBudget {
     private static final List<String> PLATFORMS = Arrays.asList("linux", "windows", "macos");

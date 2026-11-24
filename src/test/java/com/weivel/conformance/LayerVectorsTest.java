@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Timeout;
 
 /**
  * One test per layer vector of the pinned kit, each named by the vector's id and witnessing what the kit's
- * {@code LAYER.md} states for it, through the host's public surface on the real core.
+ * {@code docs/vectors/layer/} states for it, through the host's public surface on the real core.
  *
  * @implNote Each runs on a thread of its own under a timeout, so a layer that waits where a vector says it must not
  * fails the test rather than hanging the build.

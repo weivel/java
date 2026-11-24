@@ -28,7 +28,8 @@ import java.util.function.Function;
  * Drives a {@code description} vector: the standard's described library loaded through the host, each holder a plugin
  * opened with its activate left in flight, and every call made through the {@link BoundDefinition} the holder
  * resolved, or through one an answer carried and the step kept. A vector's JSON is translated into Java values by the
- * kinds its description gives, and every answer back, as {@code vectors/layer/LAYER.md} writes them.
+ * kinds its description gives, and every answer back, as the kit's {@code docs/vectors/layer/description.md} writes
+ * them.
  *
  * @implNote The mirror whose releases a {@code readReleases} step counts is found as the holder's resolved object that
  *     has a {@code count_releases} operation, since a vector does not name the service.
@@ -269,7 +270,7 @@ final class DescriptionRun {
         return call;
     }
 
-    /** The status as LAYER.md writes it: the core's name, lowercase without its prefix. */
+    /** The status as the kit's description vectors' doc writes it: the core's name, lowercase without its prefix. */
     private static String statusName(int status) {
         switch (status) {
             case CoreConstants.STATUS_MALFORMED:
@@ -299,7 +300,10 @@ final class DescriptionRun {
         return true;
     }
 
-    /** A member's C name as LAYER.md names its count, {@code nested_refusals} as {@code nestedRefusals}. */
+    /**
+     * A member's C name as the kit's description vectors' doc names its count, {@code nested_refusals} as
+     * {@code nestedRefusals}.
+     */
     private static String camelCase(String name) {
         StringBuilder camel = new StringBuilder(name.length());
         boolean upper = false;
