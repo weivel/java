@@ -17,6 +17,8 @@ public final class ServiceRefusal extends Exception {
     private final String detail;
     /** What would make the call succeed. */
     private final String fix;
+    /** Whether the refusal is the default of an operation the provider does not implement. */
+    private final boolean notOffered;
 
     /**
      * Makes the refusal.
@@ -25,9 +27,14 @@ public final class ServiceRefusal extends Exception {
      * @param fix what would make the call succeed
      */
     public ServiceRefusal(String detail, String fix) {
+        this(detail, fix, false);
+    }
+
+    private ServiceRefusal(String detail, String fix, boolean notOffered) {
         super(Objects.requireNonNull(detail, "detail"));
         this.detail = detail;
         this.fix = Objects.requireNonNull(fix, "fix");
+        this.notOffered = notOffered;
     }
 
     /**
@@ -49,6 +56,17 @@ public final class ServiceRefusal extends Exception {
     }
 
     /**
+     * Answers whether the operation was declined because the provider does not offer it, the default of an operation
+     * appended after a definition's first shape, rather than refused by the provider itself, so a consumer can fall
+     * back where C checks {@code WEIVEL_STANDARD_OFFERS}.
+     *
+     * @return true only for a refusal no provider made
+     */
+    public boolean isNotOffered() {
+        return notOffered;
+    }
+
+    /**
      * The refusal of an operation appended after a definition's first shape that its provider does not implement.
      *
      * @param definition the definition, as its service is named
@@ -57,6 +75,6 @@ public final class ServiceRefusal extends Exception {
      */
     static ServiceRefusal notOffered(String definition, String operation) {
         return new ServiceRefusal("the " + definition + " provider does not offer " + operation,
-                "implement " + operation + " in the provider");
+                "implement " + operation + " in the provider", true);
     }
 }

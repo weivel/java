@@ -10,7 +10,8 @@ import java.util.Optional;
  * A provider is safe for concurrent calls from any thread, and every call completes before it returns.
  *
  * @implNote The header's {@code size} and {@code context} have no Java counterpart: the object is its own context,
- * and an operation appended later arrives as a default method. A NULL required pointer or a value of no kind is a
+ * and an operation appended later arrives as a default method that refuses with {@link ServiceRefusal#isNotOffered}
+ * true, the test C makes with {@code WEIVEL_STANDARD_OFFERS}. A NULL required pointer or a value of no kind is a
  * {@link NullPointerException} or never constructed, where C answers {@code WEIVEL_STATUS_MALFORMED}.
  */
 public interface Config {
@@ -48,7 +49,8 @@ public interface Config {
      * @return the setting as a value tree arrives in Java: a {@link String}, a {@link Double}, a {@link Boolean}, a
      *     {@code List} or a {@code Map} keyed by text, in the provider's order; empty when the key is neither stored
      *     nor defaulted
-     * @throws ServiceRefusal when the settings cannot be read, or the provider does not offer it
+     * @throws ServiceRefusal when the settings cannot be read, or the provider does not offer it, which
+     *     {@link ServiceRefusal#isNotOffered} tells apart
      */
     default Optional<Object> getTree(String key) throws ServiceRefusal {
         throw ServiceRefusal.notOffered("config", "get_tree");
@@ -59,7 +61,8 @@ public interface Config {
      * the user.
      *
      * @return the file, absolute, which need not exist yet; empty when the provider keeps the settings in no file
-     * @throws ServiceRefusal when the file cannot be named, or the provider does not offer it
+     * @throws ServiceRefusal when the file cannot be named, or the provider does not offer it, which
+     *     {@link ServiceRefusal#isNotOffered} tells apart
      */
     default Optional<Path> settingsFile() throws ServiceRefusal {
         throw ServiceRefusal.notOffered("config", "settings_file");

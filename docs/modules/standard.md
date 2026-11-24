@@ -21,5 +21,6 @@ layer may assume, so its caller registers `manifest()` with an entry it makes it
 `Config`, `Secrets` and `Paths` are the standard's service definitions as Java interfaces, a refusal thrown as a
 `ServiceRefusal`. An operation the header appends after a definition's first shape, as `Config`'s `getTree` and
 `settingsFile`, is a default method that refuses, so a provider that does not implement it declines it as a C provider
-leaves it unoffered. A declaration's `contracts` are laid out but not read into a `LibraryDeclaration`: this host checks
-no provided capability against a contract yet.
+leaves it unoffered, and the refusal's `isNotOffered` tells that apart from a provider's own refusal, as C's
+`WEIVEL_STANDARD_OFFERS` does. A declaration's `contracts` are laid out but not read into a `LibraryDeclaration`: until
+the contract check lands, which the C host lacks too, this host checks no provided capability against a contract.
