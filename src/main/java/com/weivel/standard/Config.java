@@ -1,5 +1,6 @@
 package com.weivel.standard;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 
@@ -38,4 +39,29 @@ public interface Config {
      * @throws ServiceRefusal when the provider will not store the key or the value, or cannot write
      */
     void set(String key, SettingValue value) throws ServiceRefusal;
+
+    /**
+     * One setting whole, so a setting that is a list or a record, which {@link #get} cannot answer, is read as the host
+     * stores it; a text, number or boolean setting is answered as that one value.
+     *
+     * @param key the key
+     * @return the setting as a value tree arrives in Java: a {@link String}, a {@link Double}, a {@link Boolean}, a
+     *     {@code List} or a {@code Map} keyed by text, in the provider's order; empty when the key is neither stored
+     *     nor defaulted
+     * @throws ServiceRefusal when the settings cannot be read, or the provider does not offer it
+     */
+    default Optional<Object> getTree(String key) throws ServiceRefusal {
+        throw ServiceRefusal.notOffered("config", "get_tree");
+    }
+
+    /**
+     * The settings file {@link #set} writes, the one a user edits by hand, so a consumer can name it in what it tells
+     * the user.
+     *
+     * @return the file, absolute, which need not exist yet; empty when the provider keeps the settings in no file
+     * @throws ServiceRefusal when the file cannot be named, or the provider does not offer it
+     */
+    default Optional<Path> settingsFile() throws ServiceRefusal {
+        throw ServiceRefusal.notOffered("config", "settings_file");
+    }
 }

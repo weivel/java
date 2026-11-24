@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * The standard's described test library and its declarations, read by the standard's own reader from the files the
@@ -64,6 +65,17 @@ public final class DescribedFixture {
      * @return the declaration
      */
     public static LibraryDeclaration declaration(String file) {
+        return declaration(file, UnaryOperator.identity());
+    }
+
+    /**
+     * One of the library's declarations, edited as text before the standard reads it.
+     *
+     * @param file its file name beside the library's sources
+     * @param edit what the declaration's text becomes
+     * @return the declaration
+     */
+    public static LibraryDeclaration declaration(String file, UnaryOperator<String> edit) {
         Path path = Paths.get(System.getProperty("weivel.test.describedDirectory")).resolve(file);
         String json;
         try {
@@ -71,7 +83,7 @@ public final class DescribedFixture {
         } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
         }
-        StandardAnswer<LibraryDeclaration> read = STANDARD.readLibrary(json);
+        StandardAnswer<LibraryDeclaration> read = STANDARD.readLibrary(edit.apply(json));
         return read.value().orElseThrow(() -> new IllegalStateException("the standard refused " + path + ": "
                 + read));
     }

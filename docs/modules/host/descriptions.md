@@ -9,9 +9,12 @@ is the same for a bound definition as for any other, in [libraries.md](libraries
 
 - **The check is the caller's.** The host never loads the standard, so it runs the check its caller hands it through
   `HostOptions.withDescriptionCheck`, as `Standard.descriptionCheck()` answers it, before it reads anything else of a
-  description. A host given none refuses a described library as the caller's mistake, and so does a description the
-  check refuses, a description symbol missing or answering NULL, and a definition ending before its first shape. A
-  check that runs out of memory fails the load as `Answer.Refused` of `OUT_OF_MEMORY`, never as the caller's mistake.
+  description. That check is the standard's two: the description is well formed, and its `answered_by` answers the
+  very definition the service's definition symbol answered, so a description of another definition fails the load
+  even when both definitions share one struct. A host given none refuses a described library as the caller's mistake,
+  and so does a description either check refuses, naming both symbols, a description symbol missing or answering
+  NULL, and a definition ending before its first shape. A check that runs out of memory fails the load as
+  `Answer.Refused` of `OUT_OF_MEMORY`, never as the caller's mistake.
   The kinds each role takes, the shape of a refusal and a release, and where the context lies are the check's rules,
   which this binding does not repeat.
 - **The layout is the platform's.** Every described struct, embedded structs and value nodes included, is laid out by

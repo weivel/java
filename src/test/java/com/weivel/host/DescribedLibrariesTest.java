@@ -69,9 +69,24 @@ class DescribedLibrariesTest {
     }
 
     @Test
+    void aDescriptionOfAnotherDefinitionOfTheSameStructFailsTheLoadNamingBothSymbols() throws Exception {
+        LibraryDeclaration swapped = DescribedFixture.declaration(DECLARATION, json -> json.replaceFirst(
+                "\"described_mirror_description\"", "\"described_mirror_without_halve_description\""));
+        try (HostFixture fixture = checking()) {
+            Answer<LoadedLibrary> loaded = fixture.host.loadLibrary(DescribedFixture.binary(), swapped);
+
+            String detail = assertInstanceOf(Answer.Mistake.class, loaded).detail();
+            assertTrue(detail.contains("described_mirror_without_halve_description"), detail);
+            assertTrue(detail.contains("described_mirror_definition"), detail);
+            assertTrue(detail.contains("at answered_by"), detail);
+        }
+    }
+
+    @Test
     void aCheckRunningOutOfMemoryFailsTheLoadAsOutOfMemoryNeverAsTheCallersMistake() throws Exception {
         try (HostFixture fixture = new HostFixture(
-                description -> new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY, Optional.<Refusal>empty()))) {
+                (description, definition) -> new Answer.Refused<>(RefusalStatus.OUT_OF_MEMORY,
+                        Optional.<Refusal>empty()))) {
             Answer<LoadedLibrary> loaded = fixture.host.loadLibrary(DescribedFixture.binary(), declaration());
 
             Answer.Refused<?> refused = assertInstanceOf(Answer.Refused.class, loaded);

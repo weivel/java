@@ -69,7 +69,8 @@ final class DescriptionLayouts {
             ADDRESS.withName("blocking"),
             LONG.withName("blocking_count"),
             ADDRESS.withName("definitions"),
-            LONG.withName("definition_count")).withName("weivel_standard_description");
+            LONG.withName("definition_count"),
+            ADDRESS.withName("answered_by")).withName("weivel_standard_description");
 
     static final Layout VALUE = Layout.struct(
             INT.withName("kind"),

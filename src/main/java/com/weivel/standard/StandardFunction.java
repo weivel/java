@@ -38,7 +38,8 @@ enum StandardFunction {
     SERVICE_CONFIG("weivel_standard_service_config", ADDRESS),
     SERVICE_SECRETS("weivel_standard_service_secrets", ADDRESS),
     SERVICE_PATHS("weivel_standard_service_paths", ADDRESS),
-    DESCRIPTION_CHECK("weivel_standard_description_check", INT, ADDRESS, ADDRESS);
+    DESCRIPTION_CHECK("weivel_standard_description_check", INT, ADDRESS, ADDRESS),
+    DESCRIPTION_ANSWERS("weivel_standard_description_answers", INT, ADDRESS, ADDRESS, ADDRESS);
 
     private final String symbol;
     private final NativeType returned;
