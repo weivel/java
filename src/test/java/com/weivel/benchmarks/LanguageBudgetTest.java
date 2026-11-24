@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** {@code benchmarks/java.txt} read as the kit's RUNNER.md lays it out, with a gate per backend. */
+/** {@code benchmarks/java.txt} read as the kit's {@code docs/benchmarks.md} lays it out, with a gate per backend. */
 class LanguageBudgetTest {
     static final String BUDGET = String.join("\n",
             "control-call-ffm linux 2.5",

@@ -1,6 +1,10 @@
 build/
 .gradle/
 siblings/
+dist/
+site/
+node_modules/
+*.log
 
 # Generated on the default branch by the readme job.
-README.md
+/README.md
