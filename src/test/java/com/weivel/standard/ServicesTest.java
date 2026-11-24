@@ -1,7 +1,9 @@
 package com.weivel.standard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -48,10 +50,39 @@ class ServicesTest {
             }
         };
 
-        assertEquals("the config provider does not offer get_tree",
-                assertThrows(ServiceRefusal.class, () -> firstShape.getTree("theme")).detail());
-        assertEquals("the config provider does not offer settings_file",
-                assertThrows(ServiceRefusal.class, firstShape::settingsFile).detail());
+        ServiceRefusal getTree = assertThrows(ServiceRefusal.class, () -> firstShape.getTree("theme"));
+        ServiceRefusal settingsFile = assertThrows(ServiceRefusal.class, firstShape::settingsFile);
+
+        assertEquals("the config provider does not offer get_tree", getTree.detail());
+        assertEquals("the config provider does not offer settings_file", settingsFile.detail());
+        assertTrue(getTree.isNotOffered());
+        assertTrue(settingsFile.isNotOffered());
+    }
+
+    @Test
+    void aProvidersOwnRefusalOfAnAppendedOperationIsNotReadAsNotOffered() {
+        Config refusing = new Config() {
+            @Override
+            public Map<String, SettingValue> all() {
+                return Collections.emptyMap();
+            }
+
+            @Override
+            public Optional<SettingValue> get(String key) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void set(String key, SettingValue value) {
+            }
+
+            @Override
+            public Optional<Object> getTree(String key) throws ServiceRefusal {
+                throw new ServiceRefusal("the settings file is unreadable", "make the settings file readable");
+            }
+        };
+
+        assertFalse(assertThrows(ServiceRefusal.class, () -> refusing.getTree("theme")).isNotOffered());
     }
 
     @Test
