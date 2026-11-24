@@ -41,8 +41,7 @@ is the same for a bound definition as for any other, in [libraries.md](libraries
   through it, no longer than the answer that carried it, and a call through it once that answer has ended is the
   caller's mistake. A handle, unlike a carried definition, is valid anywhere in its library.
 - **Blocking is read and not acted on.** `BoundDefinition.blockingOperations` lists the operations the description
-  marks `blocking`, and this binding calls every operation, those included, on the calling thread. Java ships no host
-  program, so the kit's `host/` vectors are exempt.
+  marks `blocking`, and this binding calls every operation, those included, on the calling thread.
 - **Outcomes are values.** A call answers `DescribedAnswer.Answered` with each answer by name, a NULL pointer, a NULL
   handle and a value of kind NONE left out; `None`; `Refused` with the provider's `detail` and `fix`; `Failed` with any
   other status; or `Unloaded` once the binary has closed. A holder still holding a definition after the unload calls it
