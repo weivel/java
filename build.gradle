@@ -9,14 +9,16 @@ repositories {
     mavenCentral()
 }
 
-def jdk8 = { JavaToolchainSpec spec ->
-    spec.languageVersion = JavaLanguageVersion.of(8)
-    spec.vendor = JvmVendorSpec.AMAZON
+def corretto = { int version ->
+    return { JavaToolchainSpec spec ->
+        spec.languageVersion = JavaLanguageVersion.of(version)
+        spec.vendor = JvmVendorSpec.AMAZON
+    }
 }
 def jdk25 = { JavaToolchainSpec spec -> spec.languageVersion = JavaLanguageVersion.of(25) }
 
 java {
-    toolchain(jdk8)
+    toolchain(corretto(8))
 }
 
 sourceSets {
@@ -271,8 +273,8 @@ def runsOnFfm = { Test task ->
     task.javaLauncher = javaToolchains.launcherFor(jdk25)
     task.jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
-def runsOnJna = { Test task ->
-    task.javaLauncher = javaToolchains.launcherFor(jdk8)
+def runsOnJna = { Test task, int version ->
+    task.javaLauncher = javaToolchains.launcherFor(corretto(version))
 }
 
 tasks.named('test', Test) {
@@ -282,12 +284,15 @@ tasks.named('test', Test) {
     runsOnFfm(it)
 }
 
-def testJava8 = tasks.register('testJava8', Test) {
-    group = 'verification'
-    description = 'Runs the suite on Java 8, where the jar reaches the core through JNA.'
-    runsTheSuiteAgainstTheJar(it, 'jna')
-    useJUnitPlatform { excludeTags 'benchmark' }
-    runsOnJna(it)
+def jnaVersions = [8, 11, 17, 21]
+def testsOnJna = jnaVersions.collect { int version ->
+    tasks.register("testJava${version}", Test) {
+        group = 'verification'
+        description = "Runs the suite on Java ${version}, where the jar reaches the core through JNA."
+        runsTheSuiteAgainstTheJar(it, 'jna')
+        useJUnitPlatform { excludeTags 'benchmark' }
+        runsOnJna(it, version)
+    }
 }
 
 def benchmarkMode = providers.gradleProperty('weivel.benchmark.mode').getOrElse('gate')
@@ -315,7 +320,7 @@ def benchmarkFfm = tasks.register('benchmarkFfm', Test) {
 def benchmarkJna = tasks.register('benchmarkJna', Test) {
     description = 'Runs the benchmark gates on Java 8, through JNA.'
     runsTheBenchmarks(it, 'jna')
-    runsOnJna(it)
+    runsOnJna(it, 8)
 }
 
 tasks.register('benchmark') {
@@ -326,5 +331,5 @@ tasks.register('benchmark') {
 }
 
 tasks.named('check') {
-    dependsOn testJava8
+    dependsOn testsOnJna
 }
