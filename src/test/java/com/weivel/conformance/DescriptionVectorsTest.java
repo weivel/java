@@ -71,6 +71,12 @@ class DescriptionVectorsTest {
     }
 
     @Test
+    @DisplayName("description/a-library-publishing-only-contracts-loads-and-registers-nothing")
+    void aLibraryPublishingOnlyContractsLoadsAndRegistersNothing() {
+        assertWitnessed("description/a-library-publishing-only-contracts-loads-and-registers-nothing");
+    }
+
+    @Test
     @DisplayName("description/binding/a-broken-offset-description-fails-the-load")
     void aBrokenOffsetDescriptionFailsTheLoad() {
         assertWitnessed(UNBROKEN);
