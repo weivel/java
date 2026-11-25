@@ -65,6 +65,32 @@ class LibraryDeclarationsTest {
     }
 
     @Test
+    void aDeclarationOfContractsAloneIsReadWithItsContractsAndLoadedRegisteringNothing() throws Exception {
+        String contractsAlone = "{\"importName\": \"echo\", \"version\": \"0.2.0\", \"contracts\": ["
+                + " {\"capability\": \"echo.provider\", \"description\": \"echo_provider_description\"}]}";
+
+        LibraryDeclaration declaration = value(standard().readLibrary(contractsAlone));
+
+        assertEquals(new LibraryDeclaration("echo", "0.2.0", Optional.<String>empty(),
+                Collections.<LibraryDeclaration.Service>emptyList(), Collections.singletonList(
+                        new LibraryDeclaration.Contract("echo.provider", "echo_provider_description"))),
+                declaration);
+        try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
+            LoadedLibrary loaded = CoreProbes.ok(fixture.host.loadLibrary(CoreProbes.echoBinary(), declaration));
+
+            assertEquals(Collections.emptyList(), loaded.services());
+            assertEquals(Collections.emptyMap(), loaded.definitions());
+        }
+    }
+
+    @Test
+    void aDeclarationOfNeitherAServiceNorAContractIsRefusedByTheRead() {
+        String neither = "{\"importName\": \"echo\", \"version\": \"0.2.0\"}";
+
+        refusal(standard().readLibrary(neither));
+    }
+
+    @Test
     void aDeclarationTheRulesRefuseIsRefusedAtItsField() {
         String noSymbol = "{\"importName\": \"echo\", \"version\": \"0.1.0\", \"release\": \"echo_release\","
                 + " \"services\": [{\"id\": \"echo\", \"functions\": [{\"name\": \"echo\", \"kind\": \"bytes\"}]}]}";

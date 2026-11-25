@@ -8,17 +8,18 @@ import java.util.Set;
  * What of a library declaration is the caller's mistake, found before anything is opened: a function of a kind other
  * than bytes or definition, a definition beside another function of its service or reading context facts, a
  * description beside bytes functions or naming no symbol, an id listed twice, a function name a service lists twice,
- * a bytes function in a library with no release symbol, or a declaration of no service or a service of no function,
- * which the standard's reader refuses too, so a declaration the caller builds cannot load what a read one never
- * could.
+ * a bytes function in a library with no release symbol, or a declaration of neither a service nor a contract or a
+ * service of no function, which the standard's reader refuses too, so a declaration the caller builds cannot load
+ * what a read one never could.
  */
 final class LibraryChecks {
     private LibraryChecks() {
     }
 
     static Optional<String> mistakeIn(LibraryDeclaration declaration) {
-        if (declaration.services().isEmpty()) {
-            return Optional.of("the library " + declaration.importName() + " declares no service");
+        if (declaration.services().isEmpty() && declaration.contracts().isEmpty()) {
+            return Optional.of("the library " + declaration.importName()
+                    + " declares neither a service nor a contract");
         }
         Set<String> ids = new HashSet<>();
         for (LibraryDeclaration.Service service : declaration.services()) {

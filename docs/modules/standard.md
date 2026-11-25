@@ -22,5 +22,6 @@ layer may assume, so its caller registers `manifest()` with an entry it makes it
 `ServiceRefusal`. An operation the header appends after a definition's first shape, as `Config`'s `getTree` and
 `settingsFile`, is a default method that refuses, so a provider that does not implement it declines it as a C provider
 leaves it unoffered, and the refusal's `isNotOffered` tells that apart from a provider's own refusal, as C's
-`WEIVEL_STANDARD_OFFERS` does. A declaration's `contracts` are laid out but not read into a `LibraryDeclaration`: until
-the contract check lands, which the C host lacks too, this host checks no provided capability against a contract.
+`WEIVEL_STANDARD_OFFERS` does. A declaration's `contracts` are read into a `LibraryDeclaration`'s `contracts`, and a
+declaration of contracts alone, with no service, is valid. This host does not yet check a capability a plugin provides
+against the contract describing it, which the C host lacks too.

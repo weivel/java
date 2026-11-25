@@ -344,6 +344,38 @@ class LibrariesTest {
         }
     }
 
+    @Test
+    void aDeclarationOfContractsAloneLoadsAndRegistersNothing() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        try (HostFixture fixture = new HostFixture(pauses)) {
+            LibraryDeclaration contractsAlone = new LibraryDeclaration("echo-test", "1.0.0",
+                    Optional.of("echo_release"),
+                    Collections.<LibraryDeclaration.Service>emptyList(),
+                    Collections.singletonList(new LibraryDeclaration.Contract("echo.provider", "echo_description")));
+
+            LoadedLibrary library = value(fixture.host.loadLibrary(echoBinary(), contractsAlone));
+
+            assertEquals(Collections.emptyList(), library.services());
+            assertEquals(Collections.emptyMap(), library.definitions());
+            assertEquals(1, fixture.host.libraryCount());
+            assertInstanceOf(Answer.Ok.class, fixture.host.registerHostService("echo.provider", new Object()));
+            value(fixture.host.unloadLibrary(library));
+            assertEquals(Collections.singletonList("echo-test"), pauses.closed());
+            assertEquals(Collections.emptyList(), fixture.failures);
+        }
+    }
+
+    @Test
+    void aDeclarationOfNeitherAServiceNorAContractIsTheCallersMistake() throws Exception {
+        LibraryPauses pauses = new LibraryPauses();
+        try (HostFixture fixture = new HostFixture(pauses)) {
+            assertMistakeNaming("neither a service nor a contract",
+                    fixture.host.loadLibrary(echoBinary(), declaring()));
+            assertEquals(Collections.emptyList(), pauses.closed(), "nothing was opened");
+            assertEquals(Collections.emptyList(), fixture.failures);
+        }
+    }
+
     static LibraryService loadedEcho(HostFixture fixture) {
         return value(fixture.host.loadLibrary(echoBinary(), declaring("echo"))).services().get(0);
     }

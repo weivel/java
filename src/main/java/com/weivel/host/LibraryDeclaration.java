@@ -8,9 +8,10 @@ import java.util.Optional;
 
 /**
  * A C library's declaration, the standard's {@code weivel_standard_library} as a Java value: the name plugins import
- * it by, its version, the symbol that frees what its bytes functions answer, and the services its functions offer.
- * The standard's reader fills one, or the caller builds it; the declaration names no path, which the caller hands the
- * host beside it.
+ * it by, its version, the symbol that frees what its bytes functions answer, the services its functions offer, and the
+ * contracts it publishes for plugins to implement. It declares at least one service or one contract, so a library
+ * that only publishes contracts has no service. The standard's reader fills one, or the caller builds it; the
+ * declaration names no path, which the caller hands the host beside it.
  */
 public final class LibraryDeclaration {
     /** {@code WEIVEL_STANDARD_FUNCTION_BYTES}: opaque bytes in, opaque bytes out. */
@@ -25,9 +26,10 @@ public final class LibraryDeclaration {
     private final String version;
     private final Optional<String> release;
     private final List<Service> services;
+    private final List<Contract> contracts;
 
     /**
-     * Checks that every part is present, and copies the list.
+     * A declaration that publishes no contract.
      *
      * @param importName the name plugins import the library by
      * @param version its version
@@ -36,10 +38,27 @@ public final class LibraryDeclaration {
      * @param services the services its functions offer, in the declaration's order
      */
     public LibraryDeclaration(String importName, String version, Optional<String> release, List<Service> services) {
+        this(importName, version, release, services, Collections.<Contract>emptyList());
+    }
+
+    /**
+     * Checks that every part is present, and copies the lists.
+     *
+     * @param importName the name plugins import the library by
+     * @param version its version
+     * @param release the symbol that frees every body its bytes functions answer; empty for a library whose every
+     *     service is a definition
+     * @param services the services its functions offer, in the declaration's order; empty for a library that only
+     *     publishes contracts
+     * @param contracts the contracts it publishes for plugins to implement, in the declaration's order
+     */
+    public LibraryDeclaration(String importName, String version, Optional<String> release, List<Service> services,
+                              List<Contract> contracts) {
         this.importName = Objects.requireNonNull(importName, "importName");
         this.version = Objects.requireNonNull(version, "version");
         this.release = Objects.requireNonNull(release, "release");
         this.services = copied(services, "services");
+        this.contracts = copied(contracts, "contracts");
     }
 
     /**
@@ -78,6 +97,15 @@ public final class LibraryDeclaration {
         return services;
     }
 
+    /**
+     * Answers {@code contracts}.
+     *
+     * @return the contracts, unmodifiable; empty when the declaration publishes none
+     */
+    public List<Contract> contracts() {
+        return contracts;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof LibraryDeclaration)) {
@@ -85,18 +113,18 @@ public final class LibraryDeclaration {
         }
         LibraryDeclaration that = (LibraryDeclaration) other;
         return importName.equals(that.importName) && version.equals(that.version) && release.equals(that.release)
-                && services.equals(that.services);
+                && services.equals(that.services) && contracts.equals(that.contracts);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(importName, version, release, services);
+        return Objects.hash(importName, version, release, services, contracts);
     }
 
     @Override
     public String toString() {
         return "LibraryDeclaration[importName=" + importName + ", version=" + version + ", release=" + release
-                + ", services=" + services + "]";
+                + ", services=" + services + ", contracts=" + contracts + "]";
     }
 
     private static <T> List<T> copied(List<T> items, String name) {
@@ -183,6 +211,60 @@ public final class LibraryDeclaration {
         @Override
         public String toString() {
             return "Service[id=" + id + ", functions=" + functions + ", description=" + description + "]";
+        }
+    }
+
+    /**
+     * A description the library publishes for plugins to implement under a capability, where it serves no definition
+     * of its own: the capability id a plugin implementing it provides, and the symbol answering the description.
+     */
+    public static final class Contract {
+        private final String capability;
+        private final String description;
+
+        /**
+         * Checks that the texts are present.
+         *
+         * @param capability the capability id a plugin implementing the contract provides
+         * @param description the exported symbol answering the contract's {@code weivel_standard_description}
+         */
+        public Contract(String capability, String description) {
+            this.capability = Objects.requireNonNull(capability, "capability");
+            this.description = Objects.requireNonNull(description, "description");
+        }
+
+        /**
+         * Answers {@code capability}.
+         *
+         * @return the capability id a plugin implementing the contract provides
+         */
+        public String capability() {
+            return capability;
+        }
+
+        /**
+         * Answers {@code description}.
+         *
+         * @return the symbol answering the contract's description
+         */
+        public String description() {
+            return description;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Contract && capability.equals(((Contract) other).capability)
+                    && description.equals(((Contract) other).description);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(capability, description);
+        }
+
+        @Override
+        public String toString() {
+            return "Contract[capability=" + capability + ", description=" + description + "]";
         }
     }
 

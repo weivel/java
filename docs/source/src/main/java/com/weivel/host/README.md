@@ -13,7 +13,7 @@
 - [HostService.java](../../../../../../../../src/main/java/com/weivel/host/HostService.java) - a service the host registered under `WEIVEL_HOST`
 - [LibraryAnswer.java](../../../../../../../../src/main/java/com/weivel/host/LibraryAnswer.java) - what one call through a `LibraryService` answered
 - [LibraryChecks.java](../../../../../../../../src/main/java/com/weivel/host/LibraryChecks.java) - what of a library declaration is the caller's mistake, found before anything is opened
-- [LibraryDeclaration.java](../../../../../../../../src/main/java/com/weivel/host/LibraryDeclaration.java) - a C library's declaration as a Java value: its name, version, release symbol and services
+- [LibraryDeclaration.java](../../../../../../../../src/main/java/com/weivel/host/LibraryDeclaration.java) - a C library's declaration as a Java value: its name, version, release symbol, services and contracts
 - [LibraryLifetime.java](../../../../../../../../src/main/java/com/weivel/host/LibraryLifetime.java) - who holds a C library's binary open, and when it closes
 - [LibraryService.java](../../../../../../../../src/main/java/com/weivel/host/LibraryService.java) - the object a bytes service is registered with: one function per declared function, called by name
 - [LoadedLibrary.java](../../../../../../../../src/main/java/com/weivel/host/LoadedLibrary.java) - a C library the host loaded as host services, kept until it is unloaded
