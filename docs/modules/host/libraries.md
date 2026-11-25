@@ -9,6 +9,11 @@ definition answering NULL, or a struct whose `size` is below `2 * sizeof(void *)
 mistake before anything is registered. A definition whose service declares a `description` symbol is bound instead, as
 [descriptions.md](descriptions.md) says.
 
+A declaration may list no service and only `contracts`, the descriptions a library publishes for plugins to implement.
+Such a library loads, its binary opened, and registers nothing: the host keeps its contracts on the declaration and
+binds nothing from them, and does not yet check a capability a plugin provides against the contract describing it. A
+declaration of neither a service nor a contract is the caller's mistake, as the standard's reader refuses it.
+
 ## Unloading, and when the binary closes
 
 A definition, described or not, is registered awaiting releases: `unloadLibrary` unregisters it at once, each holder

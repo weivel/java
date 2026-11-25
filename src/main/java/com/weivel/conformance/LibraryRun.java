@@ -101,12 +101,16 @@ final class LibraryRun {
         return run.observers();
     }
 
-    /** A declaration as a vector writes it, a service's {@code description} symbol included where it declares one. */
+    /**
+     * A declaration as a vector writes it, a service's {@code description} symbol included where it declares one, and
+     * its contracts, where it lists any.
+     */
     static LibraryDeclaration declarationOf(String where, Map<String, Object> declaration) {
         String declarationWhere = where + "'s declaration";
-        Shapes.refuseUnknownKeys(declarationWhere, declaration, "importName", "version", "release", "services");
+        Shapes.refuseUnknownKeys(declarationWhere, declaration, "importName", "version", "release", "services",
+                "contracts");
         List<LibraryDeclaration.Service> services = new ArrayList<>();
-        for (Map<String, Object> service : Shapes.objects(declarationWhere, declaration, "services")) {
+        for (Map<String, Object> service : listed(declarationWhere, declaration, "services")) {
             String serviceWhere = declarationWhere + "'s service";
             Shapes.refuseUnknownKeys(serviceWhere, service, "id", "description", "functions");
             List<LibraryDeclaration.Function> functions = new ArrayList<>();
@@ -125,7 +129,25 @@ final class LibraryRun {
                 Shapes.text(declarationWhere, declaration, "version"),
                 declaration.containsKey("release")
                         ? Optional.of(Shapes.text(declarationWhere, declaration, "release"))
-                        : Optional.<String>empty(), services);
+                        : Optional.<String>empty(), services, contractsOf(declarationWhere, declaration));
+    }
+
+    private static List<LibraryDeclaration.Contract> contractsOf(String where, Map<String, Object> declaration) {
+        List<LibraryDeclaration.Contract> contracts = new ArrayList<>();
+        for (Map<String, Object> contract : listed(where, declaration, "contracts")) {
+            String contractWhere = where + "'s contract";
+            Shapes.refuseUnknownKeys(contractWhere, contract, "capability", "description");
+            contracts.add(new LibraryDeclaration.Contract(Shapes.text(contractWhere, contract, "capability"),
+                    Shapes.text(contractWhere, contract, "description")));
+        }
+        return contracts;
+    }
+
+    private static List<Map<String, Object>> listed(String where, Map<String, Object> owner, String key) {
+        if (!owner.containsKey(key)) {
+            return Collections.emptyList();
+        }
+        return Shapes.objects(where, owner, key);
     }
 
     private static int kindOf(String where, String kind) {

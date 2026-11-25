@@ -323,8 +323,8 @@ public final class Host implements AutoCloseable {
      *
      * @param path the library, the caller's path; the declaration names none
      * @param declaration what the library offers
-     * @return the library; {@link Answer.Mistake}, told to no sink, for a declaration of no service, a service of no
-     *     function, a function of a kind other than {@link LibraryDeclaration#BYTES} or
+     * @return the library; {@link Answer.Mistake}, told to no sink, for a declaration of neither a service nor a
+     *     contract, a service of no function, a function of a kind other than {@link LibraryDeclaration#BYTES} or
      *     {@link LibraryDeclaration#DEFINITION}, a definition beside another function or reading context facts, a
      *     bytes function with no release symbol declared, an id or a function name listed twice, an id a registration
      *     under this host holds already (a plugin's, another live library's or the host's own), a path that names no

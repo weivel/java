@@ -155,7 +155,22 @@ final class StandardReads {
         long release = memory.getLong(library, offset(layout, "release"));
         return new LibraryDeclaration(memory.readText(memory.getLong(library, offset(layout, "import_name"))),
                 memory.readText(memory.getLong(library, offset(layout, "version"))),
-                release == 0 ? Optional.<String>empty() : Optional.of(memory.readText(release)), declared);
+                release == 0 ? Optional.<String>empty() : Optional.of(memory.readText(release)), declared,
+                contracts(memory, library));
+    }
+
+    private static List<LibraryDeclaration.Contract> contracts(ForeignMemory memory, long library) {
+        Layout layout = StandardLayouts.LIBRARY_CONTRACT;
+        long contracts = memory.getLong(library, offset(StandardLayouts.LIBRARY, "contracts"));
+        long contractCount = memory.getLong(library, offset(StandardLayouts.LIBRARY, "contract_count"));
+        List<LibraryDeclaration.Contract> published = new ArrayList<>();
+        for (long index = 0; index < contractCount; index++) {
+            long contract = contracts + index * layout.byteSize();
+            published.add(new LibraryDeclaration.Contract(
+                    memory.readText(memory.getLong(contract, offset(layout, "capability"))),
+                    memory.readText(memory.getLong(contract, offset(layout, "description")))));
+        }
+        return published;
     }
 
     private static LibraryDeclaration.Service service(ForeignMemory memory, long service,
