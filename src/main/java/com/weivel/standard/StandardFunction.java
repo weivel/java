@@ -14,6 +14,7 @@ import com.weivel.core.NativeType;
 enum StandardFunction {
     REFUSAL_RELEASE("weivel_standard_refusal_release", VOID, ADDRESS),
     MANIFEST_VIEW("weivel_standard_manifest_view", ADDRESS, ADDRESS),
+    MANIFEST_LANGUAGE("weivel_standard_manifest_language", ADDRESS, ADDRESS),
     MANIFEST_RELEASE("weivel_standard_manifest_release", VOID, ADDRESS),
     VALIDATION_RELEASE("weivel_standard_validation_release", VOID, ADDRESS),
     READ_MANIFEST("weivel_standard_read_manifest", INT, ADDRESS, LONG, ADDRESS, ADDRESS),

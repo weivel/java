@@ -46,6 +46,7 @@ class DiscoveryTest {
         assertEquals(Optional.of(directory.resolve("greeting.jar").toString().replace('\\', '/')),
                 greeting.entryPath().map(path -> path.toString().replace('\\', '/')));
         assertTrue(greeting.entryPresent());
+        assertEquals("java", greeting.language());
     }
 
     @Test
@@ -80,12 +81,14 @@ class DiscoveryTest {
 
     @Test
     void aPluginWhoseEntryIsAbsentIsFoundSayingSoAndLoadsNothing(@TempDir Path directory) throws Exception {
-        write(directory, "absent.json", "{\"importName\": \"absent\", \"api\": 1, \"entry\": \"absent.jar\"}");
+        write(directory, "absent.json",
+                "{\"importName\": \"absent\", \"api\": 1, \"language\": \"c\", \"entry\": \"absent.jar\"}");
         DiscoveredPlugin absent = value(standard().discover(directory, ValidationOptions.defaults()))
                 .plugins().get(0);
 
         try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
             assertFalse(absent.entryPresent());
+            assertEquals("c", absent.language());
             assertInstanceOf(Answer.Mistake.class, fixture.host.loadEntry(absent.entryPath().get(), JAR_ENTRY));
         }
     }
@@ -112,7 +115,8 @@ class DiscoveryTest {
     }
 
     private static void layOutGreeting(Path directory) throws IOException {
-        write(directory, "greeting.json", "{\"importName\": \"greeting\", \"api\": 1, \"entry\": \"greeting.jar\","
+        write(directory, "greeting.json", "{\"importName\": \"greeting\", \"api\": 1, \"language\": \"java\","
+                + " \"entry\": \"greeting.jar\","
                 + " \"services\": {\"provides\": [\"greeting:hello\"]}}");
         write(directory, "greeting_identity.json",
                 "{\"id\": \"forge:42/greeting\", \"name\": \"greeting-repository\"}");
