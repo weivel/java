@@ -114,7 +114,9 @@ public final class Standard {
     /**
      * Reads a JSON manifest into a manifest value WITHOUT validating it, as {@code weivel_standard_read_manifest}
      * does: a field left out takes the core's default, and a field the core's manifest has no place for is ignored. A
-     * host taking the standard's defaults calls {@link #loadManifest}, which validates first.
+     * host taking the standard's defaults calls {@link #loadManifest}, which validates first. It answers no language:
+     * the manifest is unvalidated, so the language it names may be absent or outside the grammar, and only
+     * {@link #loadManifest} answers one.
      *
      * @param json the document
      * @return the manifest on OK; REFUSED for malformed JSON, a wrong type or an unrepresentable value; the standard's

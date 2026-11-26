@@ -5,6 +5,7 @@
 - [DiscoveredPlugin.java](../../../../../../../../src/main/java/com/weivel/standard/DiscoveredPlugin.java) - one plugin the standard found on disk: its manifest, its files and its entry path
 - [Discovery.java](../../../../../../../../src/main/java/com/weivel/standard/Discovery.java) - what one scan of a directory found, and every file it could not take a plugin from
 - [Identity.java](../../../../../../../../src/main/java/com/weivel/standard/Identity.java) - a repository identity as the standard takes it apart
+- [LoadedManifest.java](../../../../../../../../src/main/java/com/weivel/standard/LoadedManifest.java) - a manifest the standard validated, with the language it names beside it
 - [Paths.java](../../../../../../../../src/main/java/com/weivel/standard/Paths.java) - the standard's paths service as a Java interface
 - [ReleaseObserver.java](../../../../../../../../src/main/java/com/weivel/standard/ReleaseObserver.java) - told of every struct handed to one of the standard's releases, for the tests
 - [Secrets.java](../../../../../../../../src/main/java/com/weivel/standard/Secrets.java) - the standard's secrets service as a Java interface

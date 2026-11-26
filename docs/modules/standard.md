@@ -8,11 +8,13 @@ the standard itself reads, validates and defines is in the standard's own docs. 
 built jar with `jdeps`. `StandardBinary.load` opens the standard's binary from the caller's path through the same
 seam, through `ForeignLibrary`, which binds only the symbols its caller names and never one of the core's, and fails
 naming the first function missing. `Standard` answers what the standard answers, each as a `StandardAnswer`: a JSON
-manifest validated and read into a `Manifest`, plugins discovered on disk as `DiscoveredPlugin`s, a library
+manifest validated and read into a `LoadedManifest`, the `Manifest` with the `language` it names beside it, plugins
+discovered on disk as `DiscoveredPlugin`s, each with its `language()`, a library
 declaration read into a `LibraryDeclaration` for `loadLibrary`, identities, the mirror list, SHA-256, and the three
 service ids, read from the standard's functions. Every struct the standard fills is copied into Java values and
 released through the standard's own release before the call answers, every release of a call running even when
-another fails. `readManifest` reads a manifest without validating it, and `validate` validates one without reading it.
+another fails. `readManifest` reads a manifest without validating it into a `Manifest` alone, answering no language,
+and `validate` validates one without reading it.
 
 A `DiscoveredPlugin` loads no code: the manifest calls its entry opaque and no module convention is a default the
 layer may assume, so its caller registers `manifest()` with an entry it makes itself, from `entryPath()` through
