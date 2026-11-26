@@ -15,6 +15,7 @@ import java.util.Optional;
  */
 public final class DiscoveredPlugin {
     private final Manifest manifest;
+    private final String language;
     private final String manifestPath;
     private final Optional<String> identityPath;
     private final Optional<String> repositoryName;
@@ -26,6 +27,7 @@ public final class DiscoveredPlugin {
      * Makes the value.
      *
      * @param manifest the manifest value, its identity the identity file's id when there is one
+     * @param language the language the manifest names, the weivel implementation that loads the plugin
      * @param manifestPath the manifest file's path
      * @param identityPath the identity file's path, or empty when none sits beside the manifest
      * @param repositoryName the identity file's repository name, or empty
@@ -33,10 +35,11 @@ public final class DiscoveredPlugin {
      * @param entryPath the entry the manifest names joined to the directory, or empty when it names none
      * @param entryPresent whether the entry is a regular file reached with no link on its path
      */
-    public DiscoveredPlugin(Manifest manifest, String manifestPath, Optional<String> identityPath,
+    public DiscoveredPlugin(Manifest manifest, String language, String manifestPath, Optional<String> identityPath,
                             Optional<String> repositoryName, Optional<Identity> identity, Optional<Path> entryPath,
                             boolean entryPresent) {
         this.manifest = Objects.requireNonNull(manifest, "manifest");
+        this.language = Objects.requireNonNull(language, "language");
         this.manifestPath = Objects.requireNonNull(manifestPath, "manifestPath");
         this.identityPath = Objects.requireNonNull(identityPath, "identityPath");
         this.repositoryName = Objects.requireNonNull(repositoryName, "repositoryName");
@@ -52,6 +55,15 @@ public final class DiscoveredPlugin {
      */
     public Manifest manifest() {
         return manifest;
+    }
+
+    /**
+     * Answers {@code language}.
+     *
+     * @return the weivel implementation that loads the plugin, such as {@code java}
+     */
+    public String language() {
+        return language;
     }
 
     /**
@@ -114,7 +126,8 @@ public final class DiscoveredPlugin {
             return false;
         }
         DiscoveredPlugin that = (DiscoveredPlugin) other;
-        return manifest.equals(that.manifest) && manifestPath.equals(that.manifestPath)
+        return manifest.equals(that.manifest) && language.equals(that.language)
+                && manifestPath.equals(that.manifestPath)
                 && identityPath.equals(that.identityPath) && repositoryName.equals(that.repositoryName)
                 && identity.equals(that.identity) && entryPath.equals(that.entryPath)
                 && entryPresent == that.entryPresent;
@@ -122,12 +135,14 @@ public final class DiscoveredPlugin {
 
     @Override
     public int hashCode() {
-        return Objects.hash(manifest, manifestPath, identityPath, repositoryName, identity, entryPath, entryPresent);
+        return Objects.hash(manifest, language, manifestPath, identityPath, repositoryName, identity, entryPath,
+                entryPresent);
     }
 
     @Override
     public String toString() {
-        return "DiscoveredPlugin[manifest=" + manifest + ", manifestPath=" + manifestPath + ", identityPath="
+        return "DiscoveredPlugin[manifest=" + manifest + ", language=" + language + ", manifestPath=" + manifestPath
+                + ", identityPath="
                 + identityPath + ", repositoryName=" + repositoryName + ", identity=" + identity + ", entryPath="
                 + entryPath + ", entryPresent=" + entryPresent + "]";
     }

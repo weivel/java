@@ -86,7 +86,8 @@ final class StandardReads {
         return new String(memory.readBytes(name, 0, (int) length), StandardCharsets.UTF_8);
     }
 
-    static Discovery discovery(ForeignMemory memory, long discovery, LongUnaryOperator manifestView) {
+    static Discovery discovery(ForeignMemory memory, long discovery, LongUnaryOperator manifestView,
+                               LongUnaryOperator manifestLanguage) {
         Layout layout = StandardLayouts.DISCOVERY;
         long plugins = memory.getLong(discovery, offset(layout, "plugins"));
         long pluginCount = memory.getLong(discovery, offset(layout, "plugin_count"));
@@ -95,7 +96,7 @@ final class StandardReads {
         List<DiscoveredPlugin> found = new ArrayList<>();
         for (long index = 0; index < pluginCount; index++) {
             found.add(discoveredPlugin(memory, plugins + index * StandardLayouts.DISCOVERED_PLUGIN.byteSize(),
-                    manifestView));
+                    manifestView, manifestLanguage));
         }
         List<Discovery.Failure> failed = new ArrayList<>();
         for (long index = 0; index < failureCount; index++) {
@@ -104,14 +105,15 @@ final class StandardReads {
         return new Discovery(found, failed);
     }
 
-    private static DiscoveredPlugin discoveredPlugin(ForeignMemory memory, long plugin,
-                                                     LongUnaryOperator manifestView) {
+    private static DiscoveredPlugin discoveredPlugin(ForeignMemory memory, long plugin, LongUnaryOperator manifestView,
+                                                     LongUnaryOperator manifestLanguage) {
         Layout layout = StandardLayouts.DISCOVERED_PLUGIN;
         Optional<String> identityPath = optionalText(memory, memory.getLong(plugin, offset(layout, "identity_path")));
         Optional<String> identityId = optionalText(memory, memory.getLong(plugin, offset(layout, "identity_id")));
-        Manifest manifest = memory.manifest(manifestView.applyAsLong(
-                memory.getLong(plugin, offset(layout, "manifest"))));
+        long read = memory.getLong(plugin, offset(layout, "manifest"));
+        Manifest manifest = memory.manifest(manifestView.applyAsLong(read));
         return new DiscoveredPlugin(identified(manifest, identityId),
+                memory.readText(manifestLanguage.applyAsLong(read)),
                 memory.readText(memory.getLong(plugin, offset(layout, "manifest_path"))),
                 identityPath,
                 optionalText(memory, memory.getLong(plugin, offset(layout, "repository_name"))),

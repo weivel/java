@@ -81,13 +81,14 @@ public final class Standard {
 
     /**
      * Validates a JSON manifest and, only when it is valid, reads it into a manifest value, as {@code
-     * weivel_standard_load_manifest} does. The value carries no identity, which whatever loaded the plugin supplies.
+     * weivel_standard_load_manifest} does, with the language it names beside it. The value carries no identity, which
+     * whatever loaded the plugin supplies.
      *
      * @param json the document
      * @param options the validation's options
-     * @return the manifest on OK; the first wrong field as the refusal, and every one in {@code paths}
+     * @return the manifest and its language on OK; the first wrong field as the refusal, and every one in {@code paths}
      */
-    public StandardAnswer<Manifest> loadManifest(String json, ValidationOptions options) {
+    public StandardAnswer<LoadedManifest> loadManifest(String json, ValidationOptions options) {
         byte[] document = utf8(json);
         try (ForeignMemory memory = binary.memory()) {
             long text = memory.bytes(document);
@@ -97,9 +98,9 @@ public final class Standard {
             try {
                 StandardStatus status = status(StandardFunction.LOAD_MANIFEST, text, document.length, optionsStruct,
                         loaded, validation);
-                Optional<Manifest> manifest = status == StandardStatus.OK
-                        ? Optional.of(memory.manifest(view(memory.getLong(loaded, 0))))
-                        : Optional.<Manifest>empty();
+                Optional<LoadedManifest> manifest = status == StandardStatus.OK
+                        ? Optional.of(loaded(memory, memory.getLong(loaded, 0)))
+                        : Optional.<LoadedManifest>empty();
                 return new StandardAnswer<>(status, manifest,
                         StandardReads.refusal(memory, validation + offset(StandardLayouts.VALIDATION, "refusal")),
                         StandardReads.strings(memory, validation + offset(StandardLayouts.VALIDATION, "paths")));
@@ -185,7 +186,7 @@ public final class Standard {
             try {
                 StandardStatus status = status(StandardFunction.DISCOVER, path, optionsStruct, discovery);
                 Optional<Discovery> found = status == StandardStatus.OK
-                        ? Optional.of(StandardReads.discovery(memory, discovery, this::view))
+                        ? Optional.of(StandardReads.discovery(memory, discovery, this::view, this::language))
                         : Optional.<Discovery>empty();
                 return StandardAnswer.of(status, found,
                         StandardReads.refusal(memory, discovery + offset(StandardLayouts.DISCOVERY, "refusal")));
@@ -525,6 +526,14 @@ public final class Standard {
 
     private long view(long manifest) {
         return binary.call(StandardFunction.MANIFEST_VIEW, manifest);
+    }
+
+    private long language(long manifest) {
+        return binary.call(StandardFunction.MANIFEST_LANGUAGE, manifest);
+    }
+
+    private LoadedManifest loaded(ForeignMemory memory, long manifest) {
+        return new LoadedManifest(memory.manifest(view(manifest)), memory.readText(language(manifest)));
     }
 
     private String serviceId(StandardFunction function) {

@@ -18,7 +18,8 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class ManifestsTest {
-    static final String FULL_MANIFEST = "{\"importName\": \"greeter\", \"api\": 1, \"entry\": \"dist/greeter.jar\","
+    static final String FULL_MANIFEST = "{\"importName\": \"greeter\", \"api\": 1, \"language\": \"java\","
+            + " \"entry\": \"dist/greeter.jar\","
             + " \"targets\": [\"app.one\", \"app.two\"],"
             + " \"capabilities\": {\"provides\": [\"screens\", \"menus\"], \"consumes\": [\"provider\"]},"
             + " \"services\": {"
@@ -43,14 +44,29 @@ class ManifestsTest {
 
     @Test
     void aJsonManifestIsReadIntoTheCoresManifestValue() {
-        Manifest read = value(standard().loadManifest(FULL_MANIFEST, ValidationOptions.defaults()));
+        LoadedManifest read = value(standard().loadManifest(FULL_MANIFEST, ValidationOptions.defaults()));
 
-        assertEquals(FULL, read);
+        assertEquals(FULL, read.manifest());
+        assertEquals("java", read.language());
+    }
+
+    @Test
+    void aManifestNamingNoLanguageOrOneOutsideTheGrammarIsRefusedAtItsPath() {
+        StandardAnswer<LoadedManifest> missing = standard().loadManifest("{\"importName\": \"clock\", \"api\": 1}",
+                ValidationOptions.defaults());
+        StandardAnswer<LoadedManifest> spaced = standard().loadManifest(
+                "{\"importName\": \"clock\", \"api\": 1, \"language\": \"Type Script\"}", ValidationOptions.defaults());
+
+        assertEquals(StandardRefusal.MISSING_FIELD, refusal(missing).code());
+        assertEquals(Collections.singletonList("language"), missing.paths());
+        assertEquals(Optional.<LoadedManifest>empty(), missing.value());
+        assertEquals(StandardRefusal.INVALID_VALUE, refusal(spaced).code());
+        assertEquals(Collections.singletonList("language"), spaced.paths());
     }
 
     @Test
     void aManifestReadIsRegisteredWithTheHostAsItWasRead() throws Exception {
-        Manifest read = value(standard().loadManifest(FULL_MANIFEST, ValidationOptions.defaults()));
+        Manifest read = value(standard().loadManifest(FULL_MANIFEST, ValidationOptions.defaults())).manifest();
 
         try (StandardFixture.TestHost fixture = new StandardFixture.TestHost()) {
             Entry entry = context -> CompletableFuture.completedFuture(null);
@@ -62,17 +78,19 @@ class ManifestsTest {
 
     @Test
     void anInvalidManifestIsRefusedNamingEveryWrongField() {
-        StandardAnswer<Manifest> loaded = standard().loadManifest(
-                "{\"importName\": \"Bad Name\", \"api\": \"two\"}", ValidationOptions.defaults());
+        StandardAnswer<LoadedManifest> loaded = standard().loadManifest(
+                "{\"importName\": \"Bad Name\", \"api\": \"two\", \"language\": \"java\"}",
+                ValidationOptions.defaults());
 
         assertEquals("importName", refusal(loaded).path());
         assertEquals(Arrays.asList("importName", "api"), loaded.paths());
-        assertEquals(Optional.<Manifest>empty(), loaded.value());
+        assertEquals(Optional.<LoadedManifest>empty(), loaded.value());
     }
 
     @Test
     void theHostsWellKnownServicesAreHandedToTheValidation() {
-        String providingABareId = "{\"importName\": \"clock\", \"api\": 1, \"services\": {\"provides\": [\"time\"]}}";
+        String providingABareId = "{\"importName\": \"clock\", \"api\": 1, \"language\": \"java\","
+                + " \"services\": {\"provides\": [\"time\"]}}";
 
         assertEquals(StandardStatus.OK,
                 standard().loadManifest(providingABareId, ValidationOptions.wellKnown(Arrays.asList("time")))
@@ -118,7 +136,8 @@ class ManifestsTest {
     @Test
     void aManifestIsValidatedWithoutBeingRead() {
         assertEquals(StandardStatus.OK, standard().validate(FULL_MANIFEST, ValidationOptions.defaults()).status());
-        StandardAnswer<Void> invalid = standard().validate("{\"importName\": \"Bad Name\", \"api\": \"two\"}",
+        StandardAnswer<Void> invalid = standard().validate(
+                "{\"importName\": \"Bad Name\", \"api\": \"two\", \"language\": \"java\"}",
                 ValidationOptions.defaults());
         assertEquals("importName", refusal(invalid).path());
         assertEquals(Arrays.asList("importName", "api"), invalid.paths());
