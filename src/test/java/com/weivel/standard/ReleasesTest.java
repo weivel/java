@@ -101,7 +101,7 @@ class ReleasesTest {
 
     @Test
     void anIdentityAndItsRefusalAreReleasedForEachSideCompared() {
-        StandardFixture.value(standard.compareIdentities("forge:1", "forge:2"));
+        StandardFixture.value(standard.compareIdentities("git:4b825dc642cb6eb9a060e54bf8d69288fbee4904", "local:a"));
 
         assertReleased(StandardFunction.IDENTITY_RELEASE, StandardFunction.REFUSAL_RELEASE,
                 StandardFunction.IDENTITY_RELEASE, StandardFunction.REFUSAL_RELEASE);
@@ -127,7 +127,7 @@ class ReleasesTest {
         assertSecondRunsAfterFirstFails(StandardFunction.TEXT_RELEASE, StandardFunction.REFUSAL_RELEASE,
                 current -> current.expandMirror("https://one/{sha256}", HASH));
         assertSecondRunsAfterFirstFails(StandardFunction.IDENTITY_RELEASE, StandardFunction.REFUSAL_RELEASE,
-                current -> current.parseIdentity("forge:1"));
+                current -> current.parseIdentity("local:a"));
     }
 
     private void assertSecondRunsAfterFirstFails(StandardFunction first, StandardFunction second,

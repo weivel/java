@@ -14,7 +14,6 @@ import com.weivel.core.Manifest;
 import com.weivel.host.Entry;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +27,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class DiscoveryTest {
     private static final String JAR_ENTRY = "com.weivel.host.jar.GreetingEntry";
+    private static final String ROOT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+    private static final String GREETING_ID = "git:" + ROOT + "/greeting";
 
     @Test
     void aPluginLaidOutOnDiskIsFoundWithItsIdentityAndEntry(@TempDir Path directory) throws IOException {
@@ -38,11 +39,10 @@ class DiscoveryTest {
         assertEquals(1, found.plugins().size(), found.toString());
         DiscoveredPlugin greeting = found.plugins().get(0);
         assertEquals("greeting", greeting.manifest().importName());
-        assertEquals(Optional.of("forge:42/greeting"), greeting.manifest().identity());
+        assertEquals(Optional.of(GREETING_ID), greeting.manifest().identity());
         assertEquals(Optional.of("greeting-repository"), greeting.repositoryName());
-        assertEquals(Optional.of(new Identity(Identity.Kind.FORGE, Optional.<String>empty(), Optional.of("forge"),
-                Optional.<String>empty(), BigInteger.valueOf(42), Collections.singletonList("greeting"))),
-                greeting.identity());
+        assertEquals(Optional.of(new Identity(Identity.Kind.GIT, Optional.<String>empty(), Optional.of(ROOT),
+                Collections.singletonList("greeting"))), greeting.identity());
         assertEquals(Optional.of(directory.resolve("greeting.jar").toString().replace('\\', '/')),
                 greeting.entryPath().map(path -> path.toString().replace('\\', '/')));
         assertTrue(greeting.entryPresent());
@@ -62,7 +62,7 @@ class DiscoveryTest {
 
             Manifest registered = fixture.host.manifest(plugin).get();
             assertEquals(greeting.manifest(), registered);
-            assertEquals(Optional.of("forge:42/greeting"), registered.identity());
+            assertEquals(Optional.of(GREETING_ID), registered.identity());
         }
     }
 
@@ -119,7 +119,7 @@ class DiscoveryTest {
                 + " \"entry\": \"greeting.jar\","
                 + " \"services\": {\"provides\": [\"greeting:hello\"]}}");
         write(directory, "greeting_identity.json",
-                "{\"id\": \"forge:42/greeting\", \"name\": \"greeting-repository\"}");
+                "{\"id\": \"" + GREETING_ID + "\", \"name\": \"greeting-repository\"}");
         Files.copy(StandardFixture.file("weivel.test.pluginsJar"), directory.resolve("greeting.jar"));
     }
 

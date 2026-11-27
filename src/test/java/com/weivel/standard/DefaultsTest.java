@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,38 +50,40 @@ class DefaultsTest {
         assertEquals(Collections.<String>emptyList(), holding);
     }
 
+    private static final String ROOT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+    private static final String LONG_ROOT = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
     @Test
     void anIdentityIsTakenApartAsTheStandardTakesIt() {
-        assertEquals(new Identity(Identity.Kind.FORGE, Optional.<String>empty(), Optional.of("gitea"),
-                Optional.of("git.example.com"), BigInteger.valueOf(123), Arrays.asList("a", "b")),
-                value(standard().parseIdentity("gitea@git.example.com:0123/a/b")));
+        assertEquals(new Identity(Identity.Kind.GIT, Optional.<String>empty(), Optional.of(ROOT),
+                Arrays.asList("a", "b")), value(standard().parseIdentity("git:" + ROOT + "/a/b")));
+        assertEquals(Optional.of(LONG_ROOT), value(standard().parseIdentity("git:" + LONG_ROOT)).commit());
     }
 
     @Test
-    void aLocalNameKeepsItsLengthANulAndEveryUtf8Byte() {
-        Identity local = value(standard().parseIdentity("local:Café\u0000x"));
+    void aLocalNameKeepsEveryUtf8Byte() {
+        Identity local = value(standard().parseIdentity("local:Café"));
 
         assertEquals(Identity.Kind.LOCAL, local.kind());
-        assertEquals(Optional.of("Café\u0000x"), local.name());
-        assertEquals(BigInteger.ZERO, local.number());
+        assertEquals(Optional.of("Café"), local.name());
+        assertEquals(Optional.<String>empty(), local.commit());
     }
 
     @Test
-    void aTextThatIsNoIdentityOrANumberPast64BitsIsRefused() {
+    void aTextThatIsNoIdentityIsRefusedAtTheByteItStopsBeingOne() {
         assertEquals(StandardRefusal.INVALID_VALUE, refusal(standard().parseIdentity("calendar")).code());
-        assertEquals(StandardRefusal.UNREPRESENTABLE,
-                refusal(standard().parseIdentity("forge:18446744073709551616")).code());
-        assertEquals(new BigInteger("18446744073709551615"),
-                value(standard().parseIdentity("forge:18446744073709551615")).number());
+        assertEquals(StandardRefusal.INVALID_VALUE, refusal(standard().parseIdentity("forge:123")).code());
+        assertTrue(refusal(standard().parseIdentity("git:" + ROOT + "0")).detail().startsWith("byte 44:"));
+        assertTrue(refusal(standard().parseIdentity("local:a\u0000b")).detail().startsWith("byte 7:"));
     }
 
     @Test
     void identitiesAreOrderedByTheStandard() {
-        assertTrue(value(standard().compareIdentities("forge:9", "forge:10")) < 0);
-        assertEquals(0, (int) value(standard().compareIdentities("forge:007", "forge:7")));
-        assertTrue(value(standard().compareIdentities("forge:1", "local:a")) > 0);
+        assertEquals(-1, (int) value(standard().compareIdentities("local:z", "git:" + ROOT)));
+        assertEquals(1, (int) value(standard().compareIdentities("git:" + LONG_ROOT, "git:" + ROOT)));
+        assertEquals(-1, (int) value(standard().compareIdentities("git:" + ROOT, "git:" + ROOT + "/a")));
         assertEquals(StandardRefusal.INVALID_VALUE,
-                refusal(standard().compareIdentities("forge:1", "Forge:1")).code());
+                refusal(standard().compareIdentities("git:" + ROOT, "Git:1")).code());
     }
 
     @Test

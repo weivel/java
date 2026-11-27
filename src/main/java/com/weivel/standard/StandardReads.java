@@ -4,7 +4,6 @@ import com.weivel.core.ForeignMemory;
 import com.weivel.core.Layout;
 import com.weivel.core.Manifest;
 import com.weivel.host.LibraryDeclaration;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,15 +66,12 @@ final class StandardReads {
         boolean local = memory.getInt(identity, offset(layout, "kind")) == 0;
         long segments = memory.getLong(identity, offset(layout, "segments"));
         long segmentCount = memory.getLong(identity, offset(layout, "segment_count"));
-        return new Identity(local ? Identity.Kind.LOCAL : Identity.Kind.FORGE,
+        return new Identity(local ? Identity.Kind.LOCAL : Identity.Kind.GIT,
                 local ? Optional.of(localName(memory, identity)) : Optional.<String>empty(),
-                optionalText(memory, memory.getLong(identity, offset(layout, "forge"))),
-                optionalText(memory, memory.getLong(identity, offset(layout, "host"))),
-                new BigInteger(Long.toUnsignedString(memory.getLong(identity, offset(layout, "number")))),
+                optionalText(memory, memory.getLong(identity, offset(layout, "commit"))),
                 texts(memory, segments, segmentCount));
     }
 
-    /** A local name read by its length, since it may hold a NUL character. */
     private static String localName(ForeignMemory memory, long identity) {
         Layout layout = StandardLayouts.IDENTITY;
         long length = memory.getLong(identity, offset(layout, "name_length"));

@@ -45,11 +45,10 @@ final class StandardLayouts {
             INT.withName("kind"),
             ADDRESS.withName("name"),
             LONG.withName("name_length"),
-            ADDRESS.withName("forge"),
-            ADDRESS.withName("host"),
-            LONG.withName("number"),
             ADDRESS.withName("segments"),
-            LONG.withName("segment_count")).withName("weivel_standard_identity");
+            LONG.withName("segment_count"),
+            ADDRESS.withName("commit"),
+            LONG.withName("commit_length")).withName("weivel_standard_identity");
 
     static final Layout DISCOVERED_PLUGIN = Layout.struct(
             ADDRESS.withName("manifest"),
